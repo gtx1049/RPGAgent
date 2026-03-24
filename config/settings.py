@@ -19,6 +19,10 @@ BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 DEFAULT_PLAYER_NAME = "玩家"
 MAX_CONTEXT_LENGTH = 128000  # 上下文上限（token）
 
+# API 服务器
+HOST = "0.0.0.0"
+PORT = 7860
+
 # 数值系统默认值
 DEFAULT_STATS = {
     "hp": 100,
