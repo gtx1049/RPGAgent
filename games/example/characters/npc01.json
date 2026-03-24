@@ -1,0 +1,13 @@
+{
+  "id": "npc_01",
+  "name": "神秘委托人",
+  "role": "npc",
+  "description": "电话中声音低沉，不愿透露姓名，只说事成之后必有重谢。",
+  "stats": {
+    "hp": 50,
+    "strength": 5,
+    "agility": 8,
+    "intelligence": 12,
+    "charisma": 10
+  }
+}

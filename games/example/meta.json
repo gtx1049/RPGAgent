@@ -1,0 +1,13 @@
+{
+  "id": "example",
+  "name": "示例剧本·第一夜",
+  "version": "1.0",
+  "author": "RPGAgent",
+  "summary": "一个简短的示例剧本，演示 RPGAgent 的基本用法。",
+  "tags": ["示例", "教程"],
+  "first_scene": "scene_01",
+  "systems_enabled": {
+    "moral_debt": true,
+    "combat": true
+  }
+}
