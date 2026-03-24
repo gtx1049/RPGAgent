@@ -640,7 +640,8 @@ class TestHiddenValueSystemPersistence:
             CREATE TABLE hidden_value_state (
                 hidden_value_id TEXT PRIMARY KEY,
                 name TEXT, description TEXT, level INTEGER DEFAULT 0,
-                effects_snapshot TEXT DEFAULT '{}'
+                effects_snapshot TEXT DEFAULT '{}',
+                one_shot_fired_json TEXT DEFAULT '[]'
             );
             CREATE TABLE hidden_value_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -675,16 +676,20 @@ class TestHiddenValueSystemPersistence:
                     c.commit()
 
             def upsert_hidden_value_state(self, hidden_value_id, name, description,
-                                          level, effects_snapshot=None):
+                                          level, effects_snapshot=None,
+                                          one_shot_fired_json="[]"):
                 import json as _json
                 with self._conn() as c:
                     c.execute(
-                        """INSERT INTO hidden_value_state (hidden_value_id,name,description,level,effects_snapshot)
-                           VALUES (?,?,?,?,?)
+                        """INSERT INTO hidden_value_state (hidden_value_id,name,description,level,effects_snapshot,one_shot_fired_json)
+                           VALUES (?,?,?,?,?,?)
                            ON CONFLICT(hidden_value_id) DO UPDATE SET
                                name=excluded.name, description=excluded.description,
-                               level=excluded.level, effects_snapshot=excluded.effects_snapshot""",
-                        (hidden_value_id, name, description, level, _json.dumps(effects_snapshot or {})),
+                               level=excluded.level, effects_snapshot=excluded.effects_snapshot,
+                               one_shot_fired_json=excluded.one_shot_fired_json""",
+                        (hidden_value_id, name, description, level,
+                         _json.dumps(effects_snapshot or {}),
+                         one_shot_fired_json),
                     )
                     c.commit()
 
@@ -981,7 +986,8 @@ class TestHiddenValueDecayPersistence:
             );
             CREATE TABLE hidden_value_state (
                 hidden_value_id TEXT PRIMARY KEY, name TEXT, description TEXT,
-                level INTEGER DEFAULT 0, effects_snapshot TEXT DEFAULT '{}'
+                level INTEGER DEFAULT 0, effects_snapshot TEXT DEFAULT '{}',
+                one_shot_fired_json TEXT DEFAULT '[]'
             );
             CREATE INDEX idx_hv ON hidden_value_records(hidden_value_id);
         """)
@@ -1002,12 +1008,14 @@ class TestHiddenValueDecayPersistence:
                         kw
                     )
                     cx.commit()
-            def upsert_hidden_value_state(self, hidden_value_id, name, description, level, effects_snapshot):
+            def upsert_hidden_value_state(self, hidden_value_id, name, description, level,
+                                         effects_snapshot, one_shot_fired_json="[]"):
                 import json
                 with self._conn() as cx:
                     cx.execute(
-                        "INSERT OR REPLACE INTO hidden_value_state VALUES (?,?,?,?,?)",
-                        (hidden_value_id, name, description, level, json.dumps(effects_snapshot))
+                        "INSERT OR REPLACE INTO hidden_value_state VALUES (?,?,?,?,?,?)",
+                        (hidden_value_id, name, description, level,
+                         json.dumps(effects_snapshot), one_shot_fired_json)
                     )
                     cx.commit()
             def get_all_hidden_value_states(self):

@@ -861,12 +861,16 @@ class HiddenValueSystem:
 
             # 2) 写入当前状态的 effects 快照（覆盖式 upsert）
             #    effects_snapshot 存 full effects snapshot，使 state 表自包含
+            # 3) 同时持久化 one_shot_fired 集合，防止读档后重复触发
+            one_shot_list = list(self._one_shot_fired)
+            one_shot_json = _json.dumps(one_shot_list)
             db.upsert_hidden_value_state(
                 hidden_value_id=hv.id,
                 name=hv.name,
                 description=hv.description,
                 level=hv.level_idx,
                 effects_snapshot=self.export_effects_snapshot(hv.id),
+                one_shot_fired_json=one_shot_json,
             )
 
     def _delete_records_for(self, db, hidden_value_id: str) -> None:
@@ -992,3 +996,22 @@ class HiddenValueSystem:
                             eff = hv.effects.get(hv.thresholds[crossed_i])
                             if eff:
                                 eff.trigger_fired = False
+
+        # 4) 恢复 _one_shot_fired 集合（跨值联动的一次性触发记录）
+        #    所有 hidden_value_state 行携带同样的 one_shot_fired_json（系统级共享状态），
+        #    取第一个有效值即可；旧数据库无此字段时跳过
+        for state in states:
+            raw_osfj = state.get("one_shot_fired_json") or "[]"
+            try:
+                osfj_list = _json.loads(raw_osfj)
+                if isinstance(osfj_list, list):
+                    # JSON 序列化时 tuple 变成 list，反序列化后转回 tuple
+                    for item in osfj_list:
+                        if isinstance(item, list) and len(item) == 3:
+                            self._one_shot_fired.add(tuple(item))
+                        elif isinstance(item, str):
+                            # 兼容旧格式：字符串形式 "sourceId_threshold_targetId"
+                            self._one_shot_fired.add(item)
+                    break  # 只需取一次（所有 state 行相同）
+            except Exception:
+                pass

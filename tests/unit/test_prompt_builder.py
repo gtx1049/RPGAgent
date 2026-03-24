@@ -32,6 +32,11 @@ class MockGameLoader:
         self.characters = {}
         self.scenes = {}
 
+    def get_scene(self, scene_id):
+        """返回模拟场景（title=scene_id）"""
+        from core.context_loader import Scene
+        return Scene(id=scene_id, title=f"场景·{scene_id}", content="")
+
 
 @pytest.fixture
 def mock_game_loader():
@@ -324,6 +329,182 @@ class TestPromptBuilderHiddenValueIntegration:
         # 确认通过 snapshot 可拿到 narrative_tone
         snap = pb.get_hidden_value_snapshot()
         assert snap["moral_debt"]["effect"]["narrative_tone"] == "你开始合理化沉默"
+
+
+class TestPendingTriggeredScenes:
+    """待插入触发场景功能测试"""
+
+    def _make_hvs_with_trigger_scene(self):
+        """创建一个带 trigger_scene 的 HiddenValueSystem"""
+        return HiddenValueSystem(
+            configs=[
+                {
+                    "id": "moral_debt",
+                    "name": "道德债务",
+                    "direction": "ascending",
+                    "thresholds": [0, 10, 30],
+                    "effects": {
+                        "0":  {},
+                        "10": {"trigger_scene": "guilt_flashback"},
+                        "30": {"trigger_scene": "total_breakdown"},
+                    },
+                },
+                {
+                    "id": "sanity",
+                    "name": "理智",
+                    "direction": "descending",
+                    "thresholds": [0, 20, 50],
+                    "effects": {
+                        "0":  {},
+                        "20": {"trigger_scene": "vision_01"},
+                        "50": {"trigger_scene": "insanity_breakdown"},
+                    },
+                },
+            ],
+            action_map={
+                "witness":    {"moral_debt": 6},
+                "help":       {"moral_debt": -3},
+                "nightmare":  {"sanity": 25},
+                "sleep":      {"sanity": -5},
+            },
+        )
+
+    def test_pending_triggered_scenes_empty_initially(self, mock_game_loader,
+                                                       stats_sys, moral_debt_sys,
+                                                       inventory_sys, dialogue_sys,
+                                                       test_scene):
+        """初始状态无待插入场景"""
+        hvs = self._make_hvs_with_trigger_scene()
+        pb = PromptBuilder(
+            mock_game_loader, stats_sys, moral_debt_sys,
+            inventory_sys, dialogue_sys,
+            hidden_value_sys=hvs,
+        )
+        result = pb._build_pending_triggered_scenes()
+        assert "无待插入" in result
+
+    def test_pending_triggered_scene_after_crossing_threshold(
+        self, mock_game_loader, stats_sys, moral_debt_sys,
+        inventory_sys, dialogue_sys, test_scene,
+    ):
+        """跨阈后 get_pending_triggered_scenes 返回待插入场景"""
+        hvs = self._make_hvs_with_trigger_scene()
+        pb = PromptBuilder(
+            mock_game_loader, stats_sys, moral_debt_sys,
+            inventory_sys, dialogue_sys,
+            hidden_value_sys=hvs,
+        )
+        # moral_debt: 6 + 6 = 12 ≥ 10 → 触发 guilt_flashback
+        pb.record_action("witness", "s1", 1, "旁观")
+        pb.record_action("witness", "s2", 2, "再次旁观")
+
+        pending = pb.get_pending_triggered_scenes()
+        assert "moral_debt" in pending
+        assert pending["moral_debt"] == "guilt_flashback"
+
+        section = pb._build_pending_triggered_scenes()
+        assert "guilt_flashback" in section
+        assert "道德债务" in section
+
+    def test_pending_triggered_scene_multiple_values(
+        self, mock_game_loader, stats_sys, moral_debt_sys,
+        inventory_sys, dialogue_sys, test_scene,
+    ):
+        """两个隐藏数值各自触发待插入场景"""
+        hvs = self._make_hvs_with_trigger_scene()
+        pb = PromptBuilder(
+            mock_game_loader, stats_sys, moral_debt_sys,
+            inventory_sys, dialogue_sys,
+            hidden_value_sys=hvs,
+        )
+        # moral_debt 跨阈
+        pb.record_action("witness", "s1", 1, "旁观")
+        pb.record_action("witness", "s2", 2, "再次旁观")
+        # sanity 跨阈
+        pb.record_action("nightmare", "s3", 3, "噩梦")
+
+        pending = pb.get_pending_triggered_scenes()
+        assert "moral_debt" in pending
+        assert "sanity" in pending
+        assert pending["moral_debt"] == "guilt_flashback"
+        assert pending["sanity"] == "vision_01"
+
+    def test_acknowledge_triggered_scene_removes_from_pending(
+        self, mock_game_loader, stats_sys, moral_debt_sys,
+        inventory_sys, dialogue_sys, test_scene,
+    ):
+        """acknowledge_triggered_scene 后，该场景不再出现在待插入列表"""
+        hvs = self._make_hvs_with_trigger_scene()
+        pb = PromptBuilder(
+            mock_game_loader, stats_sys, moral_debt_sys,
+            inventory_sys, dialogue_sys,
+            hidden_value_sys=hvs,
+        )
+        # 触发 moral_debt 和 sanity 的待插入场景
+        pb.record_action("witness", "s1", 1, "旁观")
+        pb.record_action("witness", "s2", 2, "再次旁观")
+        pb.record_action("nightmare", "s3", 3, "噩梦")
+
+        assert "moral_debt" in pb.get_pending_triggered_scenes()
+
+        # GM 确认已插入 moral_debt 的触发场景
+        pb.acknowledge_triggered_scene("moral_debt")
+        pending = pb.get_pending_triggered_scenes()
+        assert "moral_debt" not in pending
+        assert "sanity" in pending  # sanity 仍待插入
+
+        # 再确认 sanity
+        pb.acknowledge_triggered_scene("sanity")
+        pending = pb.get_pending_triggered_scenes()
+        assert len(pending) == 0
+
+    def test_system_prompt_includes_pending_triggered_scenes(
+        self, mock_game_loader, stats_sys, moral_debt_sys,
+        inventory_sys, dialogue_sys, test_scene,
+    ):
+        """build_system_prompt 输出中包含待插入触发场景区块"""
+        hvs = self._make_hvs_with_trigger_scene()
+        pb = PromptBuilder(
+            mock_game_loader, stats_sys, moral_debt_sys,
+            inventory_sys, dialogue_sys,
+            hidden_value_sys=hvs,
+        )
+        pb.record_action("witness", "s1", 1, "旁观")
+        pb.record_action("witness", "s2", 2, "再次旁观")
+
+        prompt = pb.build_system_prompt(test_scene)
+        assert "待插入触发场景" in prompt
+        assert "guilt_flashback" in prompt
+
+    def test_system_prompt_no_pending_when_none(
+        self, mock_game_loader, stats_sys, moral_debt_sys,
+        inventory_sys, dialogue_sys, test_scene,
+    ):
+        """无待插入场景时，prompt 中的待插入区块显示为空提示"""
+        hvs = self._make_hvs_with_trigger_scene()
+        pb = PromptBuilder(
+            mock_game_loader, stats_sys, moral_debt_sys,
+            inventory_sys, dialogue_sys,
+            hidden_value_sys=hvs,
+        )
+        prompt = pb.build_system_prompt(test_scene)
+        assert "待插入触发场景" in prompt
+        assert "无待插入" in pb._build_pending_triggered_scenes()
+
+    def test_pending_triggered_scenes_no_hidden_value_sys(
+        self, mock_game_loader, stats_sys, moral_debt_sys,
+        inventory_sys, dialogue_sys, test_scene,
+    ):
+        """无 HiddenValueSystem 时返回友好提示，不抛异常"""
+        pb = PromptBuilder(
+            mock_game_loader, stats_sys, moral_debt_sys,
+            inventory_sys, dialogue_sys,
+            hidden_value_sys=None,
+        )
+        result = pb._build_pending_triggered_scenes()
+        assert "未启用隐藏数值框架" in result
+        assert pb.get_pending_triggered_scenes() == {}
+        pb.acknowledge_triggered_scene("any_id")  # 不抛异常
 
 
 class TestBuildSystemPrompt:

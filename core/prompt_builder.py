@@ -48,6 +48,9 @@ SYSTEM_PROMPT_TEMPLATE = """你是一名 RPG 游戏的主持人（Game Master）
 ## 隐藏数值（玩家不可见，影响叙事）
 {hidden_values_section}
 
+## 待插入触发场景
+{pending_triggered_scenes_section}
+
 ## 可用叙事选项
 {available_options}
 
@@ -295,6 +298,32 @@ class PromptBuilder:
 
         return "、".join(unique) if unique else "（无）"
 
+    def _build_pending_triggered_scenes(self) -> str:
+        """
+        渲染待插入触发场景区块。
+
+        get_pending_triggered_scenes() 返回已跨阈（trigger_fired=True）
+        但尚未由 GM 插入（trigger_executed=False）的场景列表。
+        GM 收到后将场景插入叙事流，然后调用 acknowledge_triggered_scene() 标记为已执行。
+        """
+        if self.hidden_value_sys is None:
+            return "（本剧本未启用隐藏数值框架）"
+
+        pending = self.hidden_value_sys.get_pending_triggered_scenes()
+        if not pending:
+            return "（当前无待插入的触发场景）"
+
+        # 关联到场景名称（尝试从 game_loader 解析）
+        lines = []
+        for vid, scene_id in pending.items():
+            hv = self.hidden_value_sys.values.get(vid)
+            name = hv.name if hv else vid
+            # 尝试获取场景标题
+            scene = self.game_loader.get_scene(scene_id) if self.game_loader else None
+            scene_title = scene.title if scene else scene_id
+            lines.append(f"- **{name}** → 触发场景「{scene_title}」（{scene_id}）")
+        return "\n".join(lines)
+
     # _build_moral_debt_records：_build_hidden_value_records 的别名，兼容旧调用方
     def _build_moral_debt_records(self) -> str:
         """渲染道德债务记录（别名，指向 _build_hidden_value_records）"""
@@ -488,6 +517,7 @@ class PromptBuilder:
             locked_options=locked_str,
             moral_debt_records=self._build_hidden_value_records(),
             npc_relations=self._build_npc_relations(),
+            pending_triggered_scenes_section=self._build_pending_triggered_scenes(),
             mode_extra=f"\n\n{mode_extra}" if mode_extra else "",
         )
 
@@ -602,6 +632,24 @@ class PromptBuilder:
         if self.hidden_value_sys is None:
             return {}
         return self.hidden_value_sys.get_narrative_styles()
+
+    def get_pending_triggered_scenes(self) -> Dict[str, str]:
+        """
+        暴露待插入触发场景，供 GameMaster 查询。
+        返回 {hidden_value_id: scene_id}。
+        """
+        if self.hidden_value_sys is None:
+            return {}
+        return self.hidden_value_sys.get_pending_triggered_scenes()
+
+    def acknowledge_triggered_scene(self, hidden_value_id: str) -> None:
+        """
+        标记指定隐藏数值的触发场景已被 GM 插入。
+        调用此方法后，get_pending_triggered_scenes() 不再返回该场景。
+        """
+        if self.hidden_value_sys is None:
+            return
+        self.hidden_value_sys.acknowledge_triggered_scene(hidden_value_id)
 
     def record_action(
         self,

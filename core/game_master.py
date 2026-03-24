@@ -217,6 +217,17 @@ class GameMaster:
             except ValueError:
                 pass
 
+        # ── 触发场景插入确认 ──
+        # GM 在叙事中插入触发场景后，通过此指令确认，防止重复插入
+        if "trigger_scene_ack" in cmd:
+            hv_id = cmd["trigger_scene_ack"].strip()
+            self.prompt_builder.acknowledge_triggered_scene(hv_id)
+
+        # ── 旧版触发场景确认（兼容）──
+        if "triggered_scene_ack" in cmd:
+            hv_id = cmd["triggered_scene_ack"].strip()
+            self.prompt_builder.acknowledge_triggered_scene(hv_id)
+
         # 关系修改指令
         if "relation_delta" in cmd and "npc_id" in cmd:
             try:
