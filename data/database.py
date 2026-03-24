@@ -60,12 +60,14 @@ CREATE TABLE IF NOT EXISTS hidden_value_records (
 -- 隐藏数值当前状态
 -- effects_snapshot 列存储 JSON 序列化的 effects 快照
 -- （而非 HiddenValueRecord 列表，records 列表存在 hidden_value_records 表）
+-- one_shot_fired_json 存储已触发的一次性联动键集合，防止跨值联动重复触发
 CREATE TABLE IF NOT EXISTS hidden_value_state (
     hidden_value_id TEXT PRIMARY KEY,
     name            TEXT,
     description     TEXT,
     level           INTEGER DEFAULT 0,
-    effects_snapshot TEXT DEFAULT '{}'
+    effects_snapshot TEXT DEFAULT '{}',
+    one_shot_fired_json TEXT DEFAULT '[]'
 );
 
 -- 场景标记（伏笔/开关/变量）
@@ -318,6 +320,7 @@ class Database:
         description: str = "",
         level: int = 0,
         effects_snapshot: Dict | None = None,
+        one_shot_fired_json: str = "[]",
     ) -> None:
         """
         插入或更新隐藏数值的当前状态。
@@ -331,19 +334,24 @@ class Database:
                               存储在 effects_snapshot 列，使状态表自包含。
                               格式：{ threshold_str: { locked_options, narrative_tone,
                               narrative_style, trigger_scene, trigger_fired, trigger_executed }, ... }
+            one_shot_fired_json: JSON 序列化的 _one_shot_fired 集合（list of strings）。
+                                防止一次性跨值联动在读档后重复触发。
+                                格式：["sourceId_threshold_targetId", ...]
         """
         with self._conn() as conn:
             conn.execute(
                 """INSERT INTO hidden_value_state
-                      (hidden_value_id, name, description, level, effects_snapshot)
-                   VALUES (?, ?, ?, ?, ?)
+                      (hidden_value_id, name, description, level, effects_snapshot, one_shot_fired_json)
+                   VALUES (?, ?, ?, ?, ?, ?)
                    ON CONFLICT(hidden_value_id) DO UPDATE SET
-                       name             = excluded.name,
-                       description      = excluded.description,
-                       level            = excluded.level,
-                       effects_snapshot = excluded.effects_snapshot""",
+                       name                  = excluded.name,
+                       description           = excluded.description,
+                       level                 = excluded.level,
+                       effects_snapshot      = excluded.effects_snapshot,
+                       one_shot_fired_json   = excluded.one_shot_fired_json""",
                 (hidden_value_id, name, description, level,
-                 json.dumps(effects_snapshot or {})),
+                 json.dumps(effects_snapshot or {}),
+                 one_shot_fired_json),
             )
             conn.commit()
 

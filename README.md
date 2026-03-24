@@ -26,7 +26,7 @@ RPGAgent 是一个基于大模型上下文能力的 RPG 游戏引擎。核心思
 | **多线叙事** | 支持分支剧情、道德债务、关系变化、特场景触发等机制 |
 | **存档系统** | JSON 序列化存档，随时读取/恢复（含历史记录） |
 | **双模式 Prompt 构建** | memory 模式（内存数值系统）和 db 模式（SQLite 按需查询）二合一，支持 hidden_value_sys 直接注入 |
-| **可测试** | systems/ 全套单元测试，**230 个测试全部通过** |
+| **可测试** | systems/ 全套单元测试，**306 个测试全部通过** |
 
 ---
 
@@ -121,7 +121,7 @@ python main.py
 python -m pytest tests/ -v
 ```
 
-**当前：311 个测试全部通过**，覆盖所有数值系统和完整生命周期。
+**当前：306 个测试全部通过**，覆盖所有数值系统和完整生命周期。
 
 ---
 
@@ -171,7 +171,10 @@ print(result.message)
 - `narrative_tone`：叙事语气描述（如"内心开始有声音"）
 - `narrative_style`：叙事风格（`normal` / `fragmented` / `dissociated`）
 - `locked_options`：进入该档位后锁定的选项（如"主动干预"）
-- `trigger_scene`：跨过该阈值时触发的场景 ID（由 GM 插入）
+- `unlock_options`：该档位解锁的可用选项（如新增"激进策略"）
+- `narrative_hint`：GM 叙事文风指导（如"减少客观描述，增加内心独白"）
+- `trigger_scene`：跨过该阈值时触发的场景 ID（由 GM 插入一次）
+- `cross_triggers`：跨值联动列表，详见下节
 
 ### 剧本配置示例（meta.json）
 
@@ -187,9 +190,9 @@ print(result.message)
       "decay_min_value": 0,
       "effects": {
         "0":  {"narrative_tone": "心境平和", "locked_options": []},
-        "11": {"narrative_tone": "内心开始有声音", "locked_options": ["主动干预"], "trigger_scene": "guilt_flashback"},
-        "26": {"narrative_tone": "你开始合理化沉默", "locked_options": ["主动干预", "积极行动"]},
-        "51": {"narrative_tone": "你已经习惯了", "narrative_style": "fragmented", "locked_options": ["积极行动"]},
+        "11": {"narrative_tone": "内心开始有声音", "locked_options": ["主动干预"], "narrative_hint": "叙事以第三人称客观叙述为主", "trigger_scene": "guilt_flashback"},
+        "26": {"narrative_tone": "你开始合理化沉默", "locked_options": ["主动干预", "积极行动"], "unlock_options": ["自我辩护"]},
+        "51": {"narrative_tone": "你已经习惯了", "narrative_style": "fragmented", "locked_options": ["积极行动"], "narrative_hint": "缩短句子，增加感官细节和闪回", "cross_triggers": [{"target_id": "sanity", "delta": -5, "source": "道德麻木", "one_shot": true}]},
         "76": {"narrative_tone": "你已无法回头", "narrative_style": "dissociated", "locked_options": ["道德洁癖选项"]}
       }
     },
@@ -209,10 +212,40 @@ print(result.message)
   ],
   "hidden_value_actions": {
     "silent_witness":  {"moral_debt": 5,  "sanity": -2},
-    "help_victim":     {"moral_debt": -3, "sanity": 3},
-    "violent_act":     {"moral_debt": 10, "sanity": -8}
+    "help_victim":     {"moral_debt": -3, "sanity": 3, "relation_delta": {"village_elder": 5}},
+    "violent_act":     {"moral_debt": 10, "sanity": -8, "relation_delta": {"village_elder": -15, "bystander": -5}}
   }
 }
+```
+
+### relation_delta — 行为同步影响 NPC 关系
+
+`hidden_value_actions` 中可以同时包含 `relation_delta`，使一个行为标签在触发隐藏数值变化的同时，自动调整多个 NPC 的关系值。`relation_delta` 不会混入 `deltas` 返回值，而是作为第三个返回值 `rel_deltas` 单独返回，由调用方（GameMaster）负责应用到 DialogueSystem。
+
+```json
+"hidden_value_actions": {
+  "help_victim": {
+    "moral_debt": -3,
+    "sanity": 3,
+    "relation_delta": {"village_elder": 5, "merchant": 2}
+  },
+  "betray_friend": {
+    "moral_debt": 20,
+    "relation_delta": {"old_ally": -30, "new_master": 15}
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `relation_delta` | `object` | `{npc_id: delta, ...}` NPC 关系变化量（正=提升，负=降低） |
+
+```python
+deltas, triggered, rel_deltas, _ = hvs.record_action(
+    action_tag="help_victim", scene_id="scene_01", turn=3, player_action="帮助受害者"
+)
+# deltas    = {"moral_debt": -3, "sanity": 3}
+# rel_deltas = {"village_elder": 5, "merchant": 2}  ← 由 GameMaster 应用到 DialogueSystem
 ```
 
 ### 代码使用
@@ -270,6 +303,38 @@ hvs.load_from_db(db)
 
 调用 `tick_all(turn)` 后，所有配置了 `decay_per_turn > 0` 的数值自动减少对应量。衰减产生的 level 下降**不触发**任何 `trigger_scene`。
 
+### cross_triggers — 跨值联动
+
+当一个隐藏数值正向跨阈（ascending 方向 level_idx 增加，或 descending 方向 level_idx 减少）时，自动触发对另一个隐藏数值的修改：
+
+```json
+{
+  "id": "moral_debt",
+  "effects": {
+    "51": {
+      "narrative_tone": "你已经习惯了",
+      "cross_triggers": [
+        {
+          "target_id": "sanity",
+          "delta": -5,
+          "source": "道德麻木导致精神损耗",
+          "one_shot": true
+        }
+      ]
+    }
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `target_id` | `str` | 目标 HiddenValue ID |
+| `delta` | `int` | 变化量（正=增加，负=减少） |
+| `source` | `str` | 变化来源描述，记入目标 records |
+| `one_shot` | `bool` | `true`=每次跨阈只触发一次，`false`=每次跨入该档都触发 |
+
+跨值联动支持**级联**：联动触发后若目标也发生跨阈，继续触发该目标的 cross_triggers。BFS 遍历防止循环。已触发的一次性联动键在 `save_to_db` / `load_from_db` 时会持久化，防止读档后重复触发。
+
 ### direction 说明
 
 - `ascending`：值越高越糟（如道德债务）。跨过阈值 → 锁定选项
@@ -294,14 +359,14 @@ action_tag: <本次玩家行为触发的数值标签，如 silent_witness / help
 
 支持的指令字段：
 
-| 字段 | 说明 |
-|------|------|
-| `action` | `narrative` / `choice` / `combat` / `transition` |
-| `next_scene` | 切换到指定场景 |
-| `action_tag` | 触发的隐藏数值行为标签（如 `silent_witness`），系统自动根据 `hidden_value_actions` 更新对应数值 |
-| `relation_delta` | 增减 NPC 关系值 |
-| `npc_id` | 指定 NPC ID |
-| `stat_delta` / `stat_name` | 增减角色属性 |
+| 字段 | 格式 | 说明 |
+|------|------|------|
+| `action` | `narrative \| choice \| combat \| transition` | 指令类型 |
+| `next_scene` | `scene_id` | 切换到指定场景（transition 时） |
+| `action_tag` | 字符串 | 隐藏数值行为标签（如 `silent_witness`），系统根据 `hidden_value_actions` 自动更新多个隐藏数值，并同步通过 `relation_delta` 调整 NPC 关系 |
+| `relation_delta` | `{npc_id: delta, ...}` | NPC 关系变化对象（正=提升，负=降低），由 GameMaster 直接应用到 DialogueSystem |
+| `npc_id` | 字符串 | 指定 NPC ID |
+| `stat_delta` / `stat_name` | 数值 / 属性名 | 增减角色属性 |
 
 ---
 
@@ -338,19 +403,34 @@ games/你的剧本/
       "name": "道德债务",
       "direction": "ascending",
       "thresholds": [0, 11, 26, 51, 76],
+      "decay_per_turn": 2,
+      "decay_min_value": 0,
       "effects": {
-        "0":  {"narrative_tone": "心境平和"},
-        "11": {"narrative_tone": "内心开始有声音", "trigger_scene": "guilt_flashback"},
+        "0":  {"narrative_tone": "心境平和", "locked_options": []},
+        "11": {"narrative_tone": "内心开始有声音", "narrative_hint": "叙事以客观叙述为主，适度增加内心描写", "trigger_scene": "guilt_flashback"},
         "26": {"narrative_tone": "你开始合理化沉默", "locked_options": ["主动干预"]},
-        "51": {"narrative_tone": "你已经习惯了", "locked_options": ["积极行动"]},
-        "76": {"narrative_tone": "你已无法回头", "locked_options": ["道德洁癖选项"]}
+        "51": {"narrative_tone": "你已经习惯了", "narrative_style": "fragmented", "locked_options": ["积极行动"], "cross_triggers": [{"target_id": "sanity", "delta": -5, "source": "道德麻木导致精神损耗", "one_shot": true}]},
+        "76": {"narrative_tone": "你已无法回头", "narrative_style": "dissociated", "locked_options": ["道德洁癖选项"]}
+      }
+    },
+    {
+      "id": "sanity",
+      "name": "理智",
+      "direction": "descending",
+      "thresholds": [0, 30, 60, 80],
+      "decay_per_turn": 3,
+      "decay_min_value": 0,
+      "effects": {
+        "0":  {"narrative_tone": "理智正常", "locked_options": []},
+        "30": {"narrative_tone": "偶尔出现幻觉", "narrative_style": "fragmented", "locked_options": ["冷静判断"]},
+        "60": {"narrative_tone": "感知扭曲", "narrative_style": "dissociated", "locked_options": ["冷静判断", "理性分析"], "trigger_scene": "insanity_breakdown"}
       }
     }
   ],
   "hidden_value_actions": {
     "silent_witness":  {"moral_debt": 5},
-    "help_victim":     {"moral_debt": -3},
-    "lie_to_npc":      {"moral_debt": 8}
+    "help_victim":     {"moral_debt": -3, "relation_delta": {"village_elder": 5}},
+    "lie_to_npc":      {"moral_debt": 8, "relation_delta": {"deceived_npc": -10}}
   }
 }
 ```
