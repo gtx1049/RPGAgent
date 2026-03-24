@@ -93,3 +93,60 @@ class TestMoralDebtIntegration:
         sys.modify_relation(cmd["npc_id"], delta)
         assert sys.get_relation("liubei") == -15
         assert sys.get_relation_level("liubei") == "冷淡"
+
+    def test_parse_action_tag(self):
+        """测试 action_tag 字段解析（HiddenValueSystem 联动）"""
+        from core.game_master import GMCommandParser
+
+        text = """
+        你选择了袖手旁观。
+        [GM_COMMAND]
+        action: narrative
+        action_tag: silent_witness
+        player_input: 我站在原地，什么都没做
+        moral_debt_delta: 5
+        moral_debt_source: 沉默旁观
+        [/GM_COMMAND]
+        """
+        cmd = GMCommandParser.parse(text)
+        assert cmd["action_tag"] == "silent_witness"
+        assert cmd["player_input"] == "我站在原地，什么都没做"
+
+    def test_parse_combat_command(self):
+        """测试战斗指令解析"""
+        from core.game_master import GMCommandParser
+
+        text = """
+        [GM_COMMAND]
+        action: combat
+        stat_delta: -8
+        stat_name: hp
+        relation_delta: -10
+        npc_id: enemy_01
+        [/GM_COMMAND]
+        """
+        cmd = GMCommandParser.parse(text)
+        assert cmd["action"] == "combat"
+        assert cmd["stat_delta"] == "-8"
+        assert cmd["stat_name"] == "hp"
+        assert cmd["relation_delta"] == "-10"
+        assert cmd["npc_id"] == "enemy_01"
+
+    def test_extract_narrative_with_multiple_commands(self):
+        """多行 GM_COMMAND 块不影响 narrative 提取"""
+        from core.game_master import GMCommandParser
+
+        text = """
+        你走进昏暗的房间。
+        [GM_COMMAND]
+        action: transition
+        next_scene: scene_02
+        moral_debt_delta: 3
+        action_tag: silent_witness
+        [/GM_COMMAND]
+        房间深处传来微弱的光。
+        """
+        narrative = GMCommandParser.extract_narrative(text)
+        assert "你走进昏暗的房间" in narrative
+        assert "房间深处传来微弱的光" in narrative
+        assert "[GM_COMMAND]" not in narrative

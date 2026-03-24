@@ -23,6 +23,7 @@ class GameState:
     inventory: List[Dict]
     relations: Dict[str, int]
     flags: Dict[str, Any]  # 自定义游戏事件标记
+    hidden_values: Dict[str, Dict] = field(default_factory=dict)  # HiddenValueSystem 快照
     turn_count: int = 0
 
     def to_dict(self) -> Dict:
@@ -103,6 +104,7 @@ class Session:
         self.inventory: List[Dict] = []
         self.relations: Dict[str, int] = {}
         self.flags: Dict[str, Any] = {}  # 剧情标记
+        self.hidden_values: Dict[str, Dict] = {}  # 隐藏数值快照
         self.turn_count: int = 0
 
         # 历史
@@ -119,6 +121,7 @@ class Session:
         inventory: Optional[List[Dict]] = None,
         relations: Optional[Dict[str, int]] = None,
         flags: Optional[Dict[str, Any]] = None,
+        hidden_values: Optional[Dict[str, Dict]] = None,
     ):
         """批量更新状态"""
         if scene_id is not None:
@@ -133,6 +136,8 @@ class Session:
             self.relations = relations
         if flags is not None:
             self.flags.update(flags)
+        if hidden_values is not None:
+            self.hidden_values = hidden_values
 
     def add_history(self, role: str, content: str):
         self.history.append({"role": role, "content": content, "timestamp": datetime.now().isoformat()})
@@ -150,6 +155,7 @@ class Session:
             inventory=self.inventory,
             relations=self.relations,
             flags=self.flags,
+            hidden_values=self.hidden_values,
             turn_count=self.turn_count,
         )
 
@@ -172,6 +178,7 @@ class Session:
         self.inventory = state.inventory
         self.relations = state.relations
         self.flags = state.flags
+        self.hidden_values = getattr(state, "hidden_values", {})
         self.turn_count = state.turn_count
 
     def get_history_summary(self, last_n: int = 5) -> str:

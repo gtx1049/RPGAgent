@@ -40,6 +40,8 @@ class GameMeta:
     summary: str
     tags: List[str]
     systems_enabled: Dict[str, bool] = field(default_factory=dict)
+    hidden_values: List[Dict] = field(default_factory=dict)  # HiddenValueSystem 配置列表
+    hidden_value_actions: Dict[str, Dict[str, int]] = field(default_factory=dict)  # action_map
 
 
 class GameLoader:
@@ -71,7 +73,16 @@ class GameLoader:
         if meta_path.exists():
             with open(meta_path, encoding="utf-8") as f:
                 data = json.load(f)
-                self.meta = GameMeta(**data)
+                self.meta = GameMeta(
+                    name=data.get("name", self.game_path.name),
+                    version=data.get("version", "1.0"),
+                    author=data.get("author", "unknown"),
+                    summary=data.get("summary", ""),
+                    tags=data.get("tags", []),
+                    systems_enabled=data.get("systems_enabled", {}),
+                    hidden_values=data.get("hidden_values", []),
+                    hidden_value_actions=data.get("hidden_value_actions", {}),
+                )
         else:
             self.meta = GameMeta(
                 name=self.game_path.name,

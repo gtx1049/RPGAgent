@@ -72,11 +72,23 @@ class GameMaster:
         from systems.moral_debt import MoralDebtSystem
         from systems.inventory import InventorySystem
         from systems.dialogue import DialogueSystem
+        from systems.hidden_value import HiddenValueSystem
 
         self.stats_sys = StatsSystem()
         self.moral_sys = MoralDebtSystem()
         self.inv_sys = InventorySystem()
         self.dialogue_sys = DialogueSystem()
+
+        # 隐藏数值系统（从 meta.json 读取配置，支持道德债务/理智/成长等多种隐藏数值）
+        meta = self.game_loader.meta
+        hv_configs = getattr(meta, "hidden_values", []) or []
+        hv_action_map = getattr(meta, "hidden_value_actions", {}) or {}
+        self.hidden_value_sys: HiddenValueSystem | None = None
+        if hv_configs:
+            self.hidden_value_sys = HiddenValueSystem(
+                configs=hv_configs,
+                action_map=hv_action_map,
+            )
 
         # Prompt 构造器
         self.prompt_builder = PromptBuilder(
@@ -85,6 +97,7 @@ class GameMaster:
             self.moral_sys,
             self.inv_sys,
             self.dialogue_sys,
+            hidden_value_sys=self.hidden_value_sys,
         )
 
         # 初始化 AgentScope 模型
@@ -167,6 +180,21 @@ class GameMaster:
         """执行 GM_COMMAND 指令"""
         action = cmd.get("action", "narrative")
 
+        # ── 隐藏数值系统：通过 action_tag 触发数值变化 ──
+        if self.hidden_value_sys and "action_tag" in cmd:
+            action_tag = cmd["action_tag"]
+            player_input = cmd.get("player_input", "")
+            deltas, triggered_scenes = self.hidden_value_sys.record_action(
+                action_tag=action_tag,
+                scene_id=self.session.current_scene_id,
+                turn=self.session.turn_count,
+                player_action=player_input,
+            )
+            # 如果触发了特殊场景，通知 GM（后续主循环处理跳转）
+            for vid, scene_id in triggered_scenes.items():
+                if scene_id:
+                    self.session.flags[f"_hv_triggered_{vid}"] = scene_id
+
         if action == "transition":
             next_scene = cmd.get("next_scene")
             if next_scene:
@@ -205,6 +233,11 @@ class GameMaster:
 
     def _sync_session(self):
         """同步 session 状态"""
+        # 收集隐藏数值快照（用于存档）
+        hidden_value_snapshot = (
+            self.hidden_value_sys.get_snapshot() if self.hidden_value_sys else {}
+        )
+
         self.session.update_state(
             scene_id=self.current_scene.id if self.current_scene else None,
             stats=self.stats_sys.get_snapshot(),
@@ -214,6 +247,7 @@ class GameMaster:
                 npc_id: info["value"]
                 for npc_id, info in self.dialogue_sys.get_all_relations().items()
             },
+            hidden_values=hidden_value_snapshot,
         )
         self.session.increment_turn()
 
