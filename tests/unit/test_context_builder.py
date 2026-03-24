@@ -387,17 +387,29 @@ class TestContextBuilderDBMode:
         assert "NPC-X" in status
 
     def test_build_hidden_value_records_from_db(self, mock_game_loader, temp_db):
-        """db 模式：从 hidden_value_state 表读取最近记录"""
-        # 写入隐藏数值状态
+        """db 模式：从 hidden_value_records 表读取最近记录"""
+        # hidden_value_state 表只存当前 level；records 必须写入 hidden_value_records 表
         temp_db.upsert_hidden_value_state(
             hidden_value_id="moral_debt",
             name="道德债务",
-            description="沉默累积",
             level=1,
-            records=[
-                {"delta": 5, "source": "目睹暴行", "scene_id": "scene_01"},
-                {"delta": 8, "source": "沉默旁观", "scene_id": "scene_02"},
-            ],
+        )
+        # 用正确的 API 写入变化记录
+        temp_db.insert_hidden_value_record(
+            hidden_value_id="moral_debt",
+            delta=5,
+            source="目睹暴行",
+            scene_id="scene_01",
+            player_action="袖手旁观",
+            turn=1,
+        )
+        temp_db.insert_hidden_value_record(
+            hidden_value_id="moral_debt",
+            delta=8,
+            source="沉默旁观",
+            scene_id="scene_02",
+            player_action="继续保持沉默",
+            turn=2,
         )
         pb = PromptBuilder(
             game_loader=mock_game_loader,
@@ -565,3 +577,195 @@ class TestContextBuilderEdgeCases:
         )
         events_str = pb._build_world_events()
         assert "暂无世界事件" in events_str
+
+
+# ──────────────────────────────────────────────
+# Tests: cross-mode consistency
+# ──────────────────────────────────────────────
+
+class TestPromptBuilderCrossModeConsistency:
+    """
+    验证 memory 模式和 db 模式在相同数据下产生一致的渲染结果。
+
+    关键一致性保证：
+    - 相同的 hidden_value level → 相同的 locked_options
+    - 相同的 hidden_value level → 相同的 narrative_style
+    - 相同的 hidden_value records → 相同的记录文本
+    """
+
+    def test_locked_options_consistent_across_modes(self, mock_game_loader, temp_db):
+        """
+        同一 hidden_value level（moral_debt=15 → 第11档）在 memory 和 db 模式下
+        锁定的选项应完全一致。
+        """
+        # ── memory 模式 ──
+        hvs_memory = HiddenValueSystem(
+            configs=[
+                {
+                    "id": "moral_debt",
+                    "name": "道德债务",
+                    "direction": "ascending",
+                    "thresholds": [0, 11, 26],
+                    "effects": {
+                        "0":  {"locked_options": []},
+                        "11": {"locked_options": ["主动干预"]},
+                        "26": {"locked_options": ["主动干预", "积极行动"]},
+                    },
+                },
+            ],
+            action_map={"silent_witness": {"moral_debt": 5}},
+        )
+        hvs_memory.add_to("moral_debt", 15, "test", "scene_01")
+        pb_memory = PromptBuilder(
+            game_loader=mock_game_loader,
+            hidden_value_sys=hvs_memory,
+        )
+        memory_locked = pb_memory._build_locked_options()
+
+        # ── db 模式（模拟 level=1，即第11档）──
+        temp_db.upsert_hidden_value_state(
+            hidden_value_id="moral_debt",
+            name="道德债务",
+            level=1,  # 对应 thresholds[1] = 11
+        )
+        db_cfg = {
+            "moral_debt": {
+                "thresholds": [0, 11, 26],
+                "effects": {
+                    "0":  {"locked_options": []},
+                    "11": {"locked_options": ["主动干预"]},
+                    "26": {"locked_options": ["主动干预", "积极行动"]},
+                },
+            },
+        }
+        pb_db = PromptBuilder(
+            game_loader=mock_game_loader,
+            db=temp_db,
+            hidden_values_cfg=db_cfg,
+        )
+        db_locked = pb_db._build_locked_options()
+
+        # 两者应返回相同的锁定选项
+        assert memory_locked == db_locked
+        assert "主动干预" in memory_locked
+
+    def test_narrative_styles_consistent_across_modes(self, mock_game_loader, temp_db):
+        """
+        memory 模式通过 hidden_value_sys 直接查询，
+        db 模式通过 DB level + cfg 映射，
+        两者返回的 narrative_styles 格式应兼容。
+        """
+        hvs = HiddenValueSystem(
+            configs=[
+                {
+                    "id": "sanity",
+                    "name": "理智",
+                    "direction": "descending",
+                    "thresholds": [0, 30, 60],
+                    "effects": {
+                        "0":  {"narrative_tone": "正常", "narrative_style": "normal"},
+                        "30": {"narrative_tone": "闪回", "narrative_style": "fragmented"},
+                        "60": {"narrative_tone": "脱节", "narrative_style": "dissociated"},
+                    },
+                },
+            ],
+        )
+        hvs.add_to("sanity", 35, "test", "s1")  # level_idx=1
+        pb_memory = PromptBuilder(game_loader=mock_game_loader, hidden_value_sys=hvs)
+        memory_styles = pb_memory.get_narrative_styles()
+        assert memory_styles.get("sanity") == "fragmented"
+
+        # db 模式：level=1 → 第30档 → fragmented
+        temp_db.upsert_hidden_value_state(
+            hidden_value_id="sanity",
+            name="理智",
+            level=1,
+        )
+        db_cfg = {
+            "sanity": {
+                "thresholds": [0, 30, 60],
+                "effects": {
+                    "0":  {"narrative_style": "normal"},
+                    "30": {"narrative_style": "fragmented"},
+                    "60": {"narrative_style": "dissociated"},
+                },
+            },
+        }
+        pb_db = PromptBuilder(
+            game_loader=mock_game_loader,
+            db=temp_db,
+            hidden_values_cfg=db_cfg,
+        )
+        db_styles_str = pb_db._build_narrative_styles()
+        assert "理智" in db_styles_str
+        assert "等级1" in db_styles_str  # level=1 → 正确识别档位
+
+    def test_memory_mode_full_prompt_integrates_hidden_value(
+        self, mock_game_loader, mock_scene,
+    ):
+        """
+        memory 模式：record_action 触发 hidden_value 变化后，
+        重新 build_system_prompt 应反映最新状态。
+        """
+        hvs = HiddenValueSystem(
+            configs=[
+                {
+                    "id": "moral_debt",
+                    "name": "道德债务",
+                    "direction": "ascending",
+                    "thresholds": [0, 10],
+                    "effects": {
+                        "0":  {"locked_options": [], "narrative_tone": "平和"},
+                        "10": {"locked_options": ["干预"], "narrative_tone": "不安"},
+                    },
+                },
+            ],
+            action_map={"witness": {"moral_debt": 12}},
+        )
+        pb = PromptBuilder(
+            game_loader=mock_game_loader,
+            hidden_value_sys=hvs,
+        )
+
+        # 初始状态
+        prompt_before = pb.build_system_prompt(mock_scene)
+        assert "平和" in prompt_before
+        assert "干预" not in prompt_before
+
+        # 触发 action_tag → moral_debt 跨过 10
+        pb.record_action("witness", "scene_01", 1, "目睹事件")
+
+        prompt_after = pb.build_system_prompt(mock_scene)
+        assert "不安" in prompt_after
+        assert "干预" in prompt_after  # 已锁定
+
+    def test_both_modes_share_same_public_interface(
+        self, mock_game_loader, mock_scene, temp_db,
+    ):
+        """
+        验证 memory 和 db 模式的 PromptBuilder 实例共享相同的公开接口。
+        """
+        hvs = HiddenValueSystem(configs=[], action_map={})
+
+        pb_memory = PromptBuilder(
+            game_loader=mock_game_loader,
+            hidden_value_sys=hvs,
+        )
+        pb_db = PromptBuilder(
+            game_loader=mock_game_loader,
+            db=temp_db,
+        )
+
+        # 两者都应有以下公开方法
+        public_methods = [
+            "build_system_prompt",
+            "build_user_prompt",
+            "build_choice_prompt",
+            "get_hidden_value_snapshot",
+            "get_narrative_styles",
+            "record_action",
+            "update_turn",
+        ]
+        for method in public_methods:
+            assert hasattr(pb_memory, method), f"memory mode missing: {method}"
+            assert hasattr(pb_db, method), f"db mode missing: {method}"

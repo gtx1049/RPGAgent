@@ -452,3 +452,372 @@ class TestPromptBuilderNoHiddenValue:
         assert deltas == {}
         assert triggered == {}
         assert rel_deltas == {}
+
+
+# ────────────────────────────────────────────────
+# db 模式 fixtures（复用前文的 mock_game_loader 和 test_scene）
+# ────────────────────────────────────────────────
+
+class MockDbForPromptBuilder:
+    """
+    模拟 Database 对象，仅实现 PromptBuilder db 模式调用的方法。
+    测试目标：
+    - _build_hidden_values_section_for_db()
+    - _build_npc_status()
+    - _build_dialogue_history()
+    - _build_world_events()
+    - _build_hidden_value_records_from_db()
+    - build_system_prompt()（db 模式完整 prompt）
+    """
+
+    def __init__(self):
+        self._hv_states = []
+        self._hv_records = {}   # {hidden_value_id: [record, ...]}
+        self._npc_states = []
+        self._dialogue_rows = []
+        self._events = []
+
+    # ── hidden value states ──
+
+    def set_hidden_value_states(self, states):
+        """设置隐藏数值状态（供测试注入）"""
+        self._hv_states = states
+
+    def get_all_hidden_value_states(self):
+        return self._hv_states
+
+    # ── NPC ──
+
+    def set_npc_states(self, npcs):
+        self._npc_states = npcs
+
+    def query_npcs_in_scene(self, scene_id):
+        return [n for n in self._npc_states if n.get("current_location") == scene_id]
+
+    def get_all_npc_states(self):
+        return self._npc_states
+
+    # ── dialogue ──
+
+    def set_dialogue_rows(self, rows):
+        self._dialogue_rows = rows
+
+    def query_dialogue(self, npc_ids=None, scene_id=None, limit=20):
+        return self._dialogue_rows[:limit]
+
+    # ── hidden value records ──
+
+    def set_hidden_value_records(self, records_by_id):
+        """设置各 hidden_value_id 的变化记录。
+        格式：{"moral_debt": [{"delta": 5, "source": "...", "scene_id": "s1"}, ...]}
+        """
+        self._hv_records = records_by_id
+
+    def get_hidden_value_records(self, hidden_value_id, limit=20):
+        return self._hv_records.get(hidden_value_id, [])[:limit]
+
+    # ── events ──
+
+    def set_events(self, events):
+        self._events = events
+
+    def query_events(self, scene_id=None, turn=None, limit=10):
+        result = list(self._events)
+        if turn is not None:
+            result = [e for e in result if e.get("turn") == turn]
+        return result[:limit]
+
+
+# db 模式下的 hidden_values_cfg（与 hidden_value.py 中 LevelEffect 字段对应）
+_HV_CFG_SAMPLE = {
+    "moral_debt": {
+        "name": "道德债务",
+        "direction": "ascending",
+        "thresholds": [0, 11, 26, 51, 76],
+        "effects": {
+            "0":  {"narrative_tone": "心境平和", "locked_options": []},
+            "11": {"narrative_tone": "内心开始有声音", "locked_options": ["主动干预"]},
+            "26": {"narrative_tone": "你开始合理化沉默", "locked_options": ["主动干预", "积极行动"]},
+        },
+    },
+    "sanity": {
+        "name": "理智",
+        "direction": "descending",
+        "thresholds": [0, 30, 60, 80],
+        "effects": {
+            "0":  {"narrative_tone": "神志清醒", "locked_options": []},
+            "30": {"narrative_tone": "偶尔出现幻觉", "locked_options": ["冷静判断"]},
+        },
+    },
+}
+
+
+class TestPromptBuilderDbMode:
+    """PromptBuilder db 模式单元测试（使用 Mock DB）"""
+
+    @pytest.fixture
+    def mock_db(self):
+        return MockDbForPromptBuilder()
+
+    def test_mode_property_is_db(self, mock_game_loader, mock_db, test_scene):
+        """传入 db 参数后 mode 属性为 'db'"""
+        pb = PromptBuilder(
+            mock_game_loader,
+            db=mock_db,
+            current_scene_id="scene_01",
+            turn=3,
+            hidden_values_cfg=_HV_CFG_SAMPLE,
+        )
+        assert pb.mode == "db"
+
+    def test_hidden_values_section_for_db_with_no_states(self, mock_game_loader,
+                                                          mock_db, test_scene):
+        """无隐藏数值状态时显示友好提示"""
+        pb = PromptBuilder(
+            mock_game_loader,
+            db=mock_db,
+            current_scene_id="scene_01",
+            turn=1,
+            hidden_values_cfg=_HV_CFG_SAMPLE,
+        )
+        section = pb._build_hidden_values_section_for_db()
+        assert "暂无隐藏数值记录" in section
+
+    def test_hidden_values_section_for_db_renders_correctly(self, mock_game_loader,
+                                                              mock_db, test_scene):
+        """隐藏数值状态正确渲染为 prompt 区块"""
+        import json
+        mock_db.set_hidden_value_states([
+            {
+                "hidden_value_id": "moral_debt",
+                "name": "道德债务",
+                "level": 1,  # thresholds[1] = 11
+                "records_json": json.dumps({
+                    "0":  {"narrative_tone": "心境平和",     "locked_options": []},
+                    "11": {"narrative_tone": "内心开始有声音", "locked_options": ["主动干预"]},
+                }),
+            },
+            {
+                "hidden_value_id": "sanity",
+                "name": "理智",
+                "level": 0,  # thresholds[0] = 0
+                "records_json": json.dumps({
+                    "0": {"narrative_tone": "神志清醒", "locked_options": []},
+                }),
+            },
+        ])
+
+        pb = PromptBuilder(
+            mock_game_loader,
+            db=mock_db,
+            current_scene_id="scene_01",
+            turn=1,
+            hidden_values_cfg=_HV_CFG_SAMPLE,
+        )
+        section = pb._build_hidden_values_section_for_db()
+        assert "道德债务" in section
+        assert "理智" in section
+        assert "内心开始有声音" in section   # moral_debt 第1档语气
+        assert "主动干预" in section            # moral_debt 第1档锁定
+        assert "神志清醒" in section           # sanity 第0档语气
+
+    def test_locked_options_from_db_mode(self, mock_game_loader, mock_db, test_scene):
+        """db 模式下 _build_locked_options 正确从数据库读取锁定选项"""
+        import json
+        mock_db.set_hidden_value_states([
+            {
+                "hidden_value_id": "moral_debt",
+                "name": "道德债务",
+                "level": 2,  # thresholds[2] = 26
+                "records_json": json.dumps({
+                    "26": {"locked_options": ["主动干预", "积极行动"]},
+                }),
+            },
+        ])
+
+        pb = PromptBuilder(
+            mock_game_loader,
+            db=mock_db,
+            current_scene_id="scene_01",
+            turn=1,
+            hidden_values_cfg=_HV_CFG_SAMPLE,
+        )
+        locked = pb._build_locked_options()
+        assert "主动干预" in locked
+        assert "积极行动" in locked
+
+    def test_npc_status_from_db(self, mock_game_loader, mock_db, test_scene):
+        """db 模式下渲染当前场景 NPC 状态"""
+        mock_db.set_npc_states([
+            {"id": "zhang_fei", "name": "张飞",
+             "current_location": "scene_01", "relation_value": 60},
+            {"id": "guan_yu",   "name": "关羽",
+             "current_location": "scene_01", "relation_value": 80},
+            {"id": "cao_cao",   "name": "曹操",
+             "current_location": "scene_02", "relation_value": -10},
+        ])
+
+        pb = PromptBuilder(
+            mock_game_loader,
+            db=mock_db,
+            current_scene_id="scene_01",
+            turn=1,
+            hidden_values_cfg=_HV_CFG_SAMPLE,
+        )
+        status = pb._build_npc_status()
+        assert "张飞" in status
+        assert "关羽" in status
+        assert "scene_01" in status
+        assert "曹操" not in status  # 不在当前场景
+
+    def test_dialogue_history_from_db(self, mock_game_loader, mock_db, test_scene):
+        """db 模式下渲染最近对话历史"""
+        mock_db.set_dialogue_rows([
+            {"speaker": "player", "npc_id": "liubei", "content": "我是刘皇叔",   "summary": "自我介绍"},
+            {"speaker": "npc",    "npc_id": "liubei", "content": "久仰大名",       "summary": "表示敬意"},
+            {"speaker": "player", "npc_id": "liubei", "content": "我要讨伐黄巾", "summary": "说明来意"},
+        ])
+
+        pb = PromptBuilder(
+            mock_game_loader,
+            db=mock_db,
+            current_scene_id="scene_01",
+            turn=1,
+            hidden_values_cfg=_HV_CFG_SAMPLE,
+        )
+        history = pb._build_dialogue_history()
+        assert "自我介绍" in history or "player" in history
+        assert "【玩家】" in history or "【liubei】" in history
+
+    def test_world_events_from_db(self, mock_game_loader, mock_db, test_scene):
+        """db 模式下渲染世界事件回顾"""
+        import json
+        mock_db.set_events([
+            {"scene_id": "scene_01", "summary": "进入村庄",     "tags": json.dumps(["新手"]),  "turn": 1},
+            {"scene_id": "scene_01", "summary": "与村长对话",    "tags": json.dumps(["剧情"]),  "turn": 1},
+            {"scene_id": "scene_02", "summary": "发现洞穴入口", "tags": json.dumps(["探索"]),  "turn": 2},
+        ])
+
+        pb = PromptBuilder(
+            mock_game_loader,
+            db=mock_db,
+            current_scene_id="scene_01",
+            turn=1,  # turn=1 → 只返回 turn=1 的事件
+            hidden_values_cfg=_HV_CFG_SAMPLE,
+        )
+        events = pb._build_world_events()
+        assert "进入村庄" in events or "村长" in events
+        # scene_02 事件不应出现（turn=2 过滤掉）
+        assert "发现洞穴入口" not in events
+
+    def test_build_system_prompt_db_mode_full(self, mock_game_loader, mock_db,
+                                               test_scene):
+        """完整 build_system_prompt（db 模式）包含所有必要区块"""
+        import json
+        mock_db.set_hidden_value_states([
+            {
+                "hidden_value_id": "moral_debt",
+                "name": "道德债务",
+                "level": 0,
+                "records_json": json.dumps({
+                    "0": {"narrative_tone": "心境平和", "locked_options": []},
+                }),
+            },
+        ])
+        # 提供 hidden_value_records（供 _build_hidden_value_records_from_db 使用）
+        mock_db.set_hidden_value_records({
+            "moral_debt": [
+                {"delta": 5, "source": "silent_witness", "scene_id": "s1"},
+                {"delta": 3, "source": "help_victim",     "scene_id": "s2"},
+            ],
+        })
+        mock_db.set_npc_states([
+            {"id": "npc_01", "name": "测试NPC",
+             "current_location": "scene_01", "relation_value": 50},
+        ])
+        mock_db.set_events([
+            {"scene_id": "scene_01", "summary": "玩家进入场景",
+             "tags": json.dumps([]), "turn": 1},
+        ])
+
+        pb = PromptBuilder(
+            mock_game_loader,
+            db=mock_db,
+            current_scene_id="scene_01",
+            turn=1,
+            hidden_values_cfg=_HV_CFG_SAMPLE,
+        )
+        prompt = pb.build_system_prompt(test_scene)
+
+        # 基础区块
+        assert "测试剧本" in prompt
+        assert "第一章·开始" in prompt
+        assert "当前场景活跃NPC状态" in prompt  # db 模式专属区块
+        assert "世界事件回顾" in prompt          # db 模式专属区块
+        assert "测试NPC" in prompt
+        # hidden_values 区块（db 模式走 _build_hidden_values_section_for_db）
+        assert "道德债务" in prompt
+        assert "心境平和" in prompt
+
+    def test_update_turn_updates_internal_state(self, mock_game_loader,
+                                                 mock_db, test_scene):
+        """update_turn 正确更新内部场景和回合状态"""
+        pb = PromptBuilder(
+            mock_game_loader,
+            db=mock_db,
+            current_scene_id="scene_01",
+            turn=1,
+            hidden_values_cfg=_HV_CFG_SAMPLE,
+        )
+        assert pb.current_scene_id == "scene_01"
+        assert pb.turn == 1
+
+        pb.update_turn(scene_id="scene_03", turn=7)
+        assert pb.current_scene_id == "scene_03"
+        assert pb.turn == 7
+
+    def test_hidden_value_records_from_db_empty(self, mock_game_loader,
+                                                  mock_db, test_scene):
+        """无隐藏数值记录时返回友好提示"""
+        mock_db.set_hidden_value_states([])
+
+        pb = PromptBuilder(
+            mock_game_loader,
+            db=mock_db,
+            current_scene_id="scene_01",
+            turn=1,
+            hidden_values_cfg=_HV_CFG_SAMPLE,
+        )
+        records_str = pb._build_hidden_value_records_from_db()
+        assert records_str == "（暂无记录）"
+
+    def test_hidden_value_records_from_db_with_records(self, mock_game_loader,
+                                                       mock_db, test_scene):
+        """有隐藏数值记录时正确渲染"""
+        import json
+        # 通过 set_hidden_value_records 提供变化记录（符合真实 DB 结构）
+        mock_db.set_hidden_value_records({
+            "moral_debt": [
+                {"delta": 5,  "source": "silent_witness", "scene_id": "s1"},
+                {"delta": 7,  "source": "silent_witness", "scene_id": "s2"},
+            ],
+        })
+        mock_db.set_hidden_value_states([
+            {
+                "hidden_value_id": "moral_debt",
+                "name": "道德债务",
+                "level": 1,
+                "records_json": json.dumps({}),
+            },
+        ])
+
+        pb = PromptBuilder(
+            mock_game_loader,
+            db=mock_db,
+            current_scene_id="scene_01",
+            turn=1,
+            hidden_values_cfg=_HV_CFG_SAMPLE,
+        )
+        records_str = pb._build_hidden_value_records_from_db()
+        assert "道德债务" in records_str
+        assert "silent_witness" in records_str

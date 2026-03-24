@@ -1,7 +1,11 @@
-# core/prompt_builder.py - Prompt 构造器
+# core/prompt_builder.py - Prompt 构造器（统一版）
 """
 负责组装完整的 system prompt，
 将游戏设定 + 当前状态 + 数值系统快照注入 LLM。
+
+支持两种数据来源模式：
+- memory 模式（默认）：直接读取内存中的数值系统实例
+- db 模式：使用 SQLite 数据库按需查询上下文
 
 支持两套数值系统共存：
 - HiddenValueSystem（通用框架）：道德债务、理智、成长等所有隐藏数值
@@ -12,6 +16,8 @@ Prompt 中的"道德债务"区块同时显示两组数据，
 """
 
 from typing import Dict, List, Optional, Any
+import json
+
 from systems.stats import StatsSystem
 from systems.moral_debt import MoralDebtSystem
 from systems.inventory import InventorySystem
@@ -21,7 +27,7 @@ from .context_loader import GameLoader, Scene
 
 
 # ────────────────────────────────────────────────
-# Prompt 模板
+# Prompt 模板（memory / db 共用）
 # ────────────────────────────────────────────────
 
 SYSTEM_PROMPT_TEMPLATE = """你是一名 RPG 游戏的主持人（Game Master）。
@@ -53,6 +59,7 @@ SYSTEM_PROMPT_TEMPLATE = """你是一名 RPG 游戏的主持人（Game Master）
 
 ## NPC 关系
 {npc_relations}
+{mode_extra}
 
 ## 你的职责
 1. 根据主角的输入（自然语言），推进游戏叙事
@@ -71,6 +78,18 @@ combat_data: <战斗数据>（如果是 combat）
 narrative_hint: <给玩家的叙事内容>
 action_tag: <本次玩家行为触发的数值标签，如 silent_witness / help_victim>
 [/GM_COMMAND]
+"""
+
+# db 模式专属额外区块（拼接在 NPC 关系后）
+DB_MODE_EXTRA_TEMPLATE = """
+## 当前场景活跃NPC状态
+{npc_status}
+
+## NPC对话历史（最近）
+{dialogue_history}
+
+## 世界事件回顾
+{world_events}
 """
 
 
@@ -100,10 +119,14 @@ action_tag 由 GM 在 [GM_COMMAND] 中返回，系统根据标签自动更新隐
 
 class PromptBuilder:
     """
-    Prompt 构造器。
+    Prompt 构造器（统一版）。
 
     持有所有数值系统实例，根据当前场景组装完整的 system prompt
     注入给 LLM（Game Master）。
+
+    支持两种数据来源模式：
+    - memory 模式（默认）：直接读取内存中的系统实例
+    - db 模式：使用 SQLite 数据库查询上下文
 
     HiddenValueSystem 是新标准，支持任意多个隐藏数值（道德债务/理智/成长等）。
     MoralDebtSystem 保持向后兼容，Prompt 中同时显示两组数据，
@@ -113,43 +136,67 @@ class PromptBuilder:
     def __init__(
         self,
         game_loader: GameLoader,
-        stats_sys: StatsSystem,
-        moral_debt_sys: MoralDebtSystem,
-        inventory_sys: InventorySystem,
-        dialogue_sys: DialogueSystem,
+        stats_sys: Optional[StatsSystem] = None,
+        moral_debt_sys: Optional[MoralDebtSystem] = None,
+        inventory_sys: Optional[InventorySystem] = None,
+        dialogue_sys: Optional[DialogueSystem] = None,
         hidden_value_sys: Optional[HiddenValueSystem] = None,
+        # ── db 模式参数 ──
+        db: Any = None,
+        current_scene_id: str = "",
+        turn: int = 0,
+        # db 模式下需要此配置来查阈值→锁定选项映射
+        hidden_values_cfg: Dict[str, Dict] | None = None,
     ):
         self.game_loader = game_loader
         self.stats_sys = stats_sys
         self.moral_debt_sys = moral_debt_sys
         self.inventory_sys = inventory_sys
         self.dialogue_sys = dialogue_sys
-        # 新版通用隐藏数值系统（可选，None 表示使用旧版 MoralDebtSystem）
         self.hidden_value_sys = hidden_value_sys
 
+        # ── db 模式 ──
+        self.db = db
+        self.current_scene_id = current_scene_id
+        self.turn = turn
+        # hidden_values_cfg：db 模式下用，格式同 meta.json 的 hidden_values
+        self.hidden_values_cfg: Dict[str, Dict] = hidden_values_cfg or {}
+
+    @property
+    def mode(self) -> str:
+        """当前数据来源模式"""
+        return "db" if self.db else "memory"
+
     # ────────────────────────────────────────────────
-    # 状态渲染
+    # 状态渲染（memory 模式）
     # ────────────────────────────────────────────────
 
     def _build_player_status(self) -> str:
-        stats = self.stats_sys.get_snapshot()
-        inv = self.inventory_sys.list_items()
+        if self.mode == "db":
+            # db 模式：玩家状态由 session 管理，此处简示
+            return "（玩家状态由系统管理，可通过 status 命令查看）"
+        stats = (self.stats_sys.get_snapshot() if self.stats_sys else {})
+        inv = (self.inventory_sys.list_items() if self.inventory_sys else [])
         inv_str = ", ".join([f"{i['name']}×{i['quantity']}" for i in inv]) or "（空）"
 
         return PLAYER_STATUS_TEMPLATE.format(
-            hp=stats["hp"],
-            max_hp=stats["max_hp"],
-            stamina=stats["stamina"],
-            max_stamina=stats["max_stamina"],
-            strength=stats["strength"],
-            agility=stats["agility"],
-            intelligence=stats["intelligence"],
-            charisma=stats["charisma"],
+            hp=stats.get("hp", "?"),
+            max_hp=stats.get("max_hp", "?"),
+            stamina=stats.get("stamina", "?"),
+            max_stamina=stats.get("max_stamina", "?"),
+            strength=stats.get("strength", "?"),
+            agility=stats.get("agility", "?"),
+            intelligence=stats.get("intelligence", "?"),
+            charisma=stats.get("charisma", "?"),
             inventory=inv_str,
         )
 
     def _build_hidden_values_section(self) -> str:
-        """渲染隐藏数值总览区块"""
+        """渲染隐藏数值总览区块（memory 模式）"""
+        if self.mode == "db":
+            # db 模式由 _build_narrative_styles 附带处理
+            return ""
+
         if self.hidden_value_sys is None:
             return "（本剧本未启用隐藏数值框架，使用旧版道德债务系统）"
 
@@ -194,12 +241,28 @@ class PromptBuilder:
         """
         locked: List[str] = []
 
-        if self.hidden_value_sys:
-            locked.extend(self.hidden_value_sys.get_locked_options())
-
-        # 旧版 MoralDebtSystem 兼容
-        moral = self.moral_debt_sys.get_snapshot()
-        locked.extend(moral.get("locked_options", []))
+        if self.mode == "db":
+            # db 模式：从数据库 level 值 + hidden_values_cfg 映射
+            hv_states = self.db.get_all_hidden_value_states()
+            for hv in hv_states:
+                vid = hv["hidden_value_id"]
+                if vid not in self.hidden_values_cfg:
+                    continue
+                cfg = self.hidden_values_cfg[vid]
+                effects_cfg = cfg.get("effects", {})
+                level_idx = hv.get("level", 0)
+                thresholds = cfg.get("thresholds", [0])
+                if level_idx < len(thresholds):
+                    threshold_key = str(thresholds[level_idx])
+                    eff = effects_cfg.get(threshold_key, {})
+                    locked.extend(eff.get("locked_options", []))
+        else:
+            # memory 模式
+            if self.hidden_value_sys:
+                locked.extend(self.hidden_value_sys.get_locked_options())
+            # 旧版 MoralDebtSystem 兼容
+            moral = (self.moral_debt_sys.get_snapshot() if self.moral_debt_sys else {})
+            locked.extend(moral.get("locked_options", []))
 
         # 去重，保留顺序
         seen = set()
@@ -211,9 +274,17 @@ class PromptBuilder:
 
         return "、".join(unique) if unique else "（无）"
 
+    # _build_moral_debt_records：_build_hidden_value_records 的别名，兼容旧调用方
     def _build_moral_debt_records(self) -> str:
-        """渲染道德债务记录（优先取 HiddenValueSystem 中的 moral_debt）"""
-        # 优先从 HiddenValueSystem 获取 moral_debt 记录
+        """渲染道德债务记录（别名，指向 _build_hidden_value_records）"""
+        return self._build_hidden_value_records()
+
+    def _build_hidden_value_records(self) -> str:
+        """渲染隐藏数值变化记录（memory 模式：moral_debt 为主）"""
+        if self.mode == "db":
+            return self._build_hidden_value_records_from_db()
+
+        # memory 模式
         if self.hidden_value_sys and "moral_debt" in self.hidden_value_sys.values:
             hv = self.hidden_value_sys.values["moral_debt"]
             records = hv.get_recent_records(3)
@@ -227,23 +298,134 @@ class PromptBuilder:
                 return "\n".join(lines)
 
         # Fallback：旧版 MoralDebtSystem
-        records = self.moral_debt_sys.get_recent_records(3)
+        records = (self.moral_debt_sys.get_recent_records(3) if self.moral_debt_sys else [])
         if not records:
             return "（暂无记录）"
         lines = []
         for r in records:
-            sign = "+" if r["amount"] > 0 else ""
-            lines.append(f"- [{r['scene']}] {r['source']} {sign}{r['amount']}分")
+            sign = "+" if r.get("amount", 0) > 0 else ""
+            lines.append(
+                f"- [{r.get('scene', '?')}] {r.get('source', '')} "
+                f"{sign}{r.get('amount', 0)}分"
+            )
         return "\n".join(lines)
 
     def _build_npc_relations(self) -> str:
-        rels = self.dialogue_sys.get_all_relations()
+        if self.mode == "db":
+            # db 模式走 _build_npc_status，那里已包含关系信息
+            return self._build_npc_status()
+
+        rels = (self.dialogue_sys.get_all_relations() if self.dialogue_sys else {})
         if not rels:
             return "（暂无建立关系）"
         lines = []
         for npc_id, info in rels.items():
-            sign = "+" if info["value"] > 0 else ""
-            lines.append(f"- {npc_id}: {info['level']}（{sign}{info['value']}）")
+            sign = "+" if info.get("value", 0) > 0 else ""
+            lines.append(f"- {npc_id}: {info.get('level', '?')}（{sign}{info.get('value', 0)}）")
+        return "\n".join(lines)
+
+    # ────────────────────────────────────────────────
+    # 状态渲染（db 模式专属）
+    # ────────────────────────────────────────────────
+
+    def _build_narrative_styles(self) -> str:
+        """各隐藏数值的当前叙事风格"""
+        if self.mode == "db":
+            hv_states = self.db.get_all_hidden_value_states()
+            styles = []
+            for hv in hv_states:
+                records_json = hv.get("records_json", "{}")
+                try:
+                    records = json.loads(records_json)
+                except Exception:
+                    records = {}
+                level = hv.get("level", 0)
+                desc = hv.get("description", "")
+                styles.append(f"- {hv['name']}: 等级{level}（{desc}）")
+            return "\n".join(styles) if styles else "（各隐藏数值正常）"
+
+        # memory 模式
+        styles = {}
+        if self.hidden_value_sys is not None:
+            styles = self.hidden_value_sys.get_narrative_styles()
+        return "\n".join([f"- {k}: {v}" for k, v in styles.items()]) or "（正常）"
+
+    def _build_hidden_value_records_from_db(self) -> str:
+        """db 模式：渲染隐藏数值最近记录（从 hidden_value_records 表读取）"""
+        lines = []
+        hv_states = self.db.get_all_hidden_value_states()
+        for hv in hv_states:
+            vid = hv["hidden_value_id"]
+            name = hv.get("name", vid)
+            # get_hidden_value_records() 返回最新在前的记录列表，取最后3条（时间顺序）
+            raw_records = self.db.get_hidden_value_records(vid, limit=9999) or []
+            # 最新在前 → 反转得到时间正序，再取最后3条
+            recent = list(reversed(raw_records))[-3:]
+            if not recent:
+                continue
+            for r in recent:
+                delta = r.get("delta", 0)
+                sign = "+" if delta >= 0 else ""
+                lines.append(
+                    f"- [{name}] {r.get('source', '')} "
+                    f"{sign}{delta}（{r.get('scene_id', '')}）"
+                )
+        return "\n".join(lines) if lines else "（暂无记录）"
+
+    def _build_npc_status(self) -> str:
+        """db 模式：渲染当前场景活跃 NPC 状态"""
+        if self.mode != "db":
+            return ""
+
+        npcs = self.db.query_npcs_in_scene(self.current_scene_id)
+        if not npcs:
+            npcs = self.db.get_all_npc_states()[:5]  # fallback：最近5个NPC
+        if not npcs:
+            return "（暂无NPC状态）"
+
+        lines = []
+        for npc in npcs:
+            lines.append(
+                f"- {npc['name']}（{npc['id']}）: "
+                f"关系{npc.get('relation_value', 0)} | "
+                f"位于{npc.get('current_location', '?')}"
+            )
+        return "\n".join(lines)
+
+    def _build_dialogue_history(self) -> str:
+        """db 模式：渲染最近对话历史"""
+        if self.mode != "db":
+            return ""
+
+        dialogues = self.db.query_dialogue(limit=10)
+        if not dialogues:
+            return "（暂无对话历史）"
+
+        lines = []
+        for d in dialogues:
+            prefix = "【玩家】" if d["speaker"] == "player" else f"【{d['npc_id']}】"
+            content = d.get("summary") or d.get("content", "")[:50]
+            lines.append(f"{prefix} {content}")
+        return "\n".join(lines[:6])  # 最多6条
+
+    def _build_world_events(self) -> str:
+        """db 模式：渲染世界事件回顾"""
+        if self.mode != "db":
+            return ""
+
+        if self.turn > 0:
+            events = self.db.query_events(turn=self.turn, limit=5)
+        else:
+            events = self.db.query_events(limit=5)
+
+        if not events:
+            return "（暂无世界事件）"
+
+        lines = []
+        for e in events:
+            tags = json.loads(e.get("tags", "[]"))
+            tag_str = f"[{','.join(tags)}]" if tags else ""
+            lines.append(f"- [{e['scene_id']}] {e['summary']} {tag_str}")
         return "\n".join(lines)
 
     # ────────────────────────────────────────────────
@@ -257,11 +439,22 @@ class PromptBuilder:
         """
         locked_str = self._build_locked_options()
 
-        # 获取场景中的可用选项（如果有预设）
         if scene.available_actions:
             options_str = "\n".join(f"- {a}" for a in scene.available_actions)
         else:
             options_str = "（由你根据情境自由发挥）"
+
+        # ── 模式专属额外区块 ──
+        if self.mode == "db":
+            mode_extra = DB_MODE_EXTRA_TEMPLATE.format(
+                npc_status=self._build_npc_status(),
+                dialogue_history=self._build_dialogue_history(),
+                world_events=self._build_world_events(),
+            ).strip()
+            hidden_values_section = self._build_hidden_values_section_for_db()
+        else:
+            mode_extra = ""
+            hidden_values_section = self._build_hidden_values_section()
 
         return SYSTEM_PROMPT_TEMPLATE.format(
             name=self.game_loader.meta.name,
@@ -269,12 +462,49 @@ class PromptBuilder:
             scene_title=scene.title,
             scene_content=scene.content[:3000],
             player_status=self._build_player_status(),
-            hidden_values_section=self._build_hidden_values_section(),
+            hidden_values_section=hidden_values_section,
             available_options=options_str,
             locked_options=locked_str,
-            moral_debt_records=self._build_moral_debt_records(),
+            moral_debt_records=self._build_hidden_value_records(),
             npc_relations=self._build_npc_relations(),
+            mode_extra=f"\n\n{mode_extra}" if mode_extra else "",
         )
+
+    def _build_hidden_values_section_for_db(self) -> str:
+        """db 模式：渲染隐藏数值区块（从 DB 读取 level）"""
+        hv_states = self.db.get_all_hidden_value_states()
+        if not hv_states:
+            return "（暂无隐藏数值记录）"
+
+        rows = []
+        for hv in hv_states:
+            level = hv.get("level", 0)
+            records_json = hv.get("records_json", "{}")
+            try:
+                eff_data = json.loads(records_json) if records_json else {}
+            except Exception:
+                eff_data = {}
+
+            # 从 cfg 读取 narrative_tone
+            vid = hv["hidden_value_id"]
+            cfg = self.hidden_values_cfg.get(vid, {})
+            effects_cfg = cfg.get("effects", {})
+            thresholds = cfg.get("thresholds", [0])
+            threshold_key = str(thresholds[level]) if level < len(thresholds) else str(thresholds[-1])
+            eff = effects_cfg.get(threshold_key, {})
+            tone = eff.get("narrative_tone", hv.get("description", "—"))
+            locked = eff.get("locked_options", [])
+            locked_str = "、".join(locked) if locked else "（无）"
+
+            rows.append(
+                f"| {hv['name']} | 等级{level} | {tone} | 锁定：{locked_str} |"
+            )
+
+        hv_section = HIDDEN_VALUES_TEMPLATE.format(
+            hv_rows="\n".join(rows) if rows else "| — | — | — | — |",
+            action_tags_section="（db 模式通过 hidden_value_delta 指令更新数值）",
+        )
+        return hv_section.strip()
 
     def build_user_prompt(self, player_input: str, history_summary: str = "") -> str:
         """构建用户输入的 prompt"""
@@ -312,11 +542,21 @@ class PromptBuilder:
 {self.build_user_prompt("", history_summary)}
 """
 
+    def update_turn(self, scene_id: str, turn: int) -> None:
+        """更新当前场景和回合（切换场景时调用）"""
+        self.current_scene_id = scene_id
+        self.turn = turn
+
     def get_hidden_value_snapshot(self) -> Dict[str, Dict]:
         """暴露隐藏数值快照，供调用方（如 game_master.py）查询"""
         if self.hidden_value_sys is None:
             return {}
         return self.hidden_value_sys.get_snapshot()
+
+    # get_snapshot：get_hidden_value_snapshot 的别名，兼容 context_builder 测试
+    def get_snapshot(self) -> Dict[str, Dict]:
+        """get_hidden_value_snapshot 的别名"""
+        return self.get_hidden_value_snapshot()
 
     def get_narrative_styles(self) -> Dict[str, str]:
         """暴露各隐藏数值的当前叙事风格，供 GM 层使用"""
@@ -330,13 +570,15 @@ class PromptBuilder:
         scene_id: str,
         turn: int,
         player_action: str,
-    ) -> tuple[Dict[str, int], Dict[str, Optional[str]]]:
+    ) -> tuple[Dict[str, int], Dict[str, Optional[str]], Dict[str, int]]:
         """
         通过 action_tag 触发隐藏数值变化。
         返回 (各值变化量, 各值触发场景, 关系变化量)。
 
         调用方应在 GM 返回 action_tag 后调用此方法。
         relation_delta 由调用方自行处理（如应用到 DialogueSystem）。
+
+        注意：仅 memory 模式可用。db 模式下请直接操作数据库。
         """
         if self.hidden_value_sys is None:
             return {}, {}, {}
