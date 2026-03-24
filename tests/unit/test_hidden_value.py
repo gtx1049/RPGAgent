@@ -1112,3 +1112,292 @@ class TestHiddenValueDecayPersistence:
         assert hv.decay_per_turn == 0
         assert hv.decay_min_value is None
 
+
+    # ─────────────────────────────────────────────────────────────
+    # CrossTrigger 跨值联动测试
+    # ─────────────────────────────────────────────────────────────
+
+    def test_cross_trigger_basic_one_shot(self):
+        """
+        HiddenValueSystem._process_cross_triggers:
+        道德债务跨阈触发理智扣减，one_shot=True 防止重复触发。
+        """
+        configs = [
+            {
+                "id": "moral_debt",
+                "name": "道德债务",
+                "direction": "ascending",
+                "thresholds": [0, 11, 26],
+                "effects": {
+                    "0":  {},
+                    "11": {
+                        "cross_triggers": [
+                            {"target_id": "sanity", "delta": -5,
+                             "source": "道德麻木导致精神损耗", "one_shot": True}
+                        ]
+                    },
+                    "26": {},
+                },
+            },
+            {
+                "id": "sanity",
+                "name": "理智",
+                "direction": "descending",
+                "thresholds": [0, 30, 60],
+                "effects": {
+                    "0":  {},
+                    "30": {},
+                    "60": {},
+                },
+            },
+        ]
+        hvs = HiddenValueSystem(configs=configs, action_map={
+            "silent_witness": {"moral_debt": 12},  # 12 >= 11 → 跨阈
+        })
+
+        deltas, triggered, rel_deltas, ct_results = hvs.record_action(
+            action_tag="silent_witness",
+            scene_id="s1",
+            turn=1,
+            player_action="沉默目睹",
+        )
+        assert deltas["moral_debt"] == 12  # 12 >= 11 → level_idx=1
+        assert ct_results.get("sanity") is not None
+        sanity_ct = ct_results["sanity"][0]
+        assert sanity_ct["delta"] == -5
+        assert sanity_ct["source"] == "道德麻木导致精神损耗"
+        assert sanity_ct["triggered"] is True
+        # sanity 当前值应为 -5（cross_trigger 累加）
+        assert hvs.values["sanity"]._compute_raw_value() == -5
+
+
+    def test_cross_trigger_one_shot_prevents_retrigger_on_same_cross(self):
+        """
+        one_shot=True 时，同一 (source_id, threshold, target_id) 不在同一次跨阈中重复触发。
+        当 moral_debt 继续累加跨越第二档时，sanity 的 cross_trigger 不会再次触发
+        （因为同一 fired_key 已存在于 _one_shot_fired）。
+        """
+        configs = [
+            {
+                "id": "moral_debt",
+                "name": "道德债务",
+                "direction": "ascending",
+                "thresholds": [0, 11, 26],
+                "effects": {
+                    "0":  {},
+                    "11": {
+                        "cross_triggers": [
+                            {"target_id": "sanity", "delta": -5,
+                             "source": "道德麻木", "one_shot": True}
+                        ]
+                    },
+                    "26": {
+                        "cross_triggers": [
+                            {"target_id": "rapport", "delta": -8,
+                             "source": "彻底麻木", "one_shot": True}
+                        ]
+                    },
+                },
+            },
+            {
+                "id": "sanity",
+                "name": "理智",
+                "direction": "descending",
+                "thresholds": [0],
+                "effects": {"0": {}},
+            },
+            {
+                "id": "rapport",
+                "name": "人际好感",
+                "direction": "ascending",
+                "thresholds": [0],
+                "effects": {"0": {}},
+            },
+        ]
+        hvs = HiddenValueSystem(configs=configs, action_map={
+            "silent_witness": {"moral_debt": 15},   # 跨阈到 11
+            "violent_act":    {"moral_debt": 20},   # 跨阈到 26
+        })
+
+        # 第一次：跨过 11，sanity -5
+        deltas1, _, _, ct1 = hvs.record_action(
+            action_tag="silent_witness", scene_id="s1", turn=1, player_action=""
+        )
+        assert ct1["sanity"][0]["triggered"] is True
+        assert hvs.values["sanity"]._compute_raw_value() == -5
+
+        # 第二次：跨过 26，rapport -8（sanity 不再被触发，fired_key 已存在）
+        deltas2, _, _, ct2 = hvs.record_action(
+            action_tag="violent_act", scene_id="s2", turn=2, player_action=""
+        )
+        assert ct2["rapport"][0]["triggered"] is True
+        # sanity 不应有新的 triggered（one_shot 已点燃）
+        sanity_triggereds = [c for c in ct2.get("sanity", []) if c["triggered"]]
+        assert len(sanity_triggereds) == 0
+
+    def test_cross_trigger_negative_threshold_cross_no_trigger(self):
+        """
+        负向跨阈（ascending level_idx 减少）不触发 cross_triggers。
+        通过 add(negative) 让 moral_debt 档位下降，sanity 不应被动过。
+        """
+        configs = [
+            {
+                "id": "moral_debt",
+                "name": "道德债务",
+                "direction": "ascending",
+                "thresholds": [0, 20],
+                "effects": {
+                    "0":  {},
+                    "20": {
+                        "cross_triggers": [
+                            {"target_id": "sanity", "delta": -10,
+                             "source": "测试", "one_shot": True}
+                        ]
+                    },
+                },
+            },
+            {
+                "id": "sanity",
+                "name": "理智",
+                "direction": "descending",
+                "thresholds": [0],
+                "effects": {"0": {}},
+            },
+        ]
+        hvs = HiddenValueSystem(configs=configs, action_map={
+            "silent_witness": {"moral_debt": 25},  # 跨阈到 level 1
+            "help_victim":   {"moral_debt": -25}, # 回到 level 0
+        })
+
+        # 先跨阈触发
+        hvs.record_action(action_tag="silent_witness", scene_id="s1", turn=1, player_action="")
+        assert hvs.values["sanity"]._compute_raw_value() == -10
+
+        # 救赎行为：moral_debt 回落到 level 0（负向跨阈）
+        hvs.record_action(action_tag="help_victim", scene_id="s2", turn=2, player_action="")
+        assert hvs.values["moral_debt"].level_idx == 0
+        # sanity 不应再被触发（负向跨阈不触发 cross_triggers）
+        assert hvs.values["sanity"]._compute_raw_value() == -10  # 保持不变
+
+    def test_cross_trigger_snapshot_roundtrip(self):
+        """
+        from_config 正确解析 cross_triggers 配置，
+        并存储在 LevelEffect.cross_triggers 列表中。
+        """
+        cfg = {
+            "id": "moral_debt",
+            "name": "道德债务",
+            "direction": "ascending",
+            "thresholds": [0, 11, 26],
+            "effects": {
+                "11": {
+                    "cross_triggers": [
+                        {"target_id": "sanity", "delta": -5,
+                         "source": "道德麻木", "one_shot": True}
+                    ]
+                },
+            },
+        }
+        hv = HiddenValue.from_config(cfg)
+
+        # 验证 from_config 正确解析了 cross_triggers
+        eff11 = hv.effects[11]
+        assert len(eff11.cross_triggers) == 1
+        assert eff11.cross_triggers[0].target_id == "sanity"
+        assert eff11.cross_triggers[0].delta == -5
+        assert eff11.cross_triggers[0].source == "道德麻木"
+        assert eff11.cross_triggers[0].one_shot is True
+
+        # 验证 effects[0] 没有 cross_triggers
+        assert len(hv.effects[0].cross_triggers) == 0
+
+    def test_cross_trigger_multiple_targets(self):
+        """
+        一个档位可配置多个 cross_triggers，同时修改多个目标 hidden_value。
+        """
+        configs = [
+            {
+                "id": "moral_debt",
+                "name": "道德债务",
+                "direction": "ascending",
+                "thresholds": [0, 11],
+                "effects": {
+                    "11": {
+                        "cross_triggers": [
+                            {"target_id": "sanity", "delta": -5,
+                             "source": "道德麻木", "one_shot": True},
+                            {"target_id": "rapport", "delta": -3,
+                             "source": "道德污点", "one_shot": True},
+                        ]
+                    },
+                },
+            },
+            {
+                "id": "sanity",
+                "name": "理智",
+                "direction": "descending",
+                "thresholds": [0],
+                "effects": {"0": {}},
+            },
+            {
+                "id": "rapport",
+                "name": "人际好感",
+                "direction": "ascending",
+                "thresholds": [0],
+                "effects": {"0": {}},
+            },
+        ]
+        hvs = HiddenValueSystem(configs=configs, action_map={
+            "silent_witness": {"moral_debt": 11},  # exactly at threshold
+        })
+        deltas, _, _, ct_results = hvs.record_action(
+            action_tag="silent_witness", scene_id="s1", turn=1, player_action=""
+        )
+        assert deltas["moral_debt"] == 11
+        assert deltas["sanity"] == -5
+        assert deltas["rapport"] == -3
+        assert len(ct_results["sanity"]) == 1
+        assert len(ct_results["rapport"]) == 1
+
+    def test_cross_trigger_not_triggered_when_no_threshold_cross(self):
+        """
+        未发生档位变化时（level_idx 不变），不触发 cross_triggers。
+        在同一档位内多次 add，不跨阈，sanity 不应被动过。
+        """
+        configs = [
+            {
+                "id": "moral_debt",
+                "name": "道德债务",
+                "direction": "ascending",
+                "thresholds": [0, 11, 26],
+                "effects": {
+                    "0":  {},
+                    "11": {
+                        "cross_triggers": [
+                            {"target_id": "sanity", "delta": -5,
+                             "source": "道德麻木", "one_shot": True}
+                        ]
+                    },
+                    "26": {},
+                },
+            },
+            {
+                "id": "sanity",
+                "name": "理智",
+                "direction": "descending",
+                "thresholds": [0],
+                "effects": {"0": {}},
+            },
+        ]
+        hvs = HiddenValueSystem(configs=configs, action_map={
+            "witness1": {"moral_debt": 5},
+            "witness2": {"moral_debt": 5},
+        })
+
+        # 在同一档位内两次 add，均不跨阈
+        hvs.record_action(action_tag="witness1", scene_id="s1", turn=1, player_action="目睹1")
+        hvs.record_action(action_tag="witness2", scene_id="s2", turn=2, player_action="目睹2")
+        # sanity 不应被动过（两次均未跨过 11）
+        assert hvs.values["sanity"]._compute_raw_value() == 0
+
+
