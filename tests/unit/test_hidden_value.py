@@ -640,7 +640,7 @@ class TestHiddenValueSystemPersistence:
             CREATE TABLE hidden_value_state (
                 hidden_value_id TEXT PRIMARY KEY,
                 name TEXT, description TEXT, level INTEGER DEFAULT 0,
-                records_json TEXT DEFAULT '[]'
+                effects_snapshot TEXT DEFAULT '{}'
             );
             CREATE TABLE hidden_value_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -675,16 +675,16 @@ class TestHiddenValueSystemPersistence:
                     c.commit()
 
             def upsert_hidden_value_state(self, hidden_value_id, name, description,
-                                          level, records=None):
+                                          level, effects_snapshot=None):
                 import json as _json
                 with self._conn() as c:
                     c.execute(
-                        """INSERT INTO hidden_value_state (hidden_value_id,name,description,level,records_json)
+                        """INSERT INTO hidden_value_state (hidden_value_id,name,description,level,effects_snapshot)
                            VALUES (?,?,?,?,?)
                            ON CONFLICT(hidden_value_id) DO UPDATE SET
                                name=excluded.name, description=excluded.description,
-                               level=excluded.level, records_json=excluded.records_json""",
-                        (hidden_value_id, name, description, level, _json.dumps(records or [])),
+                               level=excluded.level, effects_snapshot=excluded.effects_snapshot""",
+                        (hidden_value_id, name, description, level, _json.dumps(effects_snapshot or {})),
                     )
                     c.commit()
 
@@ -759,7 +759,7 @@ class TestHiddenValueSystemPersistence:
             "CREATE TABLE hidden_value_state ("
             "hidden_value_id TEXT PRIMARY KEY, name TEXT, "
             "description TEXT, level INTEGER DEFAULT 0, "
-            "records_json TEXT DEFAULT '[]')"
+            "effects_snapshot TEXT DEFAULT '{}')"
         )
         conn.execute(
             "CREATE TABLE hidden_value_records ("

@@ -407,6 +407,62 @@ class HiddenValueSystem:
         return {vid: hv.get_snapshot() for vid, hv in self.values.items()}
 
     # ────────────────────────────────────────────────
+    # 公共序列化接口（供 DB 持久化使用）
+    # ────────────────────────────────────────────────
+
+    def export_effects_snapshot(self, hidden_value_id: str) -> Dict[str, Dict]:
+        """
+        导出指定 HiddenValue 的 effects 快照（JSON-safe dict）。
+
+        这是供数据库持久化使用的公共接口。快照包含各档位的完整效果定义，
+        可通过 load_effects_snapshot() 恢复，包括 trigger_fired / trigger_executed 状态。
+
+        格式：{ threshold_str: { locked_options, narrative_tone, narrative_style,
+                                trigger_scene, trigger_fired, trigger_executed }, ... }
+
+        若 ID 不存在，返回空字典。
+
+        Example:
+            snapshot = hvs.export_effects_snapshot("moral_debt")
+            # → {"0": {...}, "11": {"narrative_tone": "内心开始有声音",
+            #       "locked_options": ["主动干预"], "trigger_scene": "flashback_01",
+            #       "trigger_fired": True, "trigger_executed": False}, ...}
+        """
+        hv = self.values.get(hidden_value_id)
+        if not hv:
+            return {}
+        return self._serialize_effects(hv)
+
+    def load_effects_snapshot(self, hidden_value_id: str, snapshot: Dict[str, Dict]) -> None:
+        """
+        用 effects 快照恢复指定 HiddenValue 的可持久化字段。
+
+        覆盖 locked_options、narrative_tone、narrative_style、trigger_scene、
+        trigger_executed（但不包括 trigger_fired——由调用方通过记录回放自行计算）。
+
+        若 ID 不存在，静默忽略。
+
+        Args:
+            hidden_value_id: 要恢复的 HiddenValue ID
+            snapshot: export_effects_snapshot() 返回的快照字典
+        """
+        hv = self.values.get(hidden_value_id)
+        if not hv:
+            return
+
+        for t_str, saved_e in snapshot.items():
+            t = int(t_str)
+            if t in hv.effects:
+                eff = hv.effects[t]
+                eff.locked_options = saved_e.get("locked_options", [])
+                eff.narrative_tone = saved_e.get("narrative_tone", "")
+                eff.narrative_style = saved_e.get("narrative_style", "")
+                eff.trigger_scene = saved_e.get("trigger_scene", "")
+                # trigger_executed 也从快照恢复（GM 已插入过的场景不重复插入）
+                eff.trigger_executed = saved_e.get("trigger_executed", False)
+            # trigger_fired 不在这里恢复：由调用方通过记录回放自行计算
+
+    # ────────────────────────────────────────────────
     # 数据库持久化
     # ────────────────────────────────────────────────
 
@@ -436,8 +492,8 @@ class HiddenValueSystem:
 
         每次保存写入两条信息：
         1. hidden_value_records：每条变化的原始记录（全量替换，幂等）
-        2. hidden_value_state.records_json：当前 effects 快照，
-           包含 trigger_fired 状态，使状态表自包含
+        2. hidden_value_state.effects_snapshot：当前 effects 快照，
+           包含 trigger_fired / trigger_executed 状态，使状态表自包含
 
         Args:
             db: Database 实例（见 data.database.Database）
@@ -457,14 +513,14 @@ class HiddenValueSystem:
                     turn=rec.turn,
                 )
 
-            # 2) 写入当前状态的 snapshot（覆盖式 upsert）
-            #    records_json 存 full effects snapshot，使 state 表自包含
+            # 2) 写入当前状态的 effects 快照（覆盖式 upsert）
+            #    effects_snapshot 存 full effects snapshot，使 state 表自包含
             db.upsert_hidden_value_state(
                 hidden_value_id=hv.id,
                 name=hv.name,
                 description=hv.description,
                 level=hv.level_idx,
-                records=self._serialize_effects(hv),
+                effects_snapshot=self.export_effects_snapshot(hv.id),
             )
 
     def _delete_records_for(self, db, hidden_value_id: str) -> None:
@@ -483,6 +539,12 @@ class HiddenValueSystem:
         从 hidden_value_state 恢复 level_idx 和 effects 快照，
         从 hidden_value_records 重建 records 列表，
         并通过记录回放重建 trigger_fired 状态。
+
+        恢复顺序：
+        1. 从 records_json（即 effects_snapshot）恢复 effects 可持久化字段
+           （locked_options、narrative_tone、narrative_style、trigger_scene、trigger_executed）
+        2. 重置所有 trigger_fired 为 False（由步骤 3 重新计算）
+        3. 重放 records，计算每步的 level_idx，跨阈时标记 trigger_fired
         """
         import json as _json
 
@@ -495,7 +557,7 @@ class HiddenValueSystem:
 
             hv = self.values[vid]
 
-            # 重建 records（DB 返回最新在前，需要反转按时间顺序回放）
+            # 1) 重建 records（DB 返回最新在前，需要反转按时间顺序回放）
             records_raw = db.get_hidden_value_records(vid, limit=9999)
             records_chronological = list(reversed(records_raw))
             hv.records = [
@@ -509,37 +571,26 @@ class HiddenValueSystem:
                 for r in records_chronological
             ]
 
-            # 从 records_json 恢复 effects 快照（覆盖 config 中定义的默认值）。
-            # 这确保 trigger_scene、locked_options、narrative_tone 等字段
-            # 不会因 config 缺失而丢失。
-            raw_records_json = state.get("records_json")
+            # 2) 从 effects_snapshot 恢复 effects 可持久化字段
+            #    （trigger_fired 由步骤 3 重新计算，不从这里恢复）
+            raw_snapshot = state.get("effects_snapshot")
             saved_effects: Dict = {}
-            if raw_records_json:
+            if raw_snapshot:
                 try:
-                    parsed = _json.loads(raw_records_json)
+                    parsed = _json.loads(raw_snapshot)
                     if isinstance(parsed, dict):
                         saved_effects = parsed
                 except Exception:
                     saved_effects = {}
 
-            # 重置所有 trigger_fired 和 trigger_executed 为 False（replay 会重新计算）
+            # 重置 trigger_fired（由记录回放重新计算），保留 trigger_executed
             for t, eff in hv.effects.items():
                 eff.trigger_fired = False
-                eff.trigger_executed = False
 
-            # 用 saved_effects 覆盖 effects 中的可持久化字段
-            for t_str, saved_e in saved_effects.items():
-                t = int(t_str)
-                if t in hv.effects:
-                    eff = hv.effects[t]
-                    eff.locked_options = saved_e.get("locked_options", [])
-                    eff.narrative_tone = saved_e.get("narrative_tone", "")
-                    eff.narrative_style = saved_e.get("narrative_style", "")
-                    eff.trigger_scene = saved_e.get("trigger_scene", "")
-                    # trigger_executed 也从 DB 恢复（GM 已插入过的场景不重复插入）
-                    eff.trigger_executed = saved_e.get("trigger_executed", False)
+            # 用 saved_effects 恢复可持久化字段（通过公共 API）
+            self.load_effects_snapshot(vid, saved_effects)
 
-            # 通过记录回放重建 level_idx 和 trigger_fired
+            # 3) 通过记录回放重建 level_idx 和 trigger_fired
             raw_value = hv._compute_raw_value()
             hv._set_level(raw_value)
 

@@ -105,12 +105,13 @@ PLAYER_STATUS_TEMPLATE = """
 # ────────────────────────────────────────────────
 
 HIDDEN_VALUES_TEMPLATE = """
-| 数值名称 | 当前档位 | 叙事语气 | 效果 |
-|----------|----------|----------|------|
+| 数值名称 | 当前档位 | 叙事语气 | 叙事风格 | 效果 |
+|----------|----------|----------|----------|------|
 {hv_rows}
 
 ### 行为标签（供 GM 在 action_tag 中使用）
 action_tag 由 GM 在 [GM_COMMAND] 中返回，系统根据标签自动更新隐藏数值。
+叙事风格（normal / fragmented / dissociated）用于指导你的叙事文风，请遵守。
 以下是当前剧本定义的行为标签：
 
 {action_tags_section}
@@ -208,11 +209,12 @@ class PromptBuilder:
         for vid, snap in snapshots.items():
             eff = snap["effect"]
             tone = eff.get("narrative_tone", "—")
+            style = eff.get("narrative_style", "normal")
             locked_opts = eff.get("locked_options")
             locked_str = "、".join(locked_opts) if locked_opts else "（无）"
             rows.append(
                 f"| {snap['name']} | {snap['current_threshold']} | "
-                f"{tone} | 锁定：{locked_str} |"
+                f"{tone} | {style} | 锁定：{locked_str} |"
             )
 
         hv_section = HIDDEN_VALUES_TEMPLATE.format(
@@ -228,10 +230,14 @@ class PromptBuilder:
 
         lines = []
         for tag, changes in self.hidden_value_sys.action_map.items():
+            # relation_delta 是 dict（如 {"npc_id": -10}），不参与数值渲染
             change_desc = ", ".join(
-                f"{vid}{'+' if d >= 0 else ''}{d}" for vid, d in changes.items()
+                f"{vid}{'+' if d >= 0 else ''}{d}"
+                for vid, d in changes.items()
+                if vid != "relation_delta" and isinstance(d, int)
             )
-            lines.append(f"- **{tag}**：{change_desc}")
+            if change_desc:  # 跳过只有 relation_delta 的 action_tag
+                lines.append(f"- **{tag}**：{change_desc}")
         return "\n".join(lines) if lines else "（无）"
 
     def _build_locked_options(self) -> str:
@@ -471,7 +477,13 @@ class PromptBuilder:
         )
 
     def _build_hidden_values_section_for_db(self) -> str:
-        """db 模式：渲染隐藏数值区块（从 DB 读取 level）"""
+        """
+        db 模式：渲染隐藏数值区块。
+
+        从 hidden_value_state.effects_snapshot 列读取 effects 快照，
+        用当前 level 对应的 threshold_key 索引得到该档位效果，
+        从而渲染 narrative_tone 和 locked_options。
+        """
         hv_states = self.db.get_all_hidden_value_states()
         if not hv_states:
             return "（暂无隐藏数值记录）"
@@ -479,25 +491,32 @@ class PromptBuilder:
         rows = []
         for hv in hv_states:
             level = hv.get("level", 0)
-            records_json = hv.get("records_json", "{}")
-            try:
-                eff_data = json.loads(records_json) if records_json else {}
-            except Exception:
-                eff_data = {}
 
-            # 从 cfg 读取 narrative_tone
+            # effects_snapshot：{ threshold_str: { locked_options, narrative_tone, ... }, ... }
+            effects_snapshot_raw = hv.get("effects_snapshot", "{}")
+            try:
+                effects_snapshot: Dict = json.loads(effects_snapshot_raw) if effects_snapshot_raw else {}
+            except Exception:
+                effects_snapshot = {}
+
+            # 用 level 找到当前 threshold 对应的 key
             vid = hv["hidden_value_id"]
             cfg = self.hidden_values_cfg.get(vid, {})
-            effects_cfg = cfg.get("effects", {})
             thresholds = cfg.get("thresholds", [0])
             threshold_key = str(thresholds[level]) if level < len(thresholds) else str(thresholds[-1])
-            eff = effects_cfg.get(threshold_key, {})
-            tone = eff.get("narrative_tone", hv.get("description", "—"))
-            locked = eff.get("locked_options", [])
+
+            # 优先从 effects_snapshot 读（数据库中已保存的运行时状态），
+            # 降级到剧本原始配置
+            snapshot_eff = effects_snapshot.get(threshold_key, {})
+            effects_cfg = cfg.get("effects", {})
+            cfg_eff = effects_cfg.get(threshold_key, {})
+            tone = snapshot_eff.get("narrative_tone") or cfg_eff.get("narrative_tone", hv.get("description", "—"))
+            style = snapshot_eff.get("narrative_style") or cfg_eff.get("narrative_style", "normal")
+            locked = snapshot_eff.get("locked_options") or cfg_eff.get("locked_options", [])
             locked_str = "、".join(locked) if locked else "（无）"
 
             rows.append(
-                f"| {hv['name']} | 等级{level} | {tone} | 锁定：{locked_str} |"
+                f"| {hv['name']} | 等级{level} | {tone} | {style} | 锁定：{locked_str} |"
             )
 
         hv_section = HIDDEN_VALUES_TEMPLATE.format(

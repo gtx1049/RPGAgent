@@ -58,12 +58,14 @@ CREATE TABLE IF NOT EXISTS hidden_value_records (
 );
 
 -- 隐藏数值当前状态
+-- effects_snapshot 列存储 JSON 序列化的 effects 快照
+-- （而非 HiddenValueRecord 列表，records 列表存在 hidden_value_records 表）
 CREATE TABLE IF NOT EXISTS hidden_value_state (
     hidden_value_id TEXT PRIMARY KEY,
     name            TEXT,
     description     TEXT,
     level           INTEGER DEFAULT 0,
-    records_json    TEXT DEFAULT '[]'
+    effects_snapshot TEXT DEFAULT '{}'
 );
 
 -- 场景标记（伏笔/开关/变量）
@@ -301,7 +303,13 @@ class Database:
                 "SELECT * FROM hidden_value_state WHERE hidden_value_id = ?",
                 (hidden_value_id,),
             ).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        result = dict(row)
+        # 兼容旧列名：优先读新列，新列为空时降级读旧列
+        if result.get("effects_snapshot") in (None, "{}"):
+            result["effects_snapshot"] = result.get("records_json", "{}")
+        return result
 
     def upsert_hidden_value_state(
         self,
@@ -309,26 +317,71 @@ class Database:
         name: str = "",
         description: str = "",
         level: int = 0,
-        records: List[Dict] | None = None,
+        effects_snapshot: Dict | None = None,
     ) -> None:
+        """
+        插入或更新隐藏数值的当前状态。
+
+        Args:
+            hidden_value_id: 隐藏数值 ID（如 moral_debt / sanity）
+            name: 显示名称
+            description: 描述
+            level: 当前 level_idx（对应 thresholds 数组索引）
+            effects_snapshot: HiddenValue.export_effects_snapshot() 返回的 effects 快照字典。
+                              存储在 effects_snapshot 列，使状态表自包含。
+                              格式：{ threshold_str: { locked_options, narrative_tone,
+                              narrative_style, trigger_scene, trigger_fired, trigger_executed }, ... }
+        """
         with self._conn() as conn:
             conn.execute(
                 """INSERT INTO hidden_value_state
-                      (hidden_value_id, name, description, level, records_json)
+                      (hidden_value_id, name, description, level, effects_snapshot)
                    VALUES (?, ?, ?, ?, ?)
                    ON CONFLICT(hidden_value_id) DO UPDATE SET
-                       name         = excluded.name,
-                       description  = excluded.description,
-                       level        = excluded.level,
-                       records_json = excluded.records_json""",
-                (hidden_value_id, name, description, level, json.dumps(records or [])),
+                       name             = excluded.name,
+                       description      = excluded.description,
+                       level            = excluded.level,
+                       effects_snapshot = excluded.effects_snapshot""",
+                (hidden_value_id, name, description, level,
+                 json.dumps(effects_snapshot or {})),
             )
+            conn.commit()
+
+    def migrate_records_json_to_effects_snapshot(self) -> None:
+        """
+        将旧的 records_json 列数据迁移到新的 effects_snapshot 列。
+
+        旧格式：records_json 存储 effects 序列化（与 effects_snapshot 相同）
+        新格式：列名改为 effects_snapshot（语义更清晰）
+        此迁移将旧列复制到新列，无数据损失。
+        仅在检测到旧列有数据且新列为空时执行。
+        """
+        with self._conn() as conn:
+            # 检测旧列是否存在数据
+            cur = conn.execute(
+                "SELECT hidden_value_id, records_json FROM hidden_value_state "
+                "WHERE records_json IS NOT NULL AND records_json != '[]' "
+                "AND (effects_snapshot IS NULL OR effects_snapshot = '{}')"
+            ).fetchall()
+            for row in cur:
+                conn.execute(
+                    "UPDATE hidden_value_state SET effects_snapshot = ? "
+                    "WHERE hidden_value_id = ?",
+                    (row["records_json"], row["hidden_value_id"]),
+                )
             conn.commit()
 
     def get_all_hidden_value_states(self) -> List[Dict]:
         with self._conn() as conn:
             rows = conn.execute("SELECT * FROM hidden_value_state").fetchall()
-        return [dict(r) for r in rows]
+        result = []
+        for r in rows:
+            d = dict(r)
+            # 兼容旧列名：优先读新列，新列为空时降级读旧列
+            if d.get("effects_snapshot") in (None, "{}"):
+                d["effects_snapshot"] = d.get("records_json", "{}")
+            result.append(d)
+        return result
 
     # ────────────────────────────────────────────────
     # 场景标记
