@@ -1,5 +1,6 @@
 # tests/unit/test_hidden_value.py
 import pytest
+from contextlib import contextmanager
 from systems.hidden_value import (
     HiddenValue, HiddenValueSystem, LevelEffect, HiddenValueRecord
 )
@@ -71,20 +72,28 @@ class TestHiddenValue:
         assert triggered2 is None
 
     def test_descending_direction(self):
+        """
+        descending: 值越高 = 状态越好（理智归位、声望恢复）
+        thresholds=[0, 30, 60, 80] 中，数值越大越接近最佳状态（level_idx越高）。
+
+        算法：找第一个 value < threshold[i] → level_idx = max(0, i-1)
+
+        value=15：15<30 是第一个满足条件（i=1）→ level_idx=0, threshold=0
+        value=65：65<80 是第一个满足条件（i=3）→ level_idx=2, threshold=60
+        """
         hv = HiddenValue(
             id="sanity",
             name="理智",
             direction="descending",
             thresholds=[0, 30, 60, 80],
         )
-        # descending: delta=15，value=15，还没跌破30门槛（仍在第1档）
         hv.add(10, "恐怖事件", "s1")
         hv.add(5, "恐怖事件", "s2")
-        # value=15：跌破0（第3档门槛），未跌破30 → 第1档（最接近初始值）
-        assert hv.current_threshold == 30
+        # value=15: 15<30 → level_idx=0, threshold=0（最底层档）
+        assert hv.current_threshold == 0
 
         hv.add(50, "极端事件", "s3")
-        # value=65：跌破60（第2档门槛），未跌破80 → 第2档
+        # value=65: 65<80 → level_idx=2, threshold=60
         assert hv.current_threshold == 60
 
     def test_snapshot(self):
@@ -203,3 +212,248 @@ class TestHiddenValueSystem:
         snaps = hvs.get_snapshot()
         assert "test" in snaps
         assert snaps["test"]["record_count"] == 1
+
+    def test_record_action_with_action_map(self):
+        """action_map 驱动 record_action，一次标签触发多个数值同时变化"""
+        hvs = HiddenValueSystem(
+            configs=[
+                {"id": "moral_debt", "direction": "ascending", "thresholds": [0, 11, 26]},
+                {"id": "sanity",     "direction": "descending", "thresholds": [0, 30, 60]},
+            ],
+            action_map={
+                "silent_witness": {"moral_debt": 5, "sanity": -5},
+                "help_victim":     {"moral_debt": -3, "sanity": 3},
+            },
+        )
+        deltas, triggered = hvs.record_action(
+            action_tag="silent_witness",
+            scene_id="scene_01",
+            turn=3,
+            player_action="选择袖手旁观",
+        )
+        # moral_debt: 0+5=5 → level_idx=0, triggered=None
+        assert deltas["moral_debt"] == 5
+        assert deltas["sanity"] == -5
+        assert triggered["moral_debt"] is None
+        assert triggered["sanity"] is None
+
+    def test_record_action_triggers_scene(self):
+        """跨阈值触发场景（action_map + trigger_scene）"""
+        hvs = HiddenValueSystem(
+            configs=[
+                {
+                    "id": "moral_debt",
+                    "direction": "ascending",
+                    "thresholds": [0, 10, 20],
+                    "effects": {
+                        "0":  {},
+                        "10": {"trigger_scene": "flashback_01"},
+                        "20": {},
+                    },
+                },
+            ],
+            action_map={
+                "first_witness":  {"moral_debt": 6},
+                "second_witness": {"moral_debt": 6},
+            },
+        )
+        _, triggered1 = hvs.record_action("first_witness", "s1", 1, "")
+        assert triggered1["moral_debt"] is None  # 6 < 10，未跨阈
+
+        _, triggered2 = hvs.record_action("second_witness", "s2", 2, "")
+        assert triggered2["moral_debt"] == "flashback_01"  # 12 >= 10，跨阈
+
+        # 再次触发同一阈值不重复
+        _, triggered3 = hvs.record_action("second_witness", "s3", 3, "")
+        assert triggered3["moral_debt"] is None
+
+    def test_record_action_unknown_tag_returns_empty(self):
+        """未知 action_tag 返回空 deltas/triggered，不抛异常"""
+        hvs = HiddenValueSystem(
+            configs=[{"id": "test", "direction": "ascending", "thresholds": [0]}],
+            action_map={"known_tag": {"test": 1}},
+        )
+        deltas, triggered = hvs.record_action("unknown_tag", "s1", 1, "")
+        assert deltas == {}
+        assert triggered == {}
+
+
+class TestHiddenValueSystemPersistence:
+    """HiddenValueSystem 与 SQLite 数据库的持久化"""
+
+    def test_save_and_load_round_trip(self, tmp_path):
+        """save_to_db → 清空内存 records → load_from_db，数据一致"""
+        import json
+        import sqlite3
+        from pathlib import Path
+        from systems.hidden_value import HiddenValueSystem
+
+        db_path = tmp_path / "test_hv.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.executescript("""
+            CREATE TABLE hidden_value_state (
+                hidden_value_id TEXT PRIMARY KEY,
+                name TEXT, description TEXT, level INTEGER DEFAULT 0,
+                records_json TEXT DEFAULT '[]'
+            );
+            CREATE TABLE hidden_value_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hidden_value_id TEXT NOT NULL, delta INTEGER NOT NULL,
+                source TEXT, scene_id TEXT, player_action TEXT, turn INTEGER
+            );
+        """)
+        conn.commit()
+        conn.close()
+
+        class MockDB:
+            def __init__(self, path):
+                self.path = path
+                self._conn_cache = None
+
+            @contextmanager
+            def _conn(self):
+                conn = sqlite3.connect(str(self.path))
+                conn.row_factory = sqlite3.Row
+                try:
+                    yield conn
+                finally:
+                    conn.close()
+
+            def insert_hidden_value_record(self, hidden_value_id, delta, source,
+                                           scene_id, player_action, turn):
+                with self._conn() as c:
+                    c.execute(
+                        "INSERT INTO hidden_value_records (hidden_value_id,delta,source,scene_id,player_action,turn) VALUES (?,?,?,?,?,?)",
+                        (hidden_value_id, delta, source, scene_id, player_action, turn),
+                    )
+                    c.commit()
+
+            def upsert_hidden_value_state(self, hidden_value_id, name, description,
+                                          level, records=None):
+                with self._conn() as c:
+                    c.execute(
+                        """INSERT INTO hidden_value_state (hidden_value_id,name,description,level)
+                           VALUES (?,?,?,?)
+                           ON CONFLICT(hidden_value_id) DO UPDATE SET level=excluded.level""",
+                        (hidden_value_id, name, description, level),
+                    )
+                    c.commit()
+
+            def get_all_hidden_value_states(self):
+                with self._conn() as c:
+                    return [dict(r) for r in c.execute("SELECT * FROM hidden_value_state").fetchall()]
+
+            def get_hidden_value_records(self, hidden_value_id, limit=9999):
+                with self._conn() as c:
+                    return [dict(r) for r in c.execute(
+                        "SELECT * FROM hidden_value_records WHERE hidden_value_id=? ORDER BY id LIMIT ?",
+                        (hidden_value_id, limit),
+                    ).fetchall()]
+
+        db = MockDB(db_path)
+
+        hvs = HiddenValueSystem([
+            {
+                "id": "moral_debt",
+                "name": "道德债务",
+                "direction": "ascending",
+                "thresholds": [0, 11, 26],
+                "effects": {
+                    "0":  {},
+                    "11": {"trigger_scene": "flashback_001"},
+                    "26": {},
+                },
+            },
+            {
+                "id": "sanity",
+                "name": "理智",
+                "direction": "descending",
+                "thresholds": [0, 30],
+            },
+        ])
+
+        # 写入一些记录（触发一次跨阈）
+        hvs.add_batch(
+            {"moral_debt": 8, "sanity": 10},
+            source="目睹暴行",
+            scene_id="scene_01",
+            turn=1,
+        )
+        _, trig = hvs.add_to("moral_debt", 5, "再次沉默", "scene_02", turn=2)
+        assert trig == "flashback_001"  # 13 >= 11
+
+        # 保存到数据库
+        hvs.save_to_db(db)
+
+        # 再建一个同配置的 HVS（模拟重启后加载）
+        hvs2 = HiddenValueSystem([
+            {"id": "moral_debt", "direction": "ascending", "thresholds": [0, 11, 26]},
+            {"id": "sanity",     "direction": "descending", "thresholds": [0, 30]},
+        ])
+        hvs2.load_from_db(db)
+
+        # moral_debt: level_idx=1 (13>=11, <26)，records=2条
+        assert hvs2.values["moral_debt"].level_idx == 1
+        assert hvs2.values["moral_debt"].current_threshold == 11
+        assert len(hvs2.values["moral_debt"].records) == 2
+        # sanity: 10 < 30 → level_idx=0
+        assert hvs2.values["sanity"].level_idx == 0
+
+    def test_load_from_db_ignores_unknown_ids(self, tmp_path):
+        """load_from_db 忽略配置中没有的 hidden_value_id"""
+        import sqlite3
+        from pathlib import Path
+
+        db_path = tmp_path / "test_unknown.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            "CREATE TABLE hidden_value_state ("
+            "hidden_value_id TEXT PRIMARY KEY, name TEXT, "
+            "description TEXT, level INTEGER DEFAULT 0, "
+            "records_json TEXT DEFAULT '[]')"
+        )
+        conn.execute(
+            "CREATE TABLE hidden_value_records ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "hidden_value_id TEXT NOT NULL, delta INTEGER NOT NULL, "
+            "source TEXT, scene_id TEXT, player_action TEXT, turn INTEGER)"
+        )
+        conn.execute(
+            "INSERT INTO hidden_value_state VALUES (?, ?, ?, ?, ?)",
+            ("ghost_id", "不存在", "", 2, "[]"),
+        )
+        conn.commit()
+        conn.close()
+
+        class MockDB:
+            def __init__(self, path):
+                self.path = path
+
+            @contextmanager
+            def _conn(self):
+                conn = sqlite3.connect(str(self.path))
+                conn.row_factory = sqlite3.Row
+                try:
+                    yield conn
+                finally:
+                    conn.close()
+
+            def get_all_hidden_value_states(self):
+                with self._conn() as c:
+                    return [dict(r) for r in c.execute("SELECT * FROM hidden_value_state").fetchall()]
+
+            def get_hidden_value_records(self, hidden_value_id, limit=9999):
+                with self._conn() as c:
+                    return [dict(r) for r in c.execute(
+                        "SELECT * FROM hidden_value_records WHERE hidden_value_id=? LIMIT ?",
+                        (hidden_value_id, limit),
+                    ).fetchall()]
+
+        db = MockDB(db_path)
+
+        hvs = HiddenValueSystem([{"id": "moral_debt", "direction": "ascending", "thresholds": [0]}])
+        hvs.load_from_db(db)
+        # ghost_id 不在配置中，load_from_db 不报错，且 moral_debt 不受影响
+        assert "ghost_id" not in hvs.values
+        assert hvs.values["moral_debt"].level_idx == 0
+

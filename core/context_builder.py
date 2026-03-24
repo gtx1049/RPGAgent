@@ -90,6 +90,8 @@ class PromptBuilder:
         db=None,
         current_scene_id: str = "",
         turn: int = 0,
+        # 隐藏数值配置（db 模式需要，用于查阈值→锁定选项映射）
+        hidden_values_cfg: Dict[str, Dict] | None = None,
     ):
         self.game_loader = game_loader
         self.stats_sys = stats_sys
@@ -99,6 +101,7 @@ class PromptBuilder:
         self.db = db
         self.current_scene_id = current_scene_id
         self.turn = turn
+        self.hidden_values_cfg: Dict[str, Dict] = hidden_values_cfg or {}
 
     @property
     def mode(self) -> str:
@@ -146,12 +149,22 @@ class PromptBuilder:
 
     def _build_locked_options(self) -> str:
         if self.mode == "db":
-            hv_states = self.db.get_all_hidden_value_states()
             import json
-            all_locked = []
+            hv_states = self.db.get_all_hidden_value_states()
+            all_locked: list = []
             for hv in hv_states:
-                # 从 effects 字段提取（简化版，实际存储需对齐）
-                all_locked.extend([])  # 留空，详细查 db 结构
+                vid = hv["hidden_value_id"]
+                if vid not in self.hidden_values_cfg:
+                    continue
+                cfg = self.hidden_values_cfg[vid]
+                effects_cfg = cfg.get("effects", {})
+                level_idx = hv.get("level", 0)
+                thresholds = cfg.get("thresholds", [0])
+                if level_idx < len(thresholds):
+                    threshold = thresholds[level_idx]
+                    eff = effects_cfg.get(str(threshold), {})
+                    locked = eff.get("locked_options", [])
+                    all_locked.extend(locked)
             return "、".join(all_locked) if all_locked else "（无）"
         else:
             if hasattr(self.moral_debt_sys, "get_locked_options"):
@@ -224,7 +237,7 @@ class PromptBuilder:
 
     def _build_dialogue_history(self) -> str:
         if self.mode == "db":
-            dialogues = self.db.get_dialogue(limit=10)
+            dialogues = self.db.query_dialogue(limit=10)
             if not dialogues:
                 return "（暂无对话历史）"
             lines = []

@@ -86,28 +86,44 @@ class HiddenValue:
         self.records: List[HiddenValueRecord] = []
 
     def _set_level(self, value: int):
-        """将原始值映射到等级索引"""
+        """
+        将原始累积值映射到等级索引（level_idx）。
+
+        语义对照（以 thresholds=[0, 30, 60, 80] 为例）：
+
+        ascending（越高越糟）:
+          thresholds[i] = 进入第 i 档所需的"至少达到"的值（下界）
+          value=5  → 还在第 0 档（< 30）→ level_idx=0, threshold=0
+          value=35 → 进入第 1 档（≥30 且 < 60）→ level_idx=1, threshold=30
+          value=65 → 进入第 2 档（≥60 且 < 80）→ level_idx=2, threshold=60
+          value=85 → 进入第 3 档（≥80）→ level_idx=3, threshold=80
+
+        descending（越低越糟，与 ascending 镜像）:
+          thresholds 仍然表示各档的最低值，但价值感与数值正相关
+          value=5  → 未达到第 0 档最低值 → level_idx=0, threshold=0
+          value=15 → 达到第 0 档最低值(0)，且 < 30 → level_idx=0, threshold=0
+          value=35 → 达到第 1 档最低值(30)，且 < 60 → level_idx=1, threshold=30
+          value=65 → 达到第 2 档最低值(60)，且 < 80 → level_idx=2, threshold=60
+          value=85 → 达到第 3 档最低值(80) → level_idx=3, threshold=80
+        """
         if self.direction == "ascending":
-            # ascending: 值越大 = 状态越糟（道德债务累积）
-            # 找到最后一个 value >= threshold，即最高档位
+            # ascending: 找最后一个 value >= threshold
             self.level_idx = 0
             for i, threshold in enumerate(self.thresholds):
                 if value >= threshold:
                     self.level_idx = i
         else:
-            # descending: 值越大 = 状态越好（理智归位、声望恢复）
-            # thresholds 的较小值=更糟状态，较大值=更好状态
-            # value 落入 thresholds[i-1] <= value < thresholds[i] 时，level_idx=i
-            self.level_idx = len(self.thresholds) - 1  # 默认为最高档（最好状态）
+            # descending: 找第一个 value < threshold → level_idx = i-1
+            self.level_idx = 0
             for i, threshold in enumerate(self.thresholds):
                 if value < threshold:
                     self.level_idx = i - 1 if i > 0 else 0
                     break
             else:
-                # value >= 所有 threshold，保持最高档
+                # value >= 所有 threshold：处于最佳状态
                 self.level_idx = len(self.thresholds) - 1
 
-        # level_idx 不能超过数组长度-1
+        # 边界保护
         self.level_idx = min(self.level_idx, len(self.thresholds) - 1)
 
     @property
@@ -157,11 +173,11 @@ class HiddenValue:
         return raw_value, triggered_scene
 
     def _compute_raw_value(self) -> int:
-        """从 records 计算当前原始值（始终累加，高=更糟）"""
+        """从 records 计算当前原始值（累加，正值/负值均有语义）"""
         total = 0
         for r in self.records:
             total += r.delta
-        return max(0, total)
+        return total
 
     def get_locked_options(self) -> List[str]:
         return self.current_effect.locked_options
@@ -226,10 +242,36 @@ class HiddenValueSystem:
     """
     隐藏数值管理器。
     持有多个 HiddenValue，支持一次行为同时触发多个数值变化。
+
+    action_map 配置格式（来自 meta.json）：
+    {
+      "moral_debt": {
+        "thresholds": [0, 11, 26, 51, 76],
+        "direction": "ascending",
+        "effects": { ... }
+      },
+      "sanity": {
+        "thresholds": [0, 30, 60],
+        "direction": "descending",
+        "effects": { ... }
+      }
+    }
+
+    action_map 格式（定义每个行为标签对应的数值变化）：
+    {
+      "silent_witness":  {"moral_debt": 5,  "sanity": -2},
+      "help_victim":     {"moral_debt": -3, "sanity": 3},
+      "lie_to_npc":      {"moral_debt": 8,  "relation_delta": {"npc_id": -5}}
+    }
     """
 
-    def __init__(self, configs: List[Dict] | None = None):
+    def __init__(
+        self,
+        configs: List[Dict] | None = None,
+        action_map: Dict[str, Dict[str, int]] | None = None,
+    ):
         self.values: Dict[str, HiddenValue] = {}
+        self.action_map: Dict[str, Dict[str, int]] = action_map or {}
         if configs:
             for cfg in configs:
                 hv = HiddenValue.from_config(cfg)
@@ -246,16 +288,26 @@ class HiddenValueSystem:
         player_action: str,
     ) -> tuple[Dict[str, int], Dict[str, Optional[str]]]:
         """
-        记录一次玩家行为，返回 (各值变化量, 各值触发场景)。
-        行为定义在剧本配置中（见 meta.json hidden_values.action_map）。
+        根据 action_tag 查 action_map，返回 (各值变化量, 各值触发场景)。
+        若 action_tag 不在 map 中，返回空（调用方自行决定如何处理）。
         """
         deltas: Dict[str, int] = {}
         triggered: Dict[str, Optional[str]] = {}
 
-        for vid, hv in self.values.items():
-            # 从hv配置中查找该行为的delta（简化：先不做自动映射，外部手动传）
-            deltas[vid] = 0
-            triggered[vid] = None
+        if action_tag not in self.action_map:
+            return deltas, triggered
+
+        changes = self.action_map[action_tag]
+        results = self.add_batch(
+            changes,
+            source=f"[action:{action_tag}]",
+            scene_id=scene_id,
+            player_action=player_action,
+            turn=turn,
+        )
+        for vid, (new_val, trig) in results.items():
+            deltas[vid] = new_val
+            triggered[vid] = trig
 
         return deltas, triggered
 
@@ -312,3 +364,91 @@ class HiddenValueSystem:
 
     def get_snapshot(self) -> Dict[str, Dict]:
         return {vid: hv.get_snapshot() for vid, hv in self.values.items()}
+
+    # ────────────────────────────────────────────────
+    # 数据库持久化
+    # ────────────────────────────────────────────────
+
+    def save_to_db(self, db) -> None:
+        """
+        将所有隐藏数值的当前状态和变化记录写入 SQLite 数据库。
+
+        Args:
+            db: Database 实例（见 data.database.Database）
+        """
+        import json as _json
+
+        for hv in self.values.values():
+            # 1) 写入每条 records
+            for rec in hv.records:
+                db.insert_hidden_value_record(
+                    hidden_value_id=hv.id,
+                    delta=rec.delta,
+                    source=rec.source,
+                    scene_id=rec.scene_id,
+                    player_action=rec.player_action,
+                    turn=rec.turn,
+                )
+
+            # 2) 写入当前状态的 snapshot（upsert，覆盖式）
+            records_json = _json.dumps([
+                {
+                    "delta": r.delta,
+                    "source": r.source,
+                    "scene_id": r.scene_id,
+                    "player_action": r.player_action,
+                    "turn": r.turn,
+                }
+                for r in hv.records
+            ])
+            db.upsert_hidden_value_state(
+                hidden_value_id=hv.id,
+                name=hv.name,
+                description=hv.description,
+                level=hv.level_idx,
+                records=None,  # records 已通过 insert_hidden_value_record 持久化
+            )
+
+            # 同时更新 level（只改 level，records 已在上面单独处理）
+            _conn_used = False
+            with db._conn() as conn:
+                _conn_used = True
+                conn.execute(
+                    """UPDATE hidden_value_state
+                       SET level = ?
+                       WHERE hidden_value_id = ?""",
+                    (hv.level_idx, hv.id),
+                )
+                conn.commit()
+
+    def load_from_db(self, db) -> None:
+        """
+        从 SQLite 数据库加载所有隐藏数值状态到内存。
+
+        从 hidden_value_state 恢复 level_idx，
+        从 hidden_value_records 重建 records 列表。
+        """
+        import json as _json
+
+        states = db.get_all_hidden_value_states()
+        for state in states:
+            vid = state["hidden_value_id"]
+            if vid not in self.values:
+                # 配置中有但数据库没有：跳过（尚未初始化）
+                continue
+
+            hv = self.values[vid]
+            hv.level_idx = state.get("level", 0)
+
+            # 重建 records
+            records_raw = db.get_hidden_value_records(vid, limit=9999)
+            hv.records = [
+                HiddenValueRecord(
+                    delta=r["delta"],
+                    source=r["source"],
+                    scene_id=r["scene_id"] or "",
+                    player_action=r["player_action"] or "",
+                    turn=r["turn"] or 0,
+                )
+                for r in records_raw
+            ]

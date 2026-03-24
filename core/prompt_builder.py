@@ -2,15 +2,27 @@
 """
 负责组装完整的 system prompt，
 将游戏设定 + 当前状态 + 数值系统快照注入 LLM。
+
+支持两套数值系统共存：
+- HiddenValueSystem（通用框架）：道德债务、理智、成长等所有隐藏数值
+- MoralDebtSystem（旧版）：保持向后兼容
+
+Prompt 中的"道德债务"区块同时显示两组数据，
+但以 HiddenValueSystem 为准。
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from systems.stats import StatsSystem
 from systems.moral_debt import MoralDebtSystem
 from systems.inventory import InventorySystem
 from systems.dialogue import DialogueSystem
+from systems.hidden_value import HiddenValueSystem
 from .context_loader import GameLoader, Scene
 
+
+# ────────────────────────────────────────────────
+# Prompt 模板
+# ────────────────────────────────────────────────
 
 SYSTEM_PROMPT_TEMPLATE = """你是一名 RPG 游戏的主持人（Game Master）。
 
@@ -27,10 +39,13 @@ SYSTEM_PROMPT_TEMPLATE = """你是一名 RPG 游戏的主持人（Game Master）
 ## 主角状态
 {player_status}
 
+## 隐藏数值（玩家不可见，影响叙事）
+{hidden_values_section}
+
 ## 可用叙事选项
 {available_options}
 
-## 被锁定的选项（道德债务限制）
+## 被锁定的选项（隐藏数值限制）
 {locked_options}
 
 ## 道德债务记录（最近3条）
@@ -42,7 +57,7 @@ SYSTEM_PROMPT_TEMPLATE = """你是一名 RPG 游戏的主持人（Game Master）
 ## 你的职责
 1. 根据主角的输入（自然语言），推进游戏叙事
 2. 在适当场景注入决策点，让玩家选择
-3. 遵守道德债务系统规则——债务高的玩家无法选择某些"积极"选项
+3. 遵守隐藏数值系统规则——数值达到特定档位时自动限制对应选项，并可触发特殊场景
 4. 叙事结束后，返回结构化的游戏指令（见下）
 
 ## 返回格式
@@ -54,6 +69,7 @@ next_scene: <scene_id>（如果是 transition）
 options: <选项列表>（如果是 choice，格式：选项名|描述|触发条件）
 combat_data: <战斗数据>（如果是 combat）
 narrative_hint: <给玩家的叙事内容>
+action_tag: <本次玩家行为触发的数值标签，如 silent_witness / help_victim>
 [/GM_COMMAND]
 """
 
@@ -62,13 +78,37 @@ PLAYER_STATUS_TEMPLATE = """
 - 生命值: {hp}/{max_hp}
 - 体力值: {stamina}/{max_stamina}
 - 力量: {strength} | 敏捷: {agility} | 智力: {intelligence} | 魅力: {charisma}
-- 道德债务: {debt_level}（{debt_value}分）
 - 当前背包: {inventory}
+"""
+
+# ────────────────────────────────────────────────
+# Hidden Values 区块
+# ────────────────────────────────────────────────
+
+HIDDEN_VALUES_TEMPLATE = """
+| 数值名称 | 当前档位 | 叙事语气 | 效果 |
+|----------|----------|----------|------|
+{hv_rows}
+
+### 行为标签（供 GM 在 action_tag 中使用）
+action_tag 由 GM 在 [GM_COMMAND] 中返回，系统根据标签自动更新隐藏数值。
+以下是当前剧本定义的行为标签：
+
+{action_tags_section}
 """
 
 
 class PromptBuilder:
-    """Prompt 构造器"""
+    """
+    Prompt 构造器。
+
+    持有所有数值系统实例，根据当前场景组装完整的 system prompt
+    注入给 LLM（Game Master）。
+
+    HiddenValueSystem 是新标准，支持任意多个隐藏数值（道德债务/理智/成长等）。
+    MoralDebtSystem 保持向后兼容，Prompt 中同时显示两组数据，
+    但以 HiddenValueSystem 为准。
+    """
 
     def __init__(
         self,
@@ -77,16 +117,22 @@ class PromptBuilder:
         moral_debt_sys: MoralDebtSystem,
         inventory_sys: InventorySystem,
         dialogue_sys: DialogueSystem,
+        hidden_value_sys: Optional[HiddenValueSystem] = None,
     ):
         self.game_loader = game_loader
         self.stats_sys = stats_sys
         self.moral_debt_sys = moral_debt_sys
         self.inventory_sys = inventory_sys
         self.dialogue_sys = dialogue_sys
+        # 新版通用隐藏数值系统（可选，None 表示使用旧版 MoralDebtSystem）
+        self.hidden_value_sys = hidden_value_sys
+
+    # ────────────────────────────────────────────────
+    # 状态渲染
+    # ────────────────────────────────────────────────
 
     def _build_player_status(self) -> str:
         stats = self.stats_sys.get_snapshot()
-        moral = self.moral_debt_sys.get_snapshot()
         inv = self.inventory_sys.list_items()
         inv_str = ", ".join([f"{i['name']}×{i['quantity']}" for i in inv]) or "（空）"
 
@@ -99,12 +145,88 @@ class PromptBuilder:
             agility=stats["agility"],
             intelligence=stats["intelligence"],
             charisma=stats["charisma"],
-            debt_level=moral["level"],
-            debt_value=moral["debt"],
             inventory=inv_str,
         )
 
+    def _build_hidden_values_section(self) -> str:
+        """渲染隐藏数值总览区块"""
+        if self.hidden_value_sys is None:
+            return "（本剧本未启用隐藏数值框架，使用旧版道德债务系统）"
+
+        snapshots = self.hidden_value_sys.get_snapshot()
+        if not snapshots:
+            return "（当前无激活的隐藏数值）"
+
+        rows = []
+        for vid, snap in snapshots.items():
+            eff = snap["effect"]
+            tone = eff.get("narrative_tone", "—")
+            locked_opts = eff.get("locked_options")
+            locked_str = "、".join(locked_opts) if locked_opts else "（无）"
+            rows.append(
+                f"| {snap['name']} | {snap['current_threshold']} | "
+                f"{tone} | 锁定：{locked_str} |"
+            )
+
+        hv_section = HIDDEN_VALUES_TEMPLATE.format(
+            hv_rows="\n".join(rows) if rows else "| — | — | — | — |",
+            action_tags_section=self._build_action_tags_section(),
+        )
+        return hv_section.strip()
+
+    def _build_action_tags_section(self) -> str:
+        """渲染行为标签说明区块"""
+        if self.hidden_value_sys is None or not self.hidden_value_sys.action_map:
+            return "（剧本未定义行为标签表）"
+
+        lines = []
+        for tag, changes in self.hidden_value_sys.action_map.items():
+            change_desc = ", ".join(
+                f"{vid}{'+' if d >= 0 else ''}{d}" for vid, d in changes.items()
+            )
+            lines.append(f"- **{tag}**：{change_desc}")
+        return "\n".join(lines) if lines else "（无）"
+
+    def _build_locked_options(self) -> str:
+        """
+        汇总所有来源的锁定选项。
+        HiddenValueSystem 为准；MoralDebtSystem 作向后兼容补充。
+        """
+        locked: List[str] = []
+
+        if self.hidden_value_sys:
+            locked.extend(self.hidden_value_sys.get_locked_options())
+
+        # 旧版 MoralDebtSystem 兼容
+        moral = self.moral_debt_sys.get_snapshot()
+        locked.extend(moral.get("locked_options", []))
+
+        # 去重，保留顺序
+        seen = set()
+        unique = []
+        for opt in locked:
+            if opt not in seen:
+                seen.add(opt)
+                unique.append(opt)
+
+        return "、".join(unique) if unique else "（无）"
+
     def _build_moral_debt_records(self) -> str:
+        """渲染道德债务记录（优先取 HiddenValueSystem 中的 moral_debt）"""
+        # 优先从 HiddenValueSystem 获取 moral_debt 记录
+        if self.hidden_value_sys and "moral_debt" in self.hidden_value_sys.values:
+            hv = self.hidden_value_sys.values["moral_debt"]
+            records = hv.get_recent_records(3)
+            if records:
+                lines = []
+                for r in records:
+                    sign = "+" if r["delta"] > 0 else ""
+                    lines.append(
+                        f"- [{r['scene_id']}] {r['source']} {sign}{r['delta']}分"
+                    )
+                return "\n".join(lines)
+
+        # Fallback：旧版 MoralDebtSystem
         records = self.moral_debt_sys.get_recent_records(3)
         if not records:
             return "（暂无记录）"
@@ -124,14 +246,18 @@ class PromptBuilder:
             lines.append(f"- {npc_id}: {info['level']}（{sign}{info['value']}）")
         return "\n".join(lines)
 
+    # ────────────────────────────────────────────────
+    # 主入口
+    # ────────────────────────────────────────────────
+
     def build_system_prompt(self, scene: Scene) -> str:
-        """构建完整的 system prompt"""
-        moral = self.moral_debt_sys.get_snapshot()
-        locked = moral["locked_options"]
-        locked_str = "、".join(locked) if locked else "（无）"
+        """
+        构建完整的 system prompt。
+        将所有数值系统状态渲染进 prompt，供 LLM 读取后驱动叙事。
+        """
+        locked_str = self._build_locked_options()
 
         # 获取场景中的可用选项（如果有预设）
-        options_str = ""
         if scene.available_actions:
             options_str = "\n".join(f"- {a}" for a in scene.available_actions)
         else:
@@ -139,10 +265,11 @@ class PromptBuilder:
 
         return SYSTEM_PROMPT_TEMPLATE.format(
             name=self.game_loader.meta.name,
-            setting=self.game_loader.setting[:4000],  # 截断防止超长
+            setting=self.game_loader.setting[:4000],
             scene_title=scene.title,
             scene_content=scene.content[:3000],
             player_status=self._build_player_status(),
+            hidden_values_section=self._build_hidden_values_section(),
             available_options=options_str,
             locked_options=locked_str,
             moral_debt_records=self._build_moral_debt_records(),
@@ -156,3 +283,65 @@ class PromptBuilder:
             parts.append(f"[近期回顾]\n{history_summary}\n")
         parts.append(f"[你的行动]\n{player_input}")
         return "\n".join(parts)
+
+    def build_choice_prompt(
+        self,
+        scene: Scene,
+        options: List[Dict[str, str]],
+        history_summary: str = "",
+    ) -> str:
+        """
+        构建选项选择 prompt。
+        用于 choice 模式下渲染预设选项列表。
+        """
+        options_lines = []
+        for i, opt in enumerate(options, 1):
+            desc = opt.get("description", "")
+            tag = opt.get("action_tag", "")
+            tag_hint = f" [action_tag: {tag}]" if tag else ""
+            options_lines.append(f"{i}. {opt['name']}：{desc}{tag_hint}")
+
+        options_section = "\n".join(options_lines)
+
+        return f"""## 当前情境
+{scene.content[:1500]}
+
+## 可选行动
+{options_section}
+
+{self.build_user_prompt("", history_summary)}
+"""
+
+    def get_hidden_value_snapshot(self) -> Dict[str, Dict]:
+        """暴露隐藏数值快照，供调用方（如 game_master.py）查询"""
+        if self.hidden_value_sys is None:
+            return {}
+        return self.hidden_value_sys.get_snapshot()
+
+    def get_narrative_styles(self) -> Dict[str, str]:
+        """暴露各隐藏数值的当前叙事风格，供 GM 层使用"""
+        if self.hidden_value_sys is None:
+            return {}
+        return self.hidden_value_sys.get_narrative_styles()
+
+    def record_action(
+        self,
+        action_tag: str,
+        scene_id: str,
+        turn: int,
+        player_action: str,
+    ) -> tuple[Dict[str, int], Dict[str, Optional[str]]]:
+        """
+        通过 action_tag 触发隐藏数值变化。
+        返回 (各值变化量, 各值触发场景)。
+
+        调用方应在 GM 返回 action_tag 后调用此方法。
+        """
+        if self.hidden_value_sys is None:
+            return {}, {}
+        return self.hidden_value_sys.record_action(
+            action_tag=action_tag,
+            scene_id=scene_id,
+            turn=turn,
+            player_action=player_action,
+        )
