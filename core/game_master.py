@@ -184,7 +184,7 @@ class GameMaster:
         if self.hidden_value_sys and "action_tag" in cmd:
             action_tag = cmd["action_tag"]
             player_input = cmd.get("player_input", "")
-            deltas, triggered_scenes, relation_deltas = self.hidden_value_sys.record_action(
+            deltas, triggered_scenes, relation_deltas, cross_trigger_results = self.hidden_value_sys.record_action(
                 action_tag=action_tag,
                 scene_id=self.session.current_scene_id,
                 turn=self.session.turn_count,

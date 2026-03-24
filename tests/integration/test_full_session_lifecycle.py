@@ -344,11 +344,11 @@ class TestHiddenValueSystemDatabaseIntegration:
         )
 
         # 第一次 witness：6 < 11，未触发
-        deltas, trigs, _ = hvs.record_action("witness_a", "s1", 1, "沉默旁观")
+        deltas, trigs, _, _ = hvs.record_action("witness_a", "s1", 1, "沉默旁观")
         assert trigs["moral_debt"] is None
 
         # 第二次 witness：12 >= 11，触发 guilt_flashback
-        deltas, trigs, _ = hvs.record_action("witness_b", "s2", 2, "再次沉默")
+        deltas, trigs, _, _ = hvs.record_action("witness_b", "s2", 2, "再次沉默")
         assert deltas["moral_debt"] == 12
         assert trigs["moral_debt"] == "guilt_flashback"
 
@@ -356,7 +356,7 @@ class TestHiddenValueSystemDatabaseIntegration:
         hvs.acknowledge_triggered_scene("moral_debt")
 
         # 理智触发
-        deltas, trigs, _ = hvs.record_action("terrify", "s3", 3, "恐怖遭遇")
+        deltas, trigs, _, _ = hvs.record_action("terrify", "s3", 3, "恐怖遭遇")
         assert trigs["sanity"] == "hallucination_scene"
 
         # 保存
@@ -433,7 +433,7 @@ class TestPromptBuilderEndToEnd:
         assert "心境平和" in prompt2
 
         # 第三次：moral_debt=15 → 跨过11，进入第1档
-        _, trig, _ = prompt_builder.record_action("silent_witness", "s3", 3, "还是沉默")
+        _, trig, _, _ = prompt_builder.record_action("silent_witness", "s3", 3, "还是沉默")
         assert trig["moral_debt"] == "guilt_flashback"  # config 中第1档有 trigger_scene
 
         prompt3 = prompt_builder.build_system_prompt(scene)
@@ -728,7 +728,7 @@ class TestFullGameTurnCycle:
 
         # ── 回合 1：袖手旁观 ──
         session.increment_turn()
-        deltas, trigs, _ = hidden_value_sys.record_action(
+        deltas, trigs, _, _ = hidden_value_sys.record_action(
             "silent_witness", "scene_01", session.turn_count, "袖手旁观"
         )
         assert deltas["moral_debt"] == 5
@@ -752,7 +752,7 @@ class TestFullGameTurnCycle:
 
         # ── 回合 2：帮助受害者 ──
         session.increment_turn()
-        deltas2, trigs2, _ = hidden_value_sys.record_action(
+        deltas2, trigs2, _, _ = hidden_value_sys.record_action(
             "help_victim", "scene_01", session.turn_count, "帮助受害者"
         )
         assert deltas2["moral_debt"] == 2   # 5 - 3 = 2
@@ -770,7 +770,7 @@ class TestFullGameTurnCycle:
 
         # ── 回合 3：再次袖手旁观（累计 moral_debt=7，仍 < 11）──
         session.increment_turn()
-        deltas3, trigs3, _ = hidden_value_sys.record_action(
+        deltas3, trigs3, _, _ = hidden_value_sys.record_action(
             "silent_witness", "scene_01", session.turn_count, "再次袖手旁观"
         )
         assert deltas3["moral_debt"] == 7   # 2 + 5 = 7
@@ -785,7 +785,7 @@ class TestFullGameTurnCycle:
 
         # ── 回合 4：又一次袖手旁观（跨过阈值 11，触发 flashback）──
         session.increment_turn()
-        deltas4, trigs4, _ = hidden_value_sys.record_action(
+        deltas4, trigs4, _, _ = hidden_value_sys.record_action(
             "silent_witness", "scene_01", session.turn_count, "第三次沉默"
         )
         assert deltas4["moral_debt"] == 12  # 7 + 5 = 12
@@ -852,7 +852,7 @@ class TestFullGameTurnCycle:
 
     def test_concurrent_action_tags_batch(self, hidden_value_sys):
         """一次 record_action 触发多个隐藏数值同时变化"""
-        deltas, trigs, _ = hidden_value_sys.record_action(
+        deltas, trigs, _, _ = hidden_value_sys.record_action(
             "violent_act",  # action_map: {"moral_debt": 10, "sanity": -8}
             "scene_combat",
             turn=1,
@@ -863,7 +863,7 @@ class TestFullGameTurnCycle:
         assert trigs["sanity"] is None  # -8 >= 0（最底层）
 
         # 继续施暴
-        deltas2, trigs2, _ = hidden_value_sys.record_action(
+        deltas2, trigs2, _, _ = hidden_value_sys.record_action(
             "violent_act", "scene_combat2", turn=2, player_action="再次施暴"
         )
         assert deltas2["moral_debt"] == 20  # 累积

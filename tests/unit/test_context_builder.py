@@ -222,7 +222,7 @@ class TestContextBuilderMemoryMode:
             game_loader=mock_game_loader,
             hidden_value_sys=hidden_value_sys,
         )
-        deltas, triggered, rel_deltas = pb.record_action(
+        deltas, triggered, rel_deltas, _ = pb.record_action(
             action_tag="silent_witness",
             scene_id="scene_01",
             turn=1,
@@ -239,7 +239,7 @@ class TestContextBuilderMemoryMode:
             hidden_value_sys=hidden_value_sys,
         )
         # 再加 5 → moral_debt=15，record_action 返回新值（累积总量）
-        deltas, triggered, rel_deltas = pb.record_action(
+        deltas, triggered, rel_deltas, _ = pb.record_action(
             action_tag="silent_witness",
             scene_id="scene_01",
             turn=2,
@@ -253,7 +253,7 @@ class TestContextBuilderMemoryMode:
             game_loader=mock_game_loader,
             hidden_value_sys=hidden_value_sys,
         )
-        deltas, triggered, rel_deltas = pb.record_action(
+        deltas, triggered, rel_deltas, _ = pb.record_action(
             action_tag="nonexistent_tag",
             scene_id="scene_01",
             turn=1,
@@ -265,7 +265,7 @@ class TestContextBuilderMemoryMode:
     def test_record_action_noop_without_hidden_sys(self, mock_game_loader):
         """无 hidden_value_sys 时 record_action 为空操作"""
         pb = PromptBuilder(game_loader=mock_game_loader)
-        deltas, triggered, rel_deltas = pb.record_action(
+        deltas, triggered, rel_deltas, _ = pb.record_action(
             action_tag="anything",
             scene_id="scene_01",
             turn=1,

@@ -104,14 +104,24 @@ PLAYER_STATUS_TEMPLATE = """
 # Hidden Values 区块
 # ────────────────────────────────────────────────
 
+NARRATIVE_STYLE_GUIDANCE = """
+### 叙事风格指导（请严格遵守）
+- **normal**：标准叙事。用完整流畅的句子，客观第三人称叙述，情感克制。
+- **fragmented**：碎片化叙事。短句为主，频繁切换视角/时间线，句子可残缺、不完整。玩家视角开始出现闪回、感知扭曲。
+- **dissociated**：解离叙事。时态混乱（过去/现在/想象混用），人称飘移，描述自我疏离。玩家角色与身体/情感脱节。
+
+### 叙事提示（narrative_hint）
+narrative_hint 是针对当前档位更具体的 GM 文风指导。当一个隐藏数值的 narrative_hint 非空时，优先遵循其指示。"""
+
 HIDDEN_VALUES_TEMPLATE = """
-| 数值名称 | 当前档位 | 叙事语气 | 叙事风格 | 效果 |
-|----------|----------|----------|----------|------|
+| 数值名称 | 当前档位 | 叙事语气 | 叙事风格 | 锁定选项 | 解锁选项 | 叙事提示 |
+|----------|----------|----------|----------|----------|----------|----------|
 {hv_rows}
 
 ### 行为标签（供 GM 在 action_tag 中使用）
 action_tag 由 GM 在 [GM_COMMAND] 中返回，系统根据标签自动更新隐藏数值。
 叙事风格（normal / fragmented / dissociated）用于指导你的叙事文风，请遵守。
+{narrative_style_guidance}
 以下是当前剧本定义的行为标签：
 
 {action_tags_section}
@@ -210,15 +220,20 @@ class PromptBuilder:
             eff = snap["effect"]
             tone = eff.get("narrative_tone", "—")
             style = eff.get("narrative_style", "normal")
-            locked_opts = eff.get("locked_options")
+            locked_opts = eff.get("locked_options") or []
             locked_str = "、".join(locked_opts) if locked_opts else "（无）"
+            unlock_opts = eff.get("unlock_options") or []
+            unlock_str = "、".join(unlock_opts) if unlock_opts else "（无）"
+            hint = eff.get("narrative_hint") or "—"
             rows.append(
                 f"| {snap['name']} | {snap['current_threshold']} | "
-                f"{tone} | {style} | 锁定：{locked_str} |"
+                f"{tone} | {style} | 锁定：{locked_str} | 解锁：{unlock_str} | {hint} |"
             )
 
+        default_row = "| — | — | — | — | — | — | — |"
         hv_section = HIDDEN_VALUES_TEMPLATE.format(
-            hv_rows="\n".join(rows) if rows else "| — | — | — | — |",
+            hv_rows="\n".join(rows) if rows else default_row,
+            narrative_style_guidance=NARRATIVE_STYLE_GUIDANCE,
             action_tags_section=self._build_action_tags_section(),
         )
         return hv_section.strip()
@@ -514,13 +529,18 @@ class PromptBuilder:
             style = snapshot_eff.get("narrative_style") or cfg_eff.get("narrative_style", "normal")
             locked = snapshot_eff.get("locked_options") or cfg_eff.get("locked_options", [])
             locked_str = "、".join(locked) if locked else "（无）"
+            unlock = snapshot_eff.get("unlock_options") or cfg_eff.get("unlock_options", [])
+            unlock_str = "、".join(unlock) if unlock else "（无）"
+            hint = snapshot_eff.get("narrative_hint") or cfg_eff.get("narrative_hint", "—")
 
             rows.append(
-                f"| {hv['name']} | 等级{level} | {tone} | {style} | 锁定：{locked_str} |"
+                f"| {hv['name']} | 等级{level} | {tone} | {style} | 锁定：{locked_str} | 解锁：{unlock_str} | {hint} |"
             )
 
+        default_row = "| — | — | — | — | — | — | — |"
         hv_section = HIDDEN_VALUES_TEMPLATE.format(
-            hv_rows="\n".join(rows) if rows else "| — | — | — | — |",
+            hv_rows="\n".join(rows) if rows else default_row,
+            narrative_style_guidance=NARRATIVE_STYLE_GUIDANCE,
             action_tags_section="（db 模式通过 hidden_value_delta 指令更新数值）",
         )
         return hv_section.strip()
@@ -589,10 +609,10 @@ class PromptBuilder:
         scene_id: str,
         turn: int,
         player_action: str,
-    ) -> tuple[Dict[str, int], Dict[str, Optional[str]], Dict[str, int]]:
+    ) -> tuple[Dict[str, int], Dict[str, Optional[str]], Dict[str, int], Dict[str, List[Dict]]]:
         """
         通过 action_tag 触发隐藏数值变化。
-        返回 (各值变化量, 各值触发场景, 关系变化量)。
+        返回 (各值变化量, 各值触发场景, 关系变化量, 跨值联动结果).
 
         调用方应在 GM 返回 action_tag 后调用此方法。
         relation_delta 由调用方自行处理（如应用到 DialogueSystem）。
@@ -600,7 +620,7 @@ class PromptBuilder:
         注意：仅 memory 模式可用。db 模式下请直接操作数据库。
         """
         if self.hidden_value_sys is None:
-            return {}, {}, {}
+            return {}, {}, {}, {}
         return self.hidden_value_sys.record_action(
             action_tag=action_tag,
             scene_id=scene_id,

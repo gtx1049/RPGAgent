@@ -394,13 +394,13 @@ class TestDatabaseIntegrationHiddenValueSystem:
         )
 
         # 触发行为
-        deltas, trigs, _ = hvs.record_action(
+        deltas, trigs, _, _ = hvs.record_action(
             "witness_silence", "scene_01", turn=1, player_action="袖手旁观"
         )
         assert deltas["moral_debt"] == 8
 
         # 再触发，跨过 threshold 11 → 触发场景
-        deltas2, trigs2, _ = hvs.record_action(
+        deltas2, trigs2, _, _ = hvs.record_action(
             "witness_silence", "scene_02", turn=2, player_action="再次沉默"
         )
         assert deltas2["moral_debt"] == 16

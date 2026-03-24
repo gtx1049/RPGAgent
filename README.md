@@ -20,7 +20,7 @@ RPGAgent 是一个基于大模型上下文能力的 RPG 游戏引擎。核心思
 
 | 特性 | 说明 |
 |------|------|
-| **隐藏数值框架** | 通用框架，配置驱动。道德债务/理智/声望等均可定义，支持阈值锁定选项、叙事语气变化、特场景触发 |
+| **隐藏数值框架** | 通用框架，配置驱动。道德债务/理智/声望等均可定义，支持阈值锁定选项、叙事语气/叙事风格变化、特场景触发 |
 | **外挂数值系统** | 战斗/道德债务/声望/关系与 LLM 分离，结果可验证 |
 | **SQLite 持久化** | 按剧本分离存储，世界事件/NPC状态/对话历史/隐藏数值全量记录 |
 | **多线叙事** | 支持分支剧情、道德债务、关系变化、特场景触发等机制 |
@@ -121,7 +121,7 @@ python main.py
 python -m pytest tests/ -v
 ```
 
-**当前：252 个测试全部通过**，覆盖所有数值系统和完整生命周期。
+**当前：311 个测试全部通过**，覆盖所有数值系统和完整生命周期。
 
 ---
 
@@ -183,6 +183,8 @@ print(result.message)
       "name": "道德债务",
       "direction": "ascending",
       "thresholds": [0, 11, 26, 51, 76],
+      "decay_per_turn": 2,
+      "decay_min_value": 0,
       "effects": {
         "0":  {"narrative_tone": "心境平和", "locked_options": []},
         "11": {"narrative_tone": "内心开始有声音", "locked_options": ["主动干预"], "trigger_scene": "guilt_flashback"},
@@ -196,6 +198,8 @@ print(result.message)
       "name": "理智",
       "direction": "descending",
       "thresholds": [0, 30, 60],
+      "decay_per_turn": 3,
+      "decay_min_value": 0,
       "effects": {
         "0":  {"narrative_tone": "理智正常", "locked_options": []},
         "30": {"narrative_tone": "开始出现幻觉", "narrative_style": "fragmented"},
@@ -231,15 +235,40 @@ deltas, triggered = hvs.record_action(
 # deltas = {"moral_debt": 5, "sanity": -2}
 # triggered = {"moral_debt": None, "sanity": None}  # 未跨阈
 
+# 每回合推进：对所有配置了 decay_per_turn 的数值自动衰减
+decay_results = hvs.tick_all(turn=4)
+# decay_results = {"moral_debt": (3, None), "sanity": (27, None)}
+
 # 直接查询当前锁定选项（供 PromptBuilder 使用）
 locked = hvs.get_locked_options()  # ["主动干预", ...]
 
-# 持久化到数据库
+# 持久化到数据库（含衰减配置）
 hvs.save_to_db(db)
 
-# 从数据库加载
+# 从数据库加载（含衰减配置恢复）
 hvs.load_from_db(db)
 ```
+
+### decay — 回合衰减配置
+
+```json
+{
+  "id": "rapport",
+  "name": "好感度",
+  "direction": "ascending",
+  "thresholds": [0, 20, 50],
+  "decay_per_turn": 3,      // 每回合减少 3（不互动则好感自然衰减）
+  "decay_min_value": 0,      // 衰减下限，不可低于 0
+  "effects": { ... }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `decay_per_turn` | `int` | 每回合自动衰减量（正值），0 = 不衰减 |
+| `decay_min_value` | `int?` | 衰减下限，`null` = 无下限（可衰减到负值） |
+
+调用 `tick_all(turn)` 后，所有配置了 `decay_per_turn > 0` 的数值自动减少对应量。衰减产生的 level 下降**不触发**任何 `trigger_scene`。
 
 ### direction 说明
 
@@ -330,36 +359,102 @@ games/你的剧本/
 
 ## 架构概览
 
+```mermaid
+flowchart LR
+    subgraph Input["玩家输入层"]
+        PI["自然语言输入"]
+    end
+
+    subgraph Core["核心引擎 (core/)"]
+        GM["GameMaster.py\nLLM + ReActAgent"]
+        PB["PromptBuilder.py\nmemory / db 双模式"]
+        CL["ContextLoader\n剧本加载器"]
+        SM["Session.py\n会话/存档/读档"]
+    end
+
+    subgraph Systems["外挂数值系统 (systems/)"]
+        HV["HiddenValueSystem\n隐藏数值泛化框架"]
+        ST["StatsSystem\n属性/HP/体力"]
+        CO["CombatSystem\nd20战斗检定"]
+        IN["InventorySystem\n背包/物品"]
+        DL["DialogueSystem\nNPC关系值"]
+        MD["MoralDebtSystem\n旧版道德债务"]
+    end
+
+    subgraph Data["持久化层 (data/)"]
+        DB["Database.py\nSQLite 按剧本分离"]
+        WEvt["world_events\n世界事件时间线"]
+        NPCSt["npc_states\nNPC状态快照"]
+        DLHst["dialogue_history\n对话历史"]
+        HVRec["hidden_value_records\n隐藏数值变化记录"]
+        HVSt["hidden_value_state\neffects快照"]
+        SCFlg["scene_flags\n场景标记"]
+        SVS["saves\n存档"]
+    end
+
+    subgraph GameFiles["游戏剧本 (games/)"]
+        META["meta.json\n元信息/系统配置"]
+        SET["setting.md\n世界观"]
+        CHARS["characters/\n人物定义"]
+        SCENES["scenes/\n场景Markdown"]
+    end
+
+    PI --> GM
+    GM <--> PB
+    PB --> CL
+    PB --> SM
+    CL --> GameFiles
+    GM --> HV
+    GM --> ST
+    GM --> CO
+    GM --> IN
+    GM --> DL
+    GM --> MD
+    HV <--> DB
+    ST <--> SM
+    IN <--> SM
+    DL <--> DB
+    SM <--> DB
+    DB --> WEvt & NPCSt & DLHst & HVRec & HVSt & SCFlg & SVS
+
+    classDef engine fill:#e1f5fe,stroke:#01579b
+    classDef system fill:#f1f8e9,stroke:#33691e
+    classDef data fill:#fff3e0,stroke:#e65100
+    classDef files fill:#fce4ec,stroke:#880e4f
+    class GM,PB,CL,SM engine
+    class HV,ST,CO,IN,DL,MD system
+    class DB,WEvt,NPCSt,DLHst,HVRec,HVSt,SCFlg,SVS data
+    class META,SET,CHARS,SCENES files
 ```
-玩家输入（自然语言）
-        │
-        ▼
-  Game Master（LLM）
-        │
-        │ [GM_COMMAND] 返回
-        ▼
-  GameMaster.py
-    ├─ 解析 action_tag → HiddenValueSystem.record_action()
-    ├─ 解析 relation_delta → DialogueSystem
-    ├─ 解析 stat_delta → StatsSystem
-    └─ 解析 next_scene → Scene 切换
-        │
-        ▼
-  Database（SQLite）
-    ├─ 世界事件（World Events）
-    ├─ NPC 状态快照（NPC States）
-    ├─ 对话历史（Dialogue History）
-    ├─ 隐藏数值记录（Hidden Value Records）
-    └─ 场景标记（Scene Flags）
-        │
-        ▼
-  PromptBuilder
-    ├─ 渲染玩家状态（HP/体力/属性/背包）
-    ├─ 渲染隐藏数值（当前档位/叙事语气/锁定选项）
-    ├─ 渲染 NPC 关系
-    ├─ 渲染行为标签说明
-    └─ 注入完整 system prompt 给 LLM
+
+### 数据流向
+
 ```
+1. 玩家输入自然语言
+       ↓
+2. GameMaster（LLM）读取 PromptBuilder 组装的完整上下文
+       ↓
+3. LLM 返回叙事 + [GM_COMMAND] 结构化指令
+       ↓
+4. GameMaster 解析指令：
+   • action_tag      → HiddenValueSystem.record_action() 更新隐藏数值
+   • relation_delta  → DialogueSystem 更新 NPC 关系
+   • stat_delta      → StatsSystem 修改角色属性
+   • next_scene      → SceneManager 切换场景
+       ↓
+5. 数值系统变更 → Database 持久化（SQLite，按剧本分离）
+       ↓
+6. 下一轮：PromptBuilder 重新组装上下文（含最新状态）→ 循环
+```
+
+### PromptBuilder 双模式
+
+| 模式 | 数据来源 | 适用场景 |
+|------|----------|----------|
+| **memory**（默认） | 内存中数值系统实例直接读取 | 开发/短流程/高并发 |
+| **db** | SQLite 按需查询 | 长流程/真实游戏/存档恢复 |
+
+HiddenValueSystem 通过 `save_to_db()` / `load_from_db()` 与数据库往返，确保状态不丢失。
 
 ---
 

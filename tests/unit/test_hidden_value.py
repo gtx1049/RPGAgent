@@ -344,7 +344,7 @@ class TestHiddenValueSystem:
                 "help_victim":     {"moral_debt": -3, "sanity": 3},
             },
         )
-        deltas, triggered, rel_deltas = hvs.record_action(
+        deltas, triggered, rel_deltas, _ = hvs.record_action(
             action_tag="silent_witness",
             scene_id="scene_01",
             turn=3,
@@ -377,14 +377,14 @@ class TestHiddenValueSystem:
                 "second_witness": {"moral_debt": 6},
             },
         )
-        _, triggered1, _ = hvs.record_action("first_witness", "s1", 1, "")
+        _, triggered1, _, _ = hvs.record_action("first_witness", "s1", 1, "")
         assert triggered1["moral_debt"] is None  # 6 < 10，未跨阈
 
-        _, triggered2, _ = hvs.record_action("second_witness", "s2", 2, "")
+        _, triggered2, _, _ = hvs.record_action("second_witness", "s2", 2, "")
         assert triggered2["moral_debt"] == "flashback_01"  # 12 >= 10，跨阈
 
         # 再次触发同一阈值不重复
-        _, triggered3, _ = hvs.record_action("second_witness", "s3", 3, "")
+        _, triggered3, _, _ = hvs.record_action("second_witness", "s3", 3, "")
         assert triggered3["moral_debt"] is None
 
     def test_record_action_unknown_tag_returns_empty(self):
@@ -393,7 +393,7 @@ class TestHiddenValueSystem:
             configs=[{"id": "test", "direction": "ascending", "thresholds": [0]}],
             action_map={"known_tag": {"test": 1}},
         )
-        deltas, triggered, rel_deltas = hvs.record_action("unknown_tag", "s1", 1, "")
+        deltas, triggered, rel_deltas, _ = hvs.record_action("unknown_tag", "s1", 1, "")
         assert deltas == {}
         assert triggered == {}
         assert rel_deltas == {}
@@ -406,7 +406,7 @@ class TestHiddenValueSystem:
                 "some_action": {"moral_debt": 5, "ghost_value": 10},  # ghost_value 不存在
             },
         )
-        deltas, triggered, rel_deltas = hvs.record_action("some_action", "s1", 1, "test")
+        deltas, triggered, rel_deltas, _ = hvs.record_action("some_action", "s1", 1, "test")
         assert deltas["moral_debt"] == 5
         assert "ghost_value" in deltas  # add_to 对不存在 id 返回 (0, None)
         assert rel_deltas == {}  # ghost_value 不是 relation_delta
@@ -542,7 +542,7 @@ class TestHiddenValueSystem:
                 },
             },
         )
-        deltas, triggered, rel_deltas = hvs.record_action(
+        deltas, triggered, rel_deltas, _ = hvs.record_action(
             action_tag="betray_friend",
             scene_id="scene_01",
             turn=1,
@@ -563,7 +563,7 @@ class TestHiddenValueSystem:
                 },
             },
         )
-        _, _, rel_deltas = hvs.record_action(
+        _, _, rel_deltas, _ = hvs.record_action(
             action_tag="public_speech",
             scene_id="town_square",
             turn=1,
@@ -585,7 +585,7 @@ class TestHiddenValueSystem:
         # 在修复前：这会调用 add_to("relation_delta", {"dark_presence": -10})
         # 因为 relation_delta 是 dict 而非 int，add_to 返回 (0, None)
         # 修复后：relation_delta 被正确提取，不会传入 add_to
-        deltas, triggered, rel_deltas = hvs.record_action(
+        deltas, triggered, rel_deltas, _ = hvs.record_action(
             action_tag="nightmare",
             scene_id="dream_01",
             turn=1,
@@ -620,7 +620,7 @@ class TestHiddenValueSystem:
             configs=[{"id": "test", "direction": "ascending", "thresholds": [0]}],
             action_map={"simple_action": {"test": 3}},
         )
-        _, _, rel_deltas = hvs.record_action("simple_action", "s1", 1, "")
+        _, _, rel_deltas, _ = hvs.record_action("simple_action", "s1", 1, "")
         assert rel_deltas == {}
 
 
@@ -805,4 +805,310 @@ class TestHiddenValueSystemPersistence:
         # ghost_id 不在配置中，load_from_db 不报错，且 moral_debt 不受影响
         assert "ghost_id" not in hvs.values
         assert hvs.values["moral_debt"].level_idx == 0
+
+
+# ────────────────────────────────────────────────
+# 测试：Decay（回合衰减）机制
+# ────────────────────────────────────────────────
+
+class TestHiddenValueDecay:
+    """HiddenValue.tick() 回合衰减"""
+
+    def test_tick_no_decay_returns_same_value(self):
+        """decay_per_turn=0 时，tick() 不产生变化"""
+        hv = HiddenValue(
+            id="rapport", name="好感度", direction="ascending",
+            thresholds=[0, 20, 50], initial_level=0,
+        )
+        hv.add(10, "赠送礼物", "scene_01", turn=1)
+        new_val, source = hv.tick(turn=2)
+        assert new_val == 10
+        assert source == ""
+        assert len(hv.records) == 1  # 无新记录追加
+
+    def test_tick_basic_decay(self):
+        """正常衰减：每回合减少 decay_per_turn"""
+        hv = HiddenValue(
+            id="rapport", name="好感度", direction="ascending",
+            thresholds=[0, 20, 50],
+            decay_per_turn=3,
+        )
+        hv.add(15, "赠送礼物", "scene_01", turn=1)  # 15 >= 20? 否，level_idx=0
+        new_val, source = hv.tick(turn=2)
+        assert new_val == 12   # 15 - 3
+        assert source == "[decay:turn_2]"
+        assert len(hv.records) == 2
+        assert hv.records[1].delta == -3
+        assert hv.records[1].source == "[decay:turn_2]"
+
+    def test_tick_respects_min_value(self):
+        """衰减到达 decay_min_value 下限时停止"""
+        hv = HiddenValue(
+            id="rapport", name="好感度", direction="ascending",
+            thresholds=[0, 20, 50],
+            decay_per_turn=5,
+            decay_min_value=3,
+        )
+        hv.add(7, "初始", "scene_01", turn=1)  # raw=7
+        new_val, source = hv.tick(turn=2)   # 7-5=2，但 min=3 → 3
+        assert new_val == 3
+        assert source == "[decay:turn_2]"
+
+        # 再衰减一次：3-5= -2，但 min=3 → 3（不再变化）
+        new_val2, source2 = hv.tick(turn=3)
+        assert new_val2 == 3
+        assert source2 == ""  # 无变化，不追加记录
+
+    def test_tick_multiple_turns(self):
+        """连续多回合衰减"""
+        hv = HiddenValue(
+            id="rapport", name="好感度", direction="ascending",
+            thresholds=[0, 20, 50],
+            decay_per_turn=2,
+        )
+        hv.add(10, "初始", "scene_01", turn=1)
+        for turn in range(2, 6):
+            new_val, _ = hv.tick(turn=turn)
+        # 10 - 2*4 = 2
+        assert new_val == 2
+        # 5次 add（初始1次）+ 4次 tick
+        assert len(hv.records) == 5
+
+    def test_tick_with_no_min_value_unbounded(self):
+        """decay_min_value=None 时可以衰减到负值"""
+        hv = HiddenValue(
+            id="stress", name="压力", direction="ascending",
+            thresholds=[0, 30, 60],
+            decay_per_turn=5,
+            decay_min_value=None,
+        )
+        hv.add(3, "压力累积", "scene_01", turn=1)  # raw=3
+        new_val, _ = hv.tick(turn=2)  # 3 - 5 = -2
+        assert new_val == -2
+
+    def test_tick_record_source_tag_format(self):
+        """decay 记录的 source 标签格式正确"""
+        hv = HiddenValue(
+            id="rapport", name="好感度", direction="ascending",
+            thresholds=[0],
+            decay_per_turn=1,
+        )
+        hv.add(5, "赠送礼物", "scene_01", turn=1)
+        _, source = hv.tick(turn=10)
+        assert source == "[decay:turn_10]"
+        assert hv.records[-1].turn == 10
+
+
+class TestHiddenValueSystemTickAll:
+    """HiddenValueSystem.tick_all() 多值回合推进"""
+
+    def test_tick_all_only_calls_decay_values(self):
+        """tick_all 只处理 decay_per_turn > 0 的值"""
+        hvs = HiddenValueSystem(configs=[
+            {"id": "rapport", "direction": "ascending",
+             "thresholds": [0, 20], "decay_per_turn": 3},
+            {"id": "sanity",  "direction": "ascending",
+             "thresholds": [0],     "decay_per_turn": 0},  # 不衰减
+        ])
+        hvs.add_to("rapport", 10, "初始", "s1", turn=1)
+        hvs.add_to("sanity", 5, "初始", "s1", turn=1)
+
+        results = hvs.tick_all(turn=2)
+        assert "rapport" in results
+        assert "sanity" not in results  # 无衰减配置
+
+    def test_tick_all_returns_correct_values(self):
+        """tick_all 返回所有衰减值的 (new_value, source_tag)"""
+        hvs = HiddenValueSystem(configs=[
+            {"id": "rapport", "direction": "ascending",
+             "thresholds": [0, 20], "decay_per_turn": 3},
+            {"id": "trust",   "direction": "ascending",
+             "thresholds": [0],     "decay_per_turn": 2},
+        ])
+        hvs.add_to("rapport", 10, "初始", "s1", turn=1)
+        hvs.add_to("trust", 8, "初始", "s1", turn=1)
+
+        results = hvs.tick_all(turn=2)
+        assert results["rapport"] == (7, "[decay:turn_2]")
+        assert results["trust"]   == (6, "[decay:turn_2]")
+
+    def test_tick_all_empty_when_no_decay_configured(self):
+        """没有任何数值配置衰减时，tick_all 返回空字典"""
+        hvs = HiddenValueSystem(configs=[
+            {"id": "moral_debt", "direction": "ascending",
+             "thresholds": [0, 11]},
+        ])
+        hvs.add_to("moral_debt", 5, "初始", "s1", turn=1)
+        results = hvs.tick_all(turn=2)
+        assert results == {}
+
+    def test_tick_all_reports_min_value_floor(self):
+        """tick_all 正确反映衰减到达 min_value 后的实际值"""
+        hvs = HiddenValueSystem(configs=[
+            {"id": "rapport", "direction": "ascending",
+             "thresholds": [0], "decay_per_turn": 5, "decay_min_value": 3},
+        ])
+        hvs.add_to("rapport", 7, "初始", "s1", turn=1)
+        results = hvs.tick_all(turn=2)
+        assert results["rapport"] == (3, "[decay:turn_2]")  # 7-5=2 → floor 到 3
+
+        # 再次 tick：无变化
+        results2 = hvs.tick_all(turn=3)
+        assert results2 == {}  # 无变化，不报告
+
+
+class TestHiddenValueDecayPersistence:
+    """Decay 记录在 DB 持久化中的行为"""
+
+    def test_decay_record_saved_and_loaded_no_scene_trigger(self):
+        """
+        验证两点：
+        1. decay 记录本身在回放时不会错误设置 trigger_fired
+        2. 当 decay 导致 level 下降穿过阈值时，trigger_fired 被清除
+           （这是唯一清除 trigger_fired 的机制；向上穿越阈值才设置）
+        """
+        import tempfile, sqlite3, os
+        from pathlib import Path
+
+        tmp = tempfile.mkdtemp()
+        db_path = os.path.join(tmp, "decay_test.db")
+        conn = sqlite3.connect(db_path)
+        conn.executescript("""
+            CREATE TABLE hidden_value_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hidden_value_id TEXT NOT NULL, delta INTEGER NOT NULL,
+                source TEXT, scene_id TEXT, player_action TEXT, turn INTEGER
+            );
+            CREATE TABLE hidden_value_state (
+                hidden_value_id TEXT PRIMARY KEY, name TEXT, description TEXT,
+                level INTEGER DEFAULT 0, effects_snapshot TEXT DEFAULT '{}'
+            );
+            CREATE INDEX idx_hv ON hidden_value_records(hidden_value_id);
+        """)
+        conn.close()
+
+        class TestDB:
+            def __init__(self, path):
+                self.path = path
+            def _conn(self):
+                c = sqlite3.connect(self.path)
+                c.row_factory = sqlite3.Row
+                return c
+            def insert_hidden_value_record(self, **kw):
+                with self._conn() as cx:
+                    cx.execute(
+                        "INSERT INTO hidden_value_records (hidden_value_id,delta,source,scene_id,player_action,turn) "
+                        "VALUES (:hidden_value_id,:delta,:source,:scene_id,:player_action,:turn)",
+                        kw
+                    )
+                    cx.commit()
+            def upsert_hidden_value_state(self, hidden_value_id, name, description, level, effects_snapshot):
+                import json
+                with self._conn() as cx:
+                    cx.execute(
+                        "INSERT OR REPLACE INTO hidden_value_state VALUES (?,?,?,?,?)",
+                        (hidden_value_id, name, description, level, json.dumps(effects_snapshot))
+                    )
+                    cx.commit()
+            def get_all_hidden_value_states(self):
+                with self._conn() as cx:
+                    return [dict(r) for r in cx.execute("SELECT * FROM hidden_value_state").fetchall()]
+            def get_hidden_value_records(self, hidden_value_id, limit=9999):
+                with self._conn() as cx:
+                    rows = cx.execute(
+                        "SELECT * FROM hidden_value_records WHERE hidden_value_id=? LIMIT ?",
+                        (hidden_value_id, limit)
+                    ).fetchall()
+                    return [dict(r) for r in rows]
+
+        db = TestDB(db_path)
+
+        # 构建含触发场景的配置
+        hvs = HiddenValueSystem(configs=[
+            {
+                "id": "rapport", "name": "好感度",
+                "direction": "ascending",
+                "thresholds": [0, 20, 50],
+                "decay_per_turn": 8,  # 足够大，能让值从 25 跌回阈值以下
+                "effects": {
+                    "0":  {},
+                    "20": {"trigger_scene": "cold_shoulders"},
+                    "50": {},
+                },
+            },
+        ])
+
+        # 回合1：积累到高水平，跨过 threshold=20
+        hvs.add_to("rapport", 25, "赠送重礼", "s1", turn=1)  # >= 20 → level_idx=1, trigger_fired=True
+        # 回合2：衰减 → 25-8=17，跌回 threshold=20 以下，level_idx=0，trigger_fired 应清除
+        hvs.tick_all(turn=2)
+
+        # 验证衰减记录存在
+        assert any("[decay:turn_2]" in r.source for r in hvs.values["rapport"].records)
+
+        hvs.save_to_db(db)
+
+        # 新建系统实例，从 DB 加载
+        hvs2 = HiddenValueSystem(configs=[
+            {
+                "id": "rapport", "name": "好感度",
+                "direction": "ascending",
+                "thresholds": [0, 20, 50],
+                "decay_per_turn": 8,
+            },
+        ])
+        hvs2.load_from_db(db)
+
+        # decay 记录被正确恢复（source 标签正确）
+        records = hvs2.values["rapport"].records
+        sources = [r.source for r in records]
+        assert "[decay:turn_2]" in sources
+
+        # decay 导致 level 从 1 降回 0 → trigger_fired 被清除
+        assert hvs2.values["rapport"].effects[20].trigger_fired is False
+        # 尚未达到 threshold=50
+        assert hvs2.values["rapport"].effects[50].trigger_fired is False
+
+        # 清理
+        import shutil
+        shutil.rmtree(tmp)
+
+    def test_decay_fields_in_snapshot(self):
+        """get_snapshot() 包含 decay_per_turn 和 decay_min_value"""
+        hv = HiddenValue(
+            id="rapport", name="好感度", direction="ascending",
+            thresholds=[0],
+            decay_per_turn=3,
+            decay_min_value=5,
+        )
+        snap = hv.get_snapshot()
+        assert snap["decay_per_turn"] == 3
+        assert snap["decay_min_value"] == 5
+
+    def test_from_config_decay_fields(self):
+        """from_config() 正确读取 decay_per_turn 和 decay_min_value"""
+        cfg = {
+            "id": "rapport",
+            "name": "好感度",
+            "direction": "ascending",
+            "thresholds": [0, 20],
+            "decay_per_turn": 4,
+            "decay_min_value": 2,
+            "effects": {},
+        }
+        hv = HiddenValue.from_config(cfg)
+        assert hv.decay_per_turn == 4
+        assert hv.decay_min_value == 2
+
+    def test_from_config_no_decay(self):
+        """from_config() 默认 decay_per_turn=0, decay_min_value=None"""
+        cfg = {
+            "id": "moral_debt",
+            "direction": "ascending",
+            "thresholds": [0],
+            "effects": {},
+        }
+        hv = HiddenValue.from_config(cfg)
+        assert hv.decay_per_turn == 0
+        assert hv.decay_min_value is None
 
