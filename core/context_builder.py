@@ -86,6 +86,7 @@ class PromptBuilder:
         moral_debt_sys=None,
         inventory_sys=None,
         dialogue_sys=None,
+        hidden_value_sys=None,
         # db 模式参数
         db=None,
         current_scene_id: str = "",
@@ -98,6 +99,7 @@ class PromptBuilder:
         self.moral_debt_sys = moral_debt_sys
         self.inventory_sys = inventory_sys
         self.dialogue_sys = dialogue_sys
+        self.hidden_value_sys = hidden_value_sys  # 新增：支持 memory 模式下的 HiddenValueSystem
         self.db = db
         self.current_scene_id = current_scene_id
         self.turn = turn
@@ -141,10 +143,10 @@ class PromptBuilder:
                 styles.append(f"- {hv['name']}: 等级{level}（{hv.get('description','')}）")
             return "\n".join(styles) if styles else "（各隐藏数值正常）"
         else:
-            # memory 模式
+            # memory 模式：从 HiddenValueSystem 获取叙事风格（新版）
             styles = {}
-            if hasattr(self.dialogue_sys, "get_narrative_styles"):
-                styles = self.dialogue_sys.get_narrative_styles()
+            if self.hidden_value_sys is not None:
+                styles = self.hidden_value_sys.get_narrative_styles()
             return "\n".join([f"- {k}: {v}" for k, v in styles.items()]) or "（正常）"
 
     def _build_locked_options(self) -> str:
@@ -167,11 +169,21 @@ class PromptBuilder:
                     all_locked.extend(locked)
             return "、".join(all_locked) if all_locked else "（无）"
         else:
-            if hasattr(self.moral_debt_sys, "get_locked_options"):
-                locked = self.moral_debt_sys.get_locked_options()
-            else:
-                locked = []
-            return "、".join(locked) if locked else "（无）"
+            locked: List[str] = []
+            # 优先从 HiddenValueSystem（新标准）
+            if self.hidden_value_sys is not None:
+                locked.extend(self.hidden_value_sys.get_locked_options())
+            # 兼容旧版 MoralDebtSystem
+            if self.moral_debt_sys is not None and hasattr(self.moral_debt_sys, "get_locked_options"):
+                locked.extend(self.moral_debt_sys.get_locked_options())
+            # 去重
+            seen = set()
+            unique = []
+            for opt in locked:
+                if opt not in seen:
+                    seen.add(opt)
+                    unique.append(opt)
+            return "、".join(unique) if unique else "（无）"
 
     def _build_hidden_value_records(self) -> str:
         if self.mode == "db":
@@ -190,7 +202,21 @@ class PromptBuilder:
                         )
             return "\n".join(lines) if lines else "（暂无记录）"
         else:
-            if hasattr(self.moral_debt_sys, "get_recent_records"):
+            # 优先从 HiddenValueSystem（新标准）获取 moral_debt 记录
+            if self.hidden_value_sys is not None and "moral_debt" in self.hidden_value_sys.values:
+                hv = self.hidden_value_sys.values["moral_debt"]
+                records = hv.get_recent_records(3)
+                if records:
+                    lines = []
+                    for r in records:
+                        sign = "+" if r["delta"] > 0 else ""
+                        lines.append(
+                            f"- [{r['scene_id']}] {r['source']} "
+                            f"{sign}{r['delta']}分"
+                        )
+                    return "\n".join(lines)
+            # Fallback：旧版 MoralDebtSystem
+            if self.moral_debt_sys is not None and hasattr(self.moral_debt_sys, "get_recent_records"):
                 records = self.moral_debt_sys.get_recent_records(3)
             else:
                 records = []
@@ -207,7 +233,7 @@ class PromptBuilder:
 
     def _build_npc_status(self) -> str:
         if self.mode == "db":
-            npcs = self.db.get_npcs_in_scene(self.current_scene_id)
+            npcs = self.db.query_npcs_in_scene(self.current_scene_id)
             if not npcs:
                 npcs = self.db.get_all_npc_states()[:5]  # fallback：最近5个NPC
             if not npcs:
@@ -299,3 +325,37 @@ class PromptBuilder:
         """更新当前场景和回合（切换场景时调用）"""
         self.current_scene_id = scene_id
         self.turn = turn
+
+    def get_narrative_styles(self) -> Dict[str, str]:
+        """暴露各隐藏数值的当前叙事风格，供调用方（如 game_master.py）查询"""
+        if self.hidden_value_sys is None:
+            return {}
+        return self.hidden_value_sys.get_narrative_styles()
+
+    def record_action(
+        self,
+        action_tag: str,
+        scene_id: str,
+        turn: int,
+        player_action: str,
+    ) -> tuple[Dict[str, int], Dict[str, Optional[str]], Dict[str, int]]:
+        """
+        通过 action_tag 触发隐藏数值变化（仅 memory 模式）。
+        返回 (各值变化量, 各值触发场景, 关系变化量)。
+
+        relation_delta 由调用方自行处理。
+        """
+        if self.hidden_value_sys is None:
+            return {}, {}, {}
+        return self.hidden_value_sys.record_action(
+            action_tag=action_tag,
+            scene_id=scene_id,
+            turn=turn,
+            player_action=player_action,
+        )
+
+    def get_snapshot(self) -> Dict[str, Dict]:
+        """暴露隐藏数值快照，供调用方查询"""
+        if self.hidden_value_sys is None:
+            return {}
+        return self.hidden_value_sys.get_snapshot()

@@ -239,7 +239,7 @@ class TestPromptBuilderHiddenValueIntegration:
             hidden_value_sys=hidden_value_sys,
         )
 
-        deltas, triggered = pb.record_action(
+        deltas, triggered, rel_deltas = pb.record_action(
             action_tag="silent_witness",
             scene_id="scene_01",
             turn=1,
@@ -249,7 +249,7 @@ class TestPromptBuilderHiddenValueIntegration:
         assert triggered["moral_debt"] is None  # 5 < 11，未跨阈
 
         # 再来一次：5+5=10，仍未跨阈
-        deltas2, _ = pb.record_action(
+        deltas2, _, _ = pb.record_action(
             action_tag="silent_witness",
             scene_id="scene_01",
             turn=2,
@@ -287,10 +287,10 @@ class TestPromptBuilderHiddenValueIntegration:
             hidden_value_sys=hvs,
         )
 
-        _, t1 = pb.record_action("witness_a", "s1", 1, "")
+        _, t1, _ = pb.record_action("witness_a", "s1", 1, "")
         assert t1["moral_debt"] is None  # 6 < 10
 
-        _, t2 = pb.record_action("witness_b", "s2", 2, "")
+        _, t2, _ = pb.record_action("witness_b", "s2", 2, "")
         assert t2["moral_debt"] == "flashback_01"  # 12 >= 10，触发场景
 
     def test_record_action_unknown_tag_returns_empty(
@@ -303,7 +303,7 @@ class TestPromptBuilderHiddenValueIntegration:
             inventory_sys, dialogue_sys,
             hidden_value_sys=hidden_value_sys,
         )
-        deltas, triggered = pb.record_action("unknown_tag", "s1", 1, "")
+        deltas, triggered, rel_deltas = pb.record_action("unknown_tag", "s1", 1, "")
         assert deltas == {}
         assert triggered == {}
 
@@ -448,6 +448,7 @@ class TestPromptBuilderNoHiddenValue:
             inventory_sys, dialogue_sys,
             hidden_value_sys=None,
         )
-        deltas, triggered = pb.record_action("any_tag", "s1", 1, "")
+        deltas, triggered, rel_deltas = pb.record_action("any_tag", "s1", 1, "")
         assert deltas == {}
         assert triggered == {}
+        assert rel_deltas == {}

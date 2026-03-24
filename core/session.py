@@ -25,6 +25,7 @@ class GameState:
     flags: Dict[str, Any]  # 自定义游戏事件标记
     hidden_values: Dict[str, Dict] = field(default_factory=dict)  # HiddenValueSystem 快照
     turn_count: int = 0
+    history: List[Dict] = field(default_factory=list)  # 对话历史记录
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -157,6 +158,7 @@ class Session:
             flags=self.flags,
             hidden_values=self.hidden_values,
             turn_count=self.turn_count,
+            history=self.history,
         )
 
     def save(self, name: Optional[str] = None) -> Path:
@@ -180,6 +182,7 @@ class Session:
         self.flags = state.flags
         self.hidden_values = getattr(state, "hidden_values", {})
         self.turn_count = state.turn_count
+        self.history = getattr(state, "history", [])
 
     def get_history_summary(self, last_n: int = 5) -> str:
         recent = self.history[-last_n:]

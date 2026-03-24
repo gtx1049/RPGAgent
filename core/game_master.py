@@ -184,7 +184,7 @@ class GameMaster:
         if self.hidden_value_sys and "action_tag" in cmd:
             action_tag = cmd["action_tag"]
             player_input = cmd.get("player_input", "")
-            deltas, triggered_scenes = self.hidden_value_sys.record_action(
+            deltas, triggered_scenes, relation_deltas = self.hidden_value_sys.record_action(
                 action_tag=action_tag,
                 scene_id=self.session.current_scene_id,
                 turn=self.session.turn_count,
@@ -194,6 +194,9 @@ class GameMaster:
             for vid, scene_id in triggered_scenes.items():
                 if scene_id:
                     self.session.flags[f"_hv_triggered_{vid}"] = scene_id
+            # action_map 中的 relation_delta 直接应用到 DialogueSystem
+            for npc_id, delta in relation_deltas.items():
+                self.dialogue_sys.modify_relation(npc_id, delta)
 
         if action == "transition":
             next_scene = cmd.get("next_scene")

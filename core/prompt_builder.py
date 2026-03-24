@@ -333,12 +333,13 @@ class PromptBuilder:
     ) -> tuple[Dict[str, int], Dict[str, Optional[str]]]:
         """
         通过 action_tag 触发隐藏数值变化。
-        返回 (各值变化量, 各值触发场景)。
+        返回 (各值变化量, 各值触发场景, 关系变化量)。
 
         调用方应在 GM 返回 action_tag 后调用此方法。
+        relation_delta 由调用方自行处理（如应用到 DialogueSystem）。
         """
         if self.hidden_value_sys is None:
-            return {}, {}
+            return {}, {}, {}
         return self.hidden_value_sys.record_action(
             action_tag=action_tag,
             scene_id=scene_id,

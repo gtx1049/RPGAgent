@@ -137,6 +137,124 @@ class TestHiddenValue:
         assert recent[0]["source"] == "source_5"  # records[-3:] = [source_5, source_6, source_7]
 
 
+    def test_next_threshold_property(self):
+        """next_threshold 返回下一档阈值，末档返回 None"""
+        hv = HiddenValue(
+            id="test", name="测试", direction="ascending",
+            thresholds=[0, 11, 26, 51],
+        )
+        assert hv.next_threshold == 11
+
+        hv.add(15, "src", "s1")  # 15 → level_idx=1 (>=11, <26)
+        assert hv.current_threshold == 11
+        assert hv.next_threshold == 26
+
+        hv.add(20, "src", "s2")  # 35 → level_idx=2 (>=26, <51)
+        assert hv.next_threshold == 51
+
+        hv.add(50, "src", "s3")  # 85 → level_idx=3 (>=51, last)
+        assert hv.next_threshold is None
+
+    def test_negative_delta_descending(self):
+        """descending 方向：delta 为负（值减少）= 状态变好（level_idx 降低，threshold 变小）"""
+        hv = HiddenValue(
+            id="sanity", name="理智", direction="descending",
+            thresholds=[0, 30, 60, 80],
+        )
+        hv.add(40, "恐怖经历", "s1")  # value=40, 第一个 40<threshold 是 i=2(60) → level_idx=1, threshold=30
+        assert hv.current_threshold == 30
+
+        hv.add(-20, "充分休息", "s2")  # value=20, 第一个 20<threshold 是 i=1(30) → level_idx=0, threshold=0
+        assert hv.current_threshold == 0
+
+        # 恢复到最佳状态
+        hv.add(-10, "深度冥想", "s3")  # value=-10, 仍在第0档
+        assert hv.current_threshold == 0
+
+    def test_negative_delta_ascending(self):
+        """ascending 方向：负 delta = 原始值减少，可能降档"""
+        hv = HiddenValue(
+            id="reputation", name="声望", direction="ascending",
+            thresholds=[0, 20, 50],
+        )
+        hv.add(30, "行侠仗义", "s1")  # value=30 → level_idx=1 (>=20, <50)
+        assert hv.current_threshold == 20
+
+        hv.add(-25, "失手伤人", "s2")  # value=5 → level_idx=0 (<20)
+        assert hv.current_threshold == 0
+
+    def test_cross_multiple_thresholds_at_once(self):
+        """一次 add 跨越多个阈值，每档的 trigger_scene 只触发一次"""
+        hv = HiddenValue(
+            id="moral", name="道德", direction="ascending",
+            thresholds=[0, 10, 30],
+            effects={
+                0:  LevelEffect(),
+                10: LevelEffect(trigger_scene="tension_01"),
+                30: LevelEffect(trigger_scene="crisis_01"),
+            },
+        )
+        _, triggered = hv.add(35, "大事件", "s1")
+        # 35 >= 30，进入第2档（index=2），trigger_scene = crisis_01
+        assert triggered == "crisis_01"
+        # tension_01 不触发（一次性跨越，没经过第1档的"进入"动作）
+        assert hv.effects[10].trigger_fired is False
+        assert hv.effects[30].trigger_fired is True
+
+    def test_empty_thresholds_defaults_to_zero(self):
+        """空 thresholds 列表时默认为 [0]"""
+        hv = HiddenValue(id="test", name="测试", direction="ascending")
+        assert hv.thresholds == [0]
+        assert hv.current_threshold == 0
+        hv.add(5, "src", "s1")
+        assert hv.current_threshold == 0  # value=5 >= 0 → index=0
+
+    def test_initial_level_from_config(self):
+        """from_config 正确处理 initial_level 参数"""
+        cfg = {
+            "id": "reputation",
+            "direction": "ascending",
+            "thresholds": [0, 20, 50, 80],
+            "initial_level": 50,  # value=50 → level_idx=2 (>=50, <80)
+        }
+        hv = HiddenValue.from_config(cfg)
+        assert hv.current_threshold == 50
+        assert hv.level_idx == 2
+
+    def test_initial_level_zero_by_default(self):
+        """未指定 initial_level 时默认为 0"""
+        hv = HiddenValue(id="test", name="测试", direction="ascending", thresholds=[0, 10])
+        assert hv.level_idx == 0
+        assert hv.current_threshold == 0
+
+    def test_descending_best_state(self):
+        """descending 方向：value >= 所有 threshold 时处于最佳状态（最高 level_idx）"""
+        hv = HiddenValue(
+            id="grace", name="恩典", direction="descending",
+            thresholds=[0, 40, 70, 100],
+        )
+        # value=100，>= 所有阈值，最佳状态
+        hv.add(100, "积累功德", "s1")
+        assert hv.level_idx == 3
+        assert hv.current_threshold == 100
+
+    def test_trigger_scene_not_refired_after_manual_reset(self):
+        """trigger_fired 可被手动重置后再次触发（load_from_db 场景）"""
+        hv = HiddenValue(
+            id="moral", name="道德", direction="ascending",
+            thresholds=[0, 10],
+            effects={0: LevelEffect(), 10: LevelEffect(trigger_scene="scene_x")},
+        )
+        hv.add(12, "src", "s1")
+        assert hv.effects[10].trigger_fired is True
+
+        # 模拟从 DB 重置（load_from_db 重新设为 False，但 level_idx 已在第1档）
+        hv.effects[10].trigger_fired = False
+        hv.add(5, "再次跨越", "s2")  # value=17，>=10 但 level_idx 不变（仍在第1档），不触发
+        # add() 只在 level_idx > old_level 时触发
+        assert hv.effects[10].trigger_fired is False
+
+
 class TestHiddenValueSystem:
     def test_register_and_get(self):
         hvs = HiddenValueSystem()
@@ -149,7 +267,7 @@ class TestHiddenValueSystem:
             {"id": "moral", "direction": "ascending", "thresholds": [0, 11]},
             {"id": "sanity", "direction": "descending", "thresholds": [0, 30]},
         ])
-        results = hvs.add_batch(
+        results, rel_deltas = hvs.add_batch(
             {"moral": 15, "sanity": 40},
             source="一次恐怖经历",
             scene_id="scene_01",
@@ -157,6 +275,7 @@ class TestHiddenValueSystem:
         )
         assert results["moral"][0] == 15
         assert results["sanity"][0] == 40
+        assert rel_deltas == {}
 
     def test_get_locked_options(self):
         hvs = HiddenValueSystem([
@@ -225,7 +344,7 @@ class TestHiddenValueSystem:
                 "help_victim":     {"moral_debt": -3, "sanity": 3},
             },
         )
-        deltas, triggered = hvs.record_action(
+        deltas, triggered, rel_deltas = hvs.record_action(
             action_tag="silent_witness",
             scene_id="scene_01",
             turn=3,
@@ -236,6 +355,7 @@ class TestHiddenValueSystem:
         assert deltas["sanity"] == -5
         assert triggered["moral_debt"] is None
         assert triggered["sanity"] is None
+        assert rel_deltas == {}  # 无 relation_delta
 
     def test_record_action_triggers_scene(self):
         """跨阈值触发场景（action_map + trigger_scene）"""
@@ -257,14 +377,14 @@ class TestHiddenValueSystem:
                 "second_witness": {"moral_debt": 6},
             },
         )
-        _, triggered1 = hvs.record_action("first_witness", "s1", 1, "")
+        _, triggered1, _ = hvs.record_action("first_witness", "s1", 1, "")
         assert triggered1["moral_debt"] is None  # 6 < 10，未跨阈
 
-        _, triggered2 = hvs.record_action("second_witness", "s2", 2, "")
+        _, triggered2, _ = hvs.record_action("second_witness", "s2", 2, "")
         assert triggered2["moral_debt"] == "flashback_01"  # 12 >= 10，跨阈
 
         # 再次触发同一阈值不重复
-        _, triggered3 = hvs.record_action("second_witness", "s3", 3, "")
+        _, triggered3, _ = hvs.record_action("second_witness", "s3", 3, "")
         assert triggered3["moral_debt"] is None
 
     def test_record_action_unknown_tag_returns_empty(self):
@@ -273,9 +393,235 @@ class TestHiddenValueSystem:
             configs=[{"id": "test", "direction": "ascending", "thresholds": [0]}],
             action_map={"known_tag": {"test": 1}},
         )
-        deltas, triggered = hvs.record_action("unknown_tag", "s1", 1, "")
+        deltas, triggered, rel_deltas = hvs.record_action("unknown_tag", "s1", 1, "")
         assert deltas == {}
         assert triggered == {}
+        assert rel_deltas == {}
+
+    def test_record_action_with_nonexistent_value_id_in_map(self):
+        """action_map 中包含未注册的 hidden_value_id，静默忽略（返回 0，不抛异常）"""
+        hvs = HiddenValueSystem(
+            configs=[{"id": "moral_debt", "direction": "ascending", "thresholds": [0, 11]}],
+            action_map={
+                "some_action": {"moral_debt": 5, "ghost_value": 10},  # ghost_value 不存在
+            },
+        )
+        deltas, triggered, rel_deltas = hvs.record_action("some_action", "s1", 1, "test")
+        assert deltas["moral_debt"] == 5
+        assert "ghost_value" in deltas  # add_to 对不存在 id 返回 (0, None)
+        assert rel_deltas == {}  # ghost_value 不是 relation_delta
+        assert deltas["ghost_value"] == 0  # 静默返回 0，不抛异常
+
+    def test_get_pending_triggered_scenes(self):
+        """get_pending_triggered_scenes 返回已触发但未执行的场景映射"""
+        hvs = HiddenValueSystem(
+            configs=[
+                {
+                    "id": "moral_debt",
+                    "direction": "ascending",
+                    "thresholds": [0, 10, 20],
+                    "effects": {
+                        "0":  {},
+                        "10": {"trigger_scene": "tension_01"},
+                        "20": {"trigger_scene": "breakdown_01"},
+                    },
+                },
+                {
+                    "id": "sanity",
+                    "direction": "descending",
+                    "thresholds": [0, 30],
+                    "effects": {
+                        "0":  {},
+                        "30": {"trigger_scene": "madness_01"},
+                    },
+                },
+            ],
+            action_map={
+                "first_event":  {"moral_debt": 8},
+                "second_event": {"moral_debt": 8},
+                "third_event":  {"sanity": 40},
+            },
+        )
+        pending = hvs.get_pending_triggered_scenes()
+        assert pending == {}
+
+        hvs.record_action("first_event", "s1", 1, "")   # 8 < 10 → 未跨阈
+        assert hvs.get_pending_triggered_scenes() == {}
+
+        hvs.record_action("second_event", "s2", 2, "")  # 16 >= 10 → 触发 tension_01
+        pending = hvs.get_pending_triggered_scenes()
+        assert pending == {"moral_debt": "tension_01"}
+
+        hvs.record_action("third_event", "s3", 3, "")    # sanity 40 < 30 → 触发 madness_01
+        pending = hvs.get_pending_triggered_scenes()
+        assert pending == {"moral_debt": "tension_01", "sanity": "madness_01"}
+
+    def test_get_snapshot_system_level(self):
+        """HiddenValueSystem.get_snapshot() 返回所有值的快照字典"""
+        hvs = HiddenValueSystem([
+            {
+                "id": "moral_debt",
+                "direction": "ascending",
+                "thresholds": [0, 11],
+                "effects": {
+                    "0":  {},
+                    "11": {"locked_options": ["干预"]},
+                },
+            },
+        ])
+        hvs.add_to("moral_debt", 5, "src", "s1", turn=3)
+        snaps = hvs.get_snapshot()
+        assert "moral_debt" in snaps
+        assert snaps["moral_debt"]["record_count"] == 1
+        assert snaps["moral_debt"]["level_idx"] == 0
+
+    def test_system_snapshot_empty_when_no_values(self):
+        """HiddenValueSystem 无配置时 get_snapshot() 返回空字典"""
+        hvs = HiddenValueSystem()
+        assert hvs.get_snapshot() == {}
+
+    def test_add_batch_all_keys_must_exist(self):
+        """add_batch 中有不存在 id 时，已存在的写入，不存在的返回 (0, None)"""
+        hvs = HiddenValueSystem([
+            {"id": "a", "direction": "ascending", "thresholds": [0]},
+            {"id": "b", "direction": "ascending", "thresholds": [0]},
+        ])
+        results, rel_deltas = hvs.add_batch(
+            {"a": 1, "ghost": 99},
+            source="test", scene_id="s1", turn=1,
+        )
+        assert "a" in results
+        assert results["a"][0] == 1  # ghost 不存在，返回 (0, None)
+        assert "ghost" in results  # 静默处理：返回 (0, None)，不抛异常
+        assert results["ghost"] == (0, None)
+
+    def test_register_duplicate_id_overwrites(self):
+        """register 重复 id 时覆盖旧实例"""
+        hvs = HiddenValueSystem()
+        hv1 = HiddenValue(id="test", name="A", direction="ascending", thresholds=[0, 5])
+        hv2 = HiddenValue(id="test", name="B", direction="ascending", thresholds=[0, 10])
+        hvs.register(hv1)
+        assert hvs.values["test"].thresholds == [0, 5]
+        hvs.register(hv2)
+        assert hvs.values["test"].thresholds == [0, 10]
+
+    def test_acknowledge_triggered_scene(self):
+        """acknowledge_triggered_scene 标记场景为已执行，不再出现在 pending"""
+        hvs = HiddenValueSystem([
+            {
+                "id": "moral",
+                "direction": "ascending",
+                "thresholds": [0, 10],
+                "effects": {
+                    "0":  {},
+                    "10": {"trigger_scene": "tension_01"},
+                },
+            },
+        ])
+        hvs.add_to("moral", 15, "src", "s1")
+        # 刚触发，trigger_fired=True, trigger_executed=False → 在 pending 中
+        assert hvs.get_pending_triggered_scenes() == {"moral": "tension_01"}
+
+        # GM 确认执行
+        hvs.acknowledge_triggered_scene("moral")
+        assert hvs.get_pending_triggered_scenes() == {}  # 已确认，不在 pending
+
+    def test_acknowledge_unknown_id_noop(self):
+        """acknowledge 不存在的 id 不抛异常"""
+        hvs = HiddenValueSystem()
+        hvs.acknowledge_triggered_scene("ghost")  # 不抛异常
+
+    def test_relation_delta_extracted_from_action_map(self):
+        """action_map 中包含 relation_delta 时，record_action 正确提取并返回"""
+        hvs = HiddenValueSystem(
+            configs=[{"id": "moral_debt", "direction": "ascending", "thresholds": [0]}],
+            action_map={
+                "betray_friend": {
+                    "moral_debt": 15,
+                    "relation_delta": {"npc_01": -10, "npc_02": -5},
+                },
+            },
+        )
+        deltas, triggered, rel_deltas = hvs.record_action(
+            action_tag="betray_friend",
+            scene_id="scene_01",
+            turn=1,
+            player_action="出卖了朋友",
+        )
+        assert deltas["moral_debt"] == 15
+        assert triggered == {"moral_debt": None}
+        assert rel_deltas == {"npc_01": -10, "npc_02": -5}
+
+    def test_relation_delta_multiple_npcs(self):
+        """action_map 支持多个 NPC 的 relation_delta"""
+        hvs = HiddenValueSystem(
+            configs=[{"id": "reputation", "direction": "ascending", "thresholds": [0]}],
+            action_map={
+                "public_speech": {
+                    "reputation": 5,
+                    "relation_delta": {"merchant_guild": 8, "thieves_guild": -3, "guard_captain": 2},
+                },
+            },
+        )
+        _, _, rel_deltas = hvs.record_action(
+            action_tag="public_speech",
+            scene_id="town_square",
+            turn=1,
+            player_action="公开演讲",
+        )
+        assert rel_deltas == {"merchant_guild": 8, "thieves_guild": -3, "guard_captain": 2}
+
+    def test_relation_delta_not_treated_as_hidden_value(self):
+        """relation_delta 不会被当作 hidden_value_id 传入 add_to（之前会静默失败）"""
+        hvs = HiddenValueSystem(
+            configs=[{"id": "sanity", "direction": "descending", "thresholds": [0]}],
+            action_map={
+                "nightmare": {
+                    "sanity": -20,
+                    "relation_delta": {"dark_presence": -10},
+                },
+            },
+        )
+        # 在修复前：这会调用 add_to("relation_delta", {"dark_presence": -10})
+        # 因为 relation_delta 是 dict 而非 int，add_to 返回 (0, None)
+        # 修复后：relation_delta 被正确提取，不会传入 add_to
+        deltas, triggered, rel_deltas = hvs.record_action(
+            action_tag="nightmare",
+            scene_id="dream_01",
+            turn=1,
+            player_action="经历噩梦",
+        )
+        # sanity 正确变化
+        assert deltas["sanity"] == -20
+        # relation_delta 正确提取，不混入 deltas
+        assert "relation_delta" not in deltas
+        assert rel_deltas == {"dark_presence": -10}
+
+    def test_add_batch_returns_relation_deltas(self):
+        """add_batch 直接调用时也正确分离 relation_delta"""
+        hvs = HiddenValueSystem(
+            configs=[{"id": "trust", "direction": "ascending", "thresholds": [0]}],
+        )
+        results, rel_deltas = hvs.add_batch(
+            changes={
+                "trust": 10,
+                "relation_delta": {"ally_01": 5},
+            },
+            source="test",
+            scene_id="s1",
+            turn=1,
+        )
+        assert results == {"trust": (10, None)}
+        assert rel_deltas == {"ally_01": 5}
+
+    def test_relation_delta_empty_when_no_relation_delta_in_map(self):
+        """action_map 无 relation_delta 时，返回空 dict"""
+        hvs = HiddenValueSystem(
+            configs=[{"id": "test", "direction": "ascending", "thresholds": [0]}],
+            action_map={"simple_action": {"test": 3}},
+        )
+        _, _, rel_deltas = hvs.record_action("simple_action", "s1", 1, "")
+        assert rel_deltas == {}
 
 
 class TestHiddenValueSystemPersistence:
@@ -330,12 +676,15 @@ class TestHiddenValueSystemPersistence:
 
             def upsert_hidden_value_state(self, hidden_value_id, name, description,
                                           level, records=None):
+                import json as _json
                 with self._conn() as c:
                     c.execute(
-                        """INSERT INTO hidden_value_state (hidden_value_id,name,description,level)
-                           VALUES (?,?,?,?)
-                           ON CONFLICT(hidden_value_id) DO UPDATE SET level=excluded.level""",
-                        (hidden_value_id, name, description, level),
+                        """INSERT INTO hidden_value_state (hidden_value_id,name,description,level,records_json)
+                           VALUES (?,?,?,?,?)
+                           ON CONFLICT(hidden_value_id) DO UPDATE SET
+                               name=excluded.name, description=excluded.description,
+                               level=excluded.level, records_json=excluded.records_json""",
+                        (hidden_value_id, name, description, level, _json.dumps(records or [])),
                     )
                     c.commit()
 
