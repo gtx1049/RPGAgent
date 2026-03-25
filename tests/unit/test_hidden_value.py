@@ -1534,6 +1534,7 @@ class TestCombatEvent:
         ]
         hvs = HiddenValueSystem(configs=configs, action_map={
             "combat_mercy": {"moral_debt": -3},
+            "ignore_plea": {"moral_debt": 8},
         })
         hvs.record_action(action_tag="ignore_plea", scene_id="s1", turn=1,
                           player_action="ignore")

@@ -699,6 +699,9 @@ class HiddenValueSystem:
         for tag, condition in tag_map:
             if not condition:
                 continue
+            # 只有 action_map 中有对应条目时才处理该 tag
+            if tag not in self.action_map:
+                continue
             # 使用 record_action 处理该 action_tag
             deltas, triggered, relation_deltas, cross_trigger_results = self.record_action(
                 action_tag=tag,
