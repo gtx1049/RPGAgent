@@ -9,11 +9,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 GAMES_DIR = BASE_DIR / "games"
 
 # 默认模型
-DEFAULT_MODEL = os.getenv("RPG_MODEL", "gpt-4-turbo")
+DEFAULT_MODEL = os.getenv("RPG_MODEL", "MiniMax-M2.7")
 
-# API 配置
-API_KEY = os.getenv("OPENAI_API_KEY", "")
-BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+# API 配置（默认使用 MiniMax，与 OpenClaw 保持一致）
+API_KEY = os.getenv("RPG_API_KEY", "sk-cp-5OUTq07g5SrIULP1U36OvVM6eK5JDwf8m_gXPhxinNCG1MMukWMefIyk_nAC-DnTQzKCEKpEQA5pmOTawYgnN9u2MXPBsD22N_gHGkkSMqyLsVK11IML01o")
+BASE_URL = os.getenv("RPG_BASE_URL", "https://api.minimaxi.com/anthropic")
 
 # 游戏设置
 DEFAULT_PLAYER_NAME = "玩家"

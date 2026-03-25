@@ -101,10 +101,11 @@ class GameMaster:
         )
 
         # 初始化 AgentScope 模型
+        # base_url 通过 client_kwargs 传入（OpenAIChatModel 不直接支持 base_url 参数）
         self.model = OpenAIChatModel(
             model_name=model_name,
             api_key=api_key,
-            base_url=base_url.rstrip("/") + "/v1",
+            client_kwargs={"base_url": base_url.rstrip("/") + "/v1"},
             stream=False,
         )
 
@@ -160,8 +161,15 @@ class GameMaster:
         current_sys_prompt = self.prompt_builder.build_system_prompt(scene)
         self.dm._sys_prompt = current_sys_prompt
 
-        # 调用 AgentScope Agent
-        response = self.dm.reply(user_prompt)
+        # 调用 AgentScope Agent（reply 是 async 方法，需要传入 Msg 对象）
+        from agentscope.message import Msg
+        import asyncio
+        msg = Msg(name="玩家", content=user_prompt, role="user")
+        reply_result = self.dm.reply(msg)
+        if asyncio.iscoroutine(reply_result):
+            response = asyncio.run(reply_result)
+        else:
+            response = reply_result
         llm_output = response if isinstance(response, str) else str(response)
 
         self.session.add_history("gm", llm_output)
