@@ -42,6 +42,7 @@ class GameMeta:
     systems_enabled: Dict[str, bool] = field(default_factory=dict)
     hidden_values: List[Dict] = field(default_factory=dict)  # HiddenValueSystem 配置列表
     hidden_value_actions: Dict[str, Dict[str, int]] = field(default_factory=dict)  # action_map
+    first_scene: Optional[str] = None  # 剧本入口场景 ID
 
 
 class GameLoader:
@@ -82,6 +83,7 @@ class GameLoader:
                     systems_enabled=data.get("systems_enabled", {}),
                     hidden_values=data.get("hidden_values", []),
                     hidden_value_actions=data.get("hidden_value_actions", {}),
+                    first_scene=data.get("first_scene"),
                 )
         else:
             self.meta = GameMeta(
