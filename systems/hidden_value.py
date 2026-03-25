@@ -201,7 +201,16 @@ class HiddenValue:
 
         # 检查是否跨阈值触发
         triggered_scene = None
-        if self.level_idx > old_level:
+
+        # ascending：level_idx 增加 = 正向跨阈（进入更糟档位）
+        if self.direction == "ascending" and self.level_idx > old_level:
+            new_effect = self.current_effect
+            if new_effect.trigger_scene and not new_effect.trigger_fired:
+                triggered_scene = new_effect.trigger_scene
+                new_effect.trigger_fired = True
+
+        # descending：level_idx 增加 = 正向跨阈（值升高 = 状态变差，进入更糟档位）
+        elif self.direction == "descending" and self.level_idx > old_level:
             new_effect = self.current_effect
             if new_effect.trigger_scene and not new_effect.trigger_fired:
                 triggered_scene = new_effect.trigger_scene
@@ -433,7 +442,7 @@ class HiddenValueSystem:
                 continue
 
             # ascending: level_idx 增加 → 正向跨阈（更糟的方向）
-            # descending: level_idx 减少 → 正向跨阈（值降低 = 状态变差）
+            # descending: level_idx 减少 → 正向跨阈（值降低 = 状态变差，descending=越低越糟）
             is_forward = (hv.direction == "ascending" and new_level > old_level) or \
                          (hv.direction == "descending" and new_level < old_level)
 
@@ -441,8 +450,14 @@ class HiddenValueSystem:
                 # 负向跨阈（ascending减少 或 descending增加）：不触发 cross_triggers
                 continue
 
-            # 新进入的所有档位（从 old_level+1 到 new_level）都可能携带 cross_triggers
-            for crossed_level in range(old_level + 1, new_level + 1):
+            # 触发 cross_triggers 的档位范围：
+            # ascending 正向(↑) 或 descending 负向(↓)：range(old+1, new+1) 进入新档位
+            # ascending 负向(↓) 或 descending 正向(↓)：range(new, old) 离开旧档位
+            if hv.direction == "ascending":
+                crossed_range = range(old_level + 1, new_level + 1)
+            else:  # descending: 正向跨阈时 level_idx 减少，离开高档位
+                crossed_range = range(new_level, old_level)
+            for crossed_level in crossed_range:
                 if crossed_level >= len(hv.thresholds):
                     break
                 threshold = hv.thresholds[crossed_level]
@@ -518,7 +533,11 @@ class HiddenValueSystem:
             if not is_forward:
                 continue
 
-            for crossed_level in range(old_level + 1, new_level + 1):
+            if target_hv.direction == "ascending":
+                cascade_range = range(old_level + 1, new_level + 1)
+            else:  # descending: 正向跨阈时 level_idx 减少，离开高档位
+                cascade_range = range(new_level, old_level)
+            for crossed_level in cascade_range:
                 if crossed_level >= len(target_hv.thresholds):
                     break
                 threshold = target_hv.thresholds[crossed_level]
@@ -985,7 +1004,7 @@ class HiddenValueSystem:
                     for crossed_i in range(prev_temp_idx + 1, temp_idx + 1):
                         if crossed_i < len(hv.thresholds):
                             eff = hv.effects.get(hv.thresholds[crossed_i])
-                            if eff and eff.trigger_scene:
+                            if eff:
                                 eff.trigger_fired = True
 
                 # 跨入了更低档（负向跨阈，典型为 decay 导致）：清除 trigger_fired
