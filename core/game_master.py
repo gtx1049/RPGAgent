@@ -7,7 +7,7 @@ GameMaster：整合 AgentScope Agent 作为 DM，驱动 RPG 叙事。
 import re
 from typing import Dict, Optional, Tuple, List, Any
 from agentscope import agent
-from agentscope.model import OpenAIChatModel
+from agentscope.model import AnthropicChatModel
 from config.settings import DEFAULT_MODEL, BASE_URL, API_KEY
 from .context_loader import ContextLoader, GameLoader, Scene
 from .session import Session
@@ -100,12 +100,12 @@ class GameMaster:
             hidden_value_sys=self.hidden_value_sys,
         )
 
-        # 初始化 AgentScope 模型
-        # base_url 通过 client_kwargs 传入（OpenAIChatModel 不直接支持 base_url 参数）
-        self.model = OpenAIChatModel(
+        # 初始化 AgentScope 模型（使用 AnthropicChatModel，支持 /v1/messages 端点）
+        # base_url 直接使用，AnthropicChatModel 会自动追加 /v1/messages
+        self.model = AnthropicChatModel(
             model_name=model_name,
             api_key=api_key,
-            client_kwargs={"base_url": base_url.rstrip("/") + "/v1"},
+            client_kwargs={"base_url": base_url.rstrip("/")},
             stream=False,
         )
 
@@ -127,11 +127,12 @@ class GameMaster:
                 if scene
                 else "你是RPG游戏主持人。"
             )
+            from agentscope.formatter._openai_formatter import OpenAIChatFormatter
             self._agent = agent.ReActAgent(
                 name="GameMaster",
                 sys_prompt=sys_prompt,
                 model=self.model,
-                formatter=None,  # 使用默认 formatter
+                formatter=OpenAIChatFormatter(),
                 max_iters=10,
                 print_hint_msg=False,
             )
