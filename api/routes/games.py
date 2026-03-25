@@ -174,8 +174,27 @@ async def load_game(session_id: str, save_id: str):
     session = manager.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="会话不存在")
-    snapshot = session.db.load_snapshot(save_id)
-    if not snapshot:
+
+    snapshot_data = session.db.load_snapshot(save_id)
+    if not snapshot_data:
         raise HTTPException(status_code=404, detail="存档不存在")
-    # TODO: 重新初始化 session 状态
-    return {"ok": True}
+
+    # 从数据库恢复 HiddenValueSystem 状态（records + effects）
+    if session.gm.hidden_value_sys:
+        session.gm.hidden_value_sys.load_from_db(session.db)
+
+    # 重建 GameState 并恢复到 session
+    from core.session import GameState
+    state = GameState(**snapshot_data)
+    session._apply_state(state)
+
+    # 恢复当前场景
+    if state.scene_id:
+        session.gm.current_scene = session.gm.game_loader.get_scene(state.scene_id)
+
+    return {
+        "ok": True,
+        "save_id": save_id,
+        "scene_id": state.scene_id,
+        "turn": state.turn_count,
+    }
