@@ -71,7 +71,7 @@ SYSTEM_PROMPT_TEMPLATE = """你是一名 RPG 游戏的主持人（Game Master）
 4. 叙事结束后，返回结构化的游戏指令（见下）
 
 ## 返回格式
-每次回复后，附上结构化指令（供系统解析，不向玩家展示）：
+每次回复后，**必须**附上结构化指令（供系统解析，不向玩家展示）：
 
 [GM_COMMAND]
 action: narrative | choice | combat | transition
@@ -79,7 +79,7 @@ next_scene: <scene_id>（如果是 transition）
 options: <选项列表>（如果是 choice，格式：选项名|描述|触发条件）
 combat_data: <战斗数据>（如果是 combat）
 narrative_hint: <给玩家的叙事内容>
-action_tag: <本次玩家行为触发的数值标签，如 silent_witness / help_victim>
+action_tag: <本次玩家行为触发的数值标签，如 huff_and_puff / trick_pig / threaten_pig / give_up / eat_pig / run_away，**必填**，对应 hidden_value_actions 中的键>
 [/GM_COMMAND]
 """
 

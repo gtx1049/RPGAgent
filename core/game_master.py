@@ -19,17 +19,29 @@ class GMCommandParser:
 
     @staticmethod
     def parse(text: str) -> Optional[Dict[str, Any]]:
+        # 支持 \n 和真实换行的 GM_COMMAND
         pattern = r"\[GM_COMMAND\]\s*(.*?)\s*\[/GM_COMMAND\]"
         match = re.search(pattern, text, re.DOTALL)
         if not match:
             return None
         result = {}
-        for line in match.group(1).strip().split("\n"):
+        raw_block = match.group(1).replace("\\n", "\n")
+        for line in raw_block.strip().split("\n"):
             if ":" not in line:
                 continue
             key, _, value = line.partition(":")
             result[key.strip()] = value.strip()
-        return result
+
+        # action_tag 必填：如果 GM_COMMAND 中缺失，从全文已知 action_tag 列表匹配
+        if "action_tag" not in result or not result.get("action_tag"):
+            known_tags = ["huff_and_puff", "trick_pig", "threaten_pig", "give_up", "eat_pig", "run_away",
+                          "huff_and_puff", "trick_pig", "threaten_pig", "give_up", "eat_pig", "run_away"]
+            for tag in known_tags:
+                if tag in text.lower():
+                    result["action_tag"] = tag
+                    break
+
+        return result if result else None
 
     @staticmethod
     def extract_narrative(text: str) -> str:
@@ -101,11 +113,12 @@ class GameMaster:
         )
 
         # 初始化 AgentScope 模型（使用 AnthropicChatModel，支持 /v1/messages 端点）
-        # base_url 直接使用，AnthropicChatModel 会自动追加 /v1/messages
+        # thinking={"type": "disabled"} 防止模型输出 thinking 块干扰 GM_COMMAND 解析
         self.model = AnthropicChatModel(
             model_name=model_name,
             api_key=api_key,
             client_kwargs={"base_url": base_url.rstrip("/")},
+            thinking={"type": "disabled"},
             stream=False,
         )
 
@@ -178,6 +191,22 @@ class GameMaster:
         # 解析 GM_COMMAND
         cmd = GMCommandParser.parse(llm_output)
         narrative = GMCommandParser.extract_narrative(llm_output)
+
+        # 当 GM_COMMAND 中没有 action_tag 时，通过关键词推断（弥补 LLM 不遵循指令的问题）
+        if cmd and "action_tag" not in cmd:
+            combined_text = narrative.lower()
+            if any(k in combined_text for k in ["吹", "huff", "吹倒", "吹气"]):
+                cmd["action_tag"] = "huff_and_puff"
+            elif any(k in combined_text for k in ["骗", "假装", "trick", "装", "哄"]):
+                cmd["action_tag"] = "trick_pig"
+            elif any(k in combined_text for k in ["威胁", "恐吓", "threaten"]):
+                cmd["action_tag"] = "threaten_pig"
+            elif any(k in combined_text for k in ["放弃", "give_up", "算了", "走"]):
+                cmd["action_tag"] = "give_up"
+            elif any(k in combined_text for k in ["吃", "吃掉", "eat", "吞"]):
+                cmd["action_tag"] = "eat_pig"
+            elif any(k in combined_text for k in ["逃跑", "run_away", "跑"]):
+                cmd["action_tag"] = "run_away"
 
         # 执行指令
         if cmd:
