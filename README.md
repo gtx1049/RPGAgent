@@ -22,11 +22,14 @@ RPGAgent 是一个基于大模型上下文能力的 RPG 游戏引擎。核心思
 |------|------|
 | **隐藏数值框架** | 通用框架，配置驱动。道德债务/理智/声望等均可定义，支持阈值锁定选项、叙事语气/叙事风格变化、特场景触发 |
 | **外挂数值系统** | 战斗/道德债务/声望/关系与 LLM 分离，结果可验证 |
+| **隐藏数值泛化框架** | HiddenValueSystem，支持 decay/跨值联动/触发场景/叙事风格 |
 | **SQLite 持久化** | 按剧本分离存储，世界事件/NPC状态/对话历史/隐藏数值全量记录 |
 | **多线叙事** | 支持分支剧情、道德债务、关系变化、特场景触发等机制 |
 | **存档系统** | JSON 序列化存档，随时读取/恢复（含历史记录） |
 | **双模式 Prompt 构建** | memory 模式（内存数值系统）和 db 模式（SQLite 按需查询）二合一，支持 hidden_value_sys 直接注入 |
-| **可测试** | systems/ 全套单元测试，**306 个测试全部通过** |
+| **WebSocket 实时交互** | FastAPI + WebSocket 流式叙事，前端 `static/index.html` |
+| **REST API** | FastAPI 完整 CRUD：开始游戏/玩家行动/存档/读档 |
+| **可测试** | systems/ 全套单元测试，**323 个测试全部通过** |
 
 ---
 
@@ -42,11 +45,11 @@ RPGAgent/
 │   └── settings.py               # 全局配置（模型/路径/默认值）
 │
 ├── core/                         # 核心引擎
-│   ├── game_master.py            # 游戏主持人（集成 AgentScope ReActAgent）
+│   ├── game_master.py            # 游戏主持人（LLM ReAct 循环）
 │   ├── session.py                # 会话管理/存档/读档（GameState 快照）
 │   ├── context_loader.py         # 剧本加载（meta/setting/characters/scenes）
-│   ├── prompt_builder.py         # Prompt 构造器（memory 模式，数值直接注入）
-│   └── context_builder.py        # Prompt 构造器（db 模式，按需从 SQLite 查询）
+│   ├── prompt_builder.py         # Prompt 构造器（memory/db 双模式）
+│   └── context_builder.py        # PromptBuilder 兼容导入层（向后兼容）
 │
 ├── systems/                      # 外挂数值系统（纯 Python，可独立测试）
 │   ├── stats.py                  # 角色属性（HP/体力/力量/敏捷/智力/魅力）
@@ -57,6 +60,16 @@ RPGAgent/
 │   └── hidden_value.py           # 隐藏数值泛化框架（新标准）
 ├── data/
 │   └── database.py               # SQLite 持久化层（全表 CRUD）
+│
+├── api/                          # HTTP API 层（可选）
+│   ├── server.py                 # FastAPI + WebSocket 主服务器
+│   ├── game_manager.py           # 全局游戏会话管理器
+│   ├── models.py                 # API 数据模型（Pydantic）
+│   └── routes/
+│       └── games.py             # 游戏 REST API 路由
+│
+├── static/
+│   └── index.html               # Web 前端（与 WebSocket 直连）
 │
 ├── games/                        # 游戏剧本目录（用户放置）
 │   └── example/                  # 示例剧本
@@ -113,6 +126,15 @@ cp .env.example .env
 python main.py
 ```
 
+### 5. 启动 Web 前端（可选）
+
+```bash
+python -m api.server
+# 浏览器打开 http://localhost:7860
+```
+
+Web 前端通过 WebSocket 与后端实时通信，支持流式叙事、状态栏实时刷新。
+
 ---
 
 ## 测试
@@ -121,7 +143,7 @@ python main.py
 python -m pytest tests/ -v
 ```
 
-**当前：306 个测试全部通过**，覆盖所有数值系统和完整生命周期。
+**当前：323 个测试全部通过**，覆盖所有数值系统和完整生命周期。
 
 ---
 
