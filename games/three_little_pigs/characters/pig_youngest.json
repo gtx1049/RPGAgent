@@ -1,0 +1,11 @@
+{
+  "id": "pig_youngest",
+  "name": "猪小弟",
+  "role": "小猪",
+  "description": "最聪明的小猪，用砖头建了坚固的房子",
+  "personality": "聪明、勤奋、有耐心、不轻易相信别人",
+  "strength": 7,
+  "agility": 6,
+  "intelligence": 10,
+  "charisma": 7
+}

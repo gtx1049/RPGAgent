@@ -1,0 +1,11 @@
+{
+  "id": "pig_elder",
+  "name": "猪大哥",
+  "role": "小猪",
+  "description": "懒惰的小猪，用稻草随便搭了个房子",
+  "personality": "贪吃、懒惰、喜欢偷懒",
+  "strength": 5,
+  "agility": 8,
+  "intelligence": 6,
+  "charisma": 7
+}

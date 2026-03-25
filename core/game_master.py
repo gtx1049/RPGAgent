@@ -156,8 +156,9 @@ class GameMaster:
         user_prompt = self.prompt_builder.build_user_prompt(player_input, history_summary)
 
         # 注入最新系统状态到 system prompt（每次动态更新）
+        # 注意：ReActAgent.sys_prompt 是只读属性，需直接修改 _sys_prompt
         current_sys_prompt = self.prompt_builder.build_system_prompt(scene)
-        self.dm.sys_prompt = current_sys_prompt
+        self.dm._sys_prompt = current_sys_prompt
 
         # 调用 AgentScope Agent
         response = self.dm.reply(user_prompt)
@@ -265,11 +266,53 @@ class GameMaster:
         )
         self.session.increment_turn()
 
-    def apply_combat_result(self, result) -> None:
-        """战斗结算后更新数值"""
+    def apply_combat_result(
+        self,
+        result,
+        killed: bool = False,
+        was_kind: bool = False,
+        was_cruel: bool = False,
+        avoided_harm: bool = False,
+    ) -> dict:
+        """
+        战斗结算后更新数值。
+
+        Args:
+            result:        CombatResult 实例
+            killed:        是否击杀了敌人
+            was_kind:      是否在战斗中表现仁慈
+            was_cruel:     是否以残忍手段结束战斗
+            avoided_harm:  是否成功避免受到伤害
+
+        Returns:
+            combat_event() 的结果字典（含 deltas / relation_deltas 等）
+        """
         if result.damage_taken > 0:
             self.stats_sys.take_damage(result.damage_taken)
+        # 同步 stats 到 session
         self._sync_session()
+
+        # 处理战斗事件对隐藏数值的影响
+        combat_result = {}
+        if self.hidden_value_sys:
+            combat_result = self.hidden_value_sys.combat_event(
+                killed=killed,
+                was_kind=was_kind,
+                was_cruel=was_cruel,
+                was_injured=result.damage_taken > 0,
+                avoided_harm=avoided_harm,
+                scene_id=self.session.current_scene_id,
+                turn=self.session.turn_count,
+            )
+            # 处理 relation_delta
+            for npc_id, delta in combat_result.get("relation_deltas", {}).items():
+                self.dialogue_sys.modify_relation(npc_id, delta)
+            # 处理触发场景
+            for vid, scene_id in combat_result.get("triggered_scenes", {}).items():
+                if scene_id:
+                    self.session.flags[f"_hv_triggered_{vid}"] = scene_id
+
+        return combat_result
 
     def get_status(self) -> str:
         """获取当前状态摘要"""

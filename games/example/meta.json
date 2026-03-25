@@ -43,7 +43,15 @@
           "narrative_tone": "你不再相信正直有意义",
           "narrative_style": "dissociated",
           "locked_options": ["主动干预", "积极行动", "道德洁癖选项"],
-          "trigger_scene": "moral_breakdown"
+          "trigger_scene": "moral_breakdown",
+          "cross_triggers": [
+            {
+              "target_id": "sanity",
+              "delta": 10,
+              "source": "道德崩溃引发精神震荡",
+              "one_shot": true
+            }
+          ]
         }
       }
     },
@@ -93,6 +101,23 @@
     },
     "accept_dark_truth": {
       "sanity": 15
+    },
+    "combat_kill": {
+      "moral_debt": 6,
+      "sanity": 2
+    },
+    "combat_mercy": {
+      "moral_debt": -2
+    },
+    "combat_cruel": {
+      "moral_debt": 10,
+      "sanity": 4
+    },
+    "combat_injured": {
+      "sanity": 3
+    },
+    "combat_avoided": {
+      "sanity": -1
     }
   }
 }

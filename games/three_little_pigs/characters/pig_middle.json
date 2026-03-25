@@ -1,0 +1,11 @@
+{
+  "id": "pig_middle",
+  "name": "猪二哥",
+  "role": "小猪",
+  "description": "比大哥勤快一点，用木头搭了个房子",
+  "personality": "勤快、有主见、谨慎",
+  "strength": 6,
+  "agility": 7,
+  "intelligence": 8,
+  "charisma": 6
+}

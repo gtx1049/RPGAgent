@@ -1409,3 +1409,184 @@ class TestHiddenValueDecayPersistence:
         assert hvs.values["sanity"]._compute_raw_value() == 0
 
 
+
+
+# ────────────────────────────────────────────────
+# Combat Event Integration Tests
+# ────────────────────────────────────────────────
+
+class TestCombatEvent:
+    """测试 combat_event() 方法：战斗结果自动映射到隐藏数值变化"""
+
+    def test_combat_event_kill_increases_moral_debt(self):
+        """击杀敌人 → moral_debt +6"""
+        configs = [
+            {
+                "id": "moral_debt",
+                "name": "道德债务",
+                "direction": "ascending",
+                "thresholds": [0, 11, 26],
+                "effects": {
+                    "0": {}, "11": {}, "26": {},
+                },
+            },
+        ]
+        hvs = HiddenValueSystem(configs=configs, action_map={
+            "combat_kill": {"moral_debt": 6},
+        })
+        result = hvs.combat_event(killed=True, scene_id="battle_01", turn=1)
+        assert hvs.values["moral_debt"]._compute_raw_value() == 6
+        assert result["processed_tags"] == ["combat_kill"]
+        assert result["deltas"]["moral_debt"] == 6
+
+    def test_combat_event_kill_triggers_cross_triggers(self):
+        """击杀导致 moral_debt 跨阈，触发跨值联动（如 sanity）"""
+        configs = [
+            {
+                "id": "moral_debt",
+                "name": "道德债务",
+                "direction": "ascending",
+                "thresholds": [0, 5, 20],
+                "effects": {
+                    "0": {},
+                    "5": {
+                        "cross_triggers": [
+                            {"target_id": "sanity", "delta": -5,
+                             "source": "杀戮后的空虚", "one_shot": True}
+                        ]
+                    },
+                    "20": {},
+                },
+            },
+            {
+                "id": "sanity",
+                "name": "理智",
+                "direction": "descending",
+                "thresholds": [0],
+                "effects": {"0": {}},
+            },
+        ]
+        hvs = HiddenValueSystem(configs=configs, action_map={
+            "combat_kill": {"moral_debt": 6},
+        })
+        result = hvs.combat_event(killed=True, scene_id="battle_01", turn=1)
+        # moral_debt 跨过 5 阈，cross_trigger 触发
+        assert hvs.values["moral_debt"]._compute_raw_value() == 6
+        assert hvs.values["sanity"]._compute_raw_value() == -5
+
+    def test_combat_event_multiple_flags(self):
+        """同时满足多个条件（killed + was_cruel），合并处理"""
+        configs = [
+            {
+                "id": "moral_debt",
+                "name": "道德债务",
+                "direction": "ascending",
+                "thresholds": [0],
+                "effects": {"0": {}},
+            },
+            {
+                "id": "sanity",
+                "name": "理智",
+                "direction": "descending",
+                "thresholds": [0],
+                "effects": {"0": {}},
+            },
+        ]
+        hvs = HiddenValueSystem(configs=configs, action_map={
+            "combat_kill": {"moral_debt": 6, "sanity": 2},
+            "combat_cruel": {"moral_debt": 10, "sanity": 4},
+        })
+        result = hvs.combat_event(killed=True, was_cruel=True, scene_id="battle_01", turn=1)
+        # 两者均被处理
+        assert set(result["processed_tags"]) == {"combat_kill", "combat_cruel"}
+        assert result["deltas"]["moral_debt"] == 16   # 6 + 10
+        assert result["deltas"]["sanity"] == 6         # 2 + 4
+
+    def test_combat_event_no_match_returns_empty(self):
+        """无匹配 action_tag 时，返回空结果"""
+        configs = [
+            {
+                "id": "moral_debt",
+                "name": "道德债务",
+                "direction": "ascending",
+                "thresholds": [0],
+                "effects": {"0": {}},
+            },
+        ]
+        hvs = HiddenValueSystem(configs=configs, action_map={
+            "combat_mercy": {"moral_debt": -2},
+        })
+        result = hvs.combat_event(killed=True, scene_id="battle_01", turn=1)
+        assert result["processed_tags"] == []
+        assert result["deltas"] == {}
+        assert hvs.values["moral_debt"]._compute_raw_value() == 0
+
+    def test_combat_event_was_kind_reduces_moral_debt(self):
+        """战斗中表现仁慈 → moral_debt 下降"""
+        configs = [
+            {
+                "id": "moral_debt",
+                "name": "道德债务",
+                "direction": "ascending",
+                "thresholds": [0, 11],
+                "effects": {"0": {}, "11": {}},
+            },
+        ]
+        hvs = HiddenValueSystem(configs=configs, action_map={
+            "combat_mercy": {"moral_debt": -3},
+        })
+        hvs.record_action(action_tag="ignore_plea", scene_id="s1", turn=1,
+                          player_action="ignore")
+        hvs.combat_event(was_kind=True, scene_id="battle_01", turn=2)
+        assert hvs.values["moral_debt"]._compute_raw_value() == 5  # 8 - 3
+
+    def test_combat_event_injured_affects_sanity(self):
+        """战斗受伤 → sanity 下降"""
+        configs = [
+            {
+                "id": "sanity",
+                "name": "理智",
+                "direction": "descending",
+                "thresholds": [0, 30],
+                "effects": {"0": {}, "30": {}},
+            },
+        ]
+        hvs = HiddenValueSystem(configs=configs, action_map={
+            "combat_injured": {"sanity": 5},
+        })
+        result = hvs.combat_event(was_injured=True, scene_id="battle_01", turn=1)
+        assert hvs.values["sanity"]._compute_raw_value() == 5
+        assert "combat_injured" in result["processed_tags"]
+
+    def test_combat_event_integration_with_game_master_signature(self):
+        """验证 combat_event 返回格式与 GameMaster.apply_combat_result 兼容"""
+        configs = [
+            {
+                "id": "moral_debt",
+                "name": "道德债务",
+                "direction": "ascending",
+                "thresholds": [0, 11],
+                "effects": {"0": {}, "11": {}},
+            },
+        ]
+        hvs = HiddenValueSystem(configs=configs, action_map={
+            "combat_kill": {"moral_debt": 6},
+            "combat_mercy": {"moral_debt": -2},
+        })
+        result = hvs.combat_event(
+            killed=True,
+            was_kind=False,
+            was_cruel=False,
+            avoided_harm=False,
+            scene_id="scene_a",
+            player_action="攻击并击杀",
+            turn=5,
+        )
+        # 验证返回结构完整性
+        assert "deltas" in result
+        assert "triggered_scenes" in result
+        assert "relation_deltas" in result
+        assert "cross_trigger_results" in result
+        assert "processed_tags" in result
+        assert result["processed_tags"] == ["combat_kill"]
+        assert result["deltas"]["moral_debt"] == 6

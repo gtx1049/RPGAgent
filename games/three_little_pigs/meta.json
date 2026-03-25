@@ -1,0 +1,50 @@
+{
+  "id": "three_little-pigs",
+  "name": "三只小猪",
+  "version": "1.0",
+  "author": "RPGAgent",
+  "summary": "你是一只想吃掉小猪的大灰狼。小猪们分别建了草屋、木屋和砖房。发挥你的智慧，看你能否吃到小猪！",
+  "tags": ["童话", "经典", "大灰狼"],
+  "first_scene": "forest_edge",
+  "systems_enabled": {
+    "moral_debt": false,
+    "combat": true
+  },
+  "hidden_values": [
+    {
+      "id": "hunger",
+      "name": "饥饿度",
+      "description": "大灰狼的饥饿程度，越高越想吃掉小猪",
+      "direction": "ascending",
+      "thresholds": [0, 30, 60, 80],
+      "effects": {
+        "0":  {"narrative_tone": "刚吃饱，不着急", "locked_options": []},
+        "30": {"narrative_tone": "有点饿了", "locked_options": [], "narrative_hint": "语气可以稍微急切"},
+        "60": {"narrative_tone": "很饿，开始流口水", "locked_options": [], "narrative_hint": "叙事带有明显的饥饿感和急切"},
+        "80": {"narrative_tone": "饿疯了，失去理智", "locked_options": ["耐心谈判"], "narrative_hint": "语言变得狂暴而直接"}
+      }
+    },
+    {
+      "id": "reputation",
+      "name": "名声",
+      "description": "森林里其他动物对你的看法",
+      "direction": "ascending",
+      "thresholds": [0, 20, 50],
+      "decay_per_turn": 1,
+      "decay_min_value": 0,
+      "effects": {
+        "0":  {"narrative_tone": "大家眼中的恶棍", "locked_options": []},
+        "20": {"narrative_tone": "大家有点怕你", "locked_options": []},
+        "50": {"narrative_tone": "你成了森林公敌", "locked_options": [], "trigger_scene": "hunted_by_forest"}
+      }
+    }
+  ],
+  "hidden_value_actions": {
+    "huff_and_puff":    {"hunger": 10, "reputation": 5},
+    "trick_pig":        {"hunger": -5, "reputation": 10},
+    "threaten_pig":     {"hunger": 5, "reputation": 8},
+    "give_up":          {"hunger": 15, "reputation": -5},
+    "eat_pig":          {"hunger": -30},
+    "run_away":         {"reputation": 15}
+  }
+}

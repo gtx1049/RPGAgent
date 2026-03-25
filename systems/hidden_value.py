@@ -636,6 +636,90 @@ class HiddenValueSystem:
 
         return deltas, triggered, relation_deltas, cross_trigger_results
 
+    def combat_event(
+        self,
+        killed: bool = False,
+        was_kind: bool = False,
+        was_cruel: bool = False,
+        was_injured: bool = False,
+        avoided_harm: bool = False,
+        scene_id: str = "",
+        player_action: str = "",
+        turn: int = 0,
+    ) -> dict:
+        """
+        处理战斗事件对隐藏数值的影响。
+
+        根据战斗结果标志，从 action_map 中查找对应的 action_tag 并执行。
+        支持的 action_tag 前缀：
+          - combat_kill        ：击杀敌人
+          - combat_mercy       ：对敌人手下留情
+          - combat_cruel       ：以残忍手段结束战斗
+          - combat_injured     ：在战斗中受伤
+          - combat_avoided     ：成功避免受到伤害
+
+        各剧本可在 meta.json 的 hidden_value_actions 中配置这些 action_tag
+        对应哪些隐藏数值变化，例如：
+          "combat_kill":  {"moral_debt": 5}
+          "combat_mercy": {"moral_debt": -3}
+
+        Args:
+            killed:        击杀了敌人
+            was_kind:      战斗中表现仁慈（如劝降、放过弱小敌人）
+            was_cruel:     以残忍方式结束战斗
+            was_injured:   在战斗中被伤害
+            avoided_harm:  成功避免受到伤害
+            scene_id:      当前场景 ID（用于记录）
+            player_action: 玩家动作描述
+            turn:          当前回合数
+
+        Returns:
+            包含所有副作用结果的字典，含键：
+            - deltas:              {vid: total_delta}（含自身+跨值联动累加）
+            - triggered_scenes:    {vid: scene_id_or_None}
+            - relation_deltas:     {npc_id: delta}
+            - cross_trigger_results: {vid: [ct_result_list]}
+            - processed_tags:      list[str]，本次处理了的 action_tag 列表
+        """
+        # 确定要查询的 action_tag 列表
+        tag_map = [
+            ("combat_kill", killed),
+            ("combat_mercy", was_kind),
+            ("combat_cruel", was_cruel),
+            ("combat_injured", was_injured),
+            ("combat_avoided", avoided_harm),
+        ]
+
+        all_deltas: Dict[str, int] = {}
+        all_triggered: Dict[str, Optional[str]] = {}
+        all_relation_deltas: Dict[str, int] = {}
+        all_cross_triggers: Dict[str, List[Dict]] = {}
+        processed_tags: List[str] = []
+
+        for tag, condition in tag_map:
+            if not condition:
+                continue
+            # 使用 record_action 处理该 action_tag
+            deltas, triggered, relation_deltas, cross_trigger_results = self.record_action(
+                action_tag=tag,
+                scene_id=scene_id,
+                turn=turn,
+                player_action=player_action,
+            )
+            all_deltas.update(deltas)
+            all_triggered.update(triggered)
+            all_relation_deltas.update(relation_deltas)
+            all_cross_triggers.update(cross_trigger_results)
+            processed_tags.append(tag)
+
+        return {
+            "deltas": all_deltas,
+            "triggered_scenes": all_triggered,
+            "relation_deltas": all_relation_deltas,
+            "cross_trigger_results": all_cross_triggers,
+            "processed_tags": processed_tags,
+        }
+
     def add_to(
         self,
         hidden_value_id: str,
