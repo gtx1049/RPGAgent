@@ -60,6 +60,7 @@ class MockModel:
             "[GM_COMMAND]\n"
             "action_tag: keep_silent\n"
             "player_input: 观察周围环境\n"
+            "next_scene: dawn_rally\n"
             "[/GM_COMMAND]"
         ),
         # ── dawn_rally ────────────────────────────────────────
@@ -164,15 +165,19 @@ class MockModel:
     def get_response(cls, scene_id: str, player_input: str) -> str:
         input_key = player_input.lower()
 
-        # 优先匹配更具体的关键词（顺序从长到短）
+        # 优先匹配更具体的关键词（按优先级排序）
         if any(k in input_key for k in ["靠近", "接近", "交谈"]):
             key = f"{scene_id}_approach_chen"
         elif any(k in input_key for k in ["吴广", "同袍", "安慰"]):
             key = f"{scene_id}_speak_to_wu"
         elif any(k in input_key for k in ["观察", "安静"]):
             key = f"{scene_id}_observe"
-        elif any(k in input_key for k in ["接受", "参与", "愿意", "铜印"]):
+        elif any(k in input_key for k in ["接受", "愿意", "铜印"]) and "决策" not in input_key and "计划" not in input_key:
+            # "参与" 出现在多个场景，避免歧义：与"决策/计划"组合时走 commit
             key = f"{scene_id}_volunteer"
+        elif any(k in input_key for k in ["决策", "计划"]):
+            # deliberation 专属路径（优先于 volunteer 中的"参与"）
+            key = f"{scene_id}_commit"
         elif "沉默" in input_key and scene_id == "dawn_rally":
             key = f"{scene_id}_silent"
         elif any(k in input_key for k in ["调查", "查看", "来源"]):
@@ -185,8 +190,6 @@ class MockModel:
             key = f"{scene_id}_strike"
         elif any(k in input_key for k in ["犹豫", "害怕", "发抖"]):
             key = f"{scene_id}_hesitate"
-        elif any(k in input_key for k in ["决策", "计划"]):
-            key = f"{scene_id}_commit"
         elif any(k in input_key for k in ["逃", "离开"]):
             key = f"{scene_id}_flee"
         elif any(k in input_key for k in ["站", "号召", "呼应", "第一个"]):
@@ -400,62 +403,49 @@ class TestDazexiangHiddenValues:
 class TestDazexiangEndToEnd:
     """端到端战役测试：完整遍历第一章场景图"""
 
-    @pytest.mark.xfail(reason="LLM-dependent: scene transitions require real GM/LLM to emit correct action_tags")
     def test_full_chapter_path_with_gm(self, gm):
-        """走完第一章主路径：daze_camp → dawn_rally → fox_cry_fire → kill_officer → deliberation → spirit_awakened → ending"""
-        session = gm.session
+        """
+        走完第一章主路径：daze_camp → dawn_rally → fox_cry_fire → kill_officer → deliberation → spirit_awakened → ending
 
-        # ── 回合 1：daze_camp ────────────────────────────────
-        n1 = advance(gm, "靠近陈胜交谈")
-        assert session.current_scene_id in (
-            "dawn_rally",  # 被 next_scene 跳转
-            "daze_camp",   # 某些路径暂时没跳转
-        )
-        # HiddenValue 应已记录
+        使用确定性序列，无条件分支。MockModel 保证每步都给出正确的 next_scene 跳转。
+        """
+        session = gm.session
         hv = gm.hidden_value_sys
         assert hv is not None
+
+        # ── 回合 1：daze_camp → dawn_rally ──────────────────
+        n1 = advance(gm, "靠近陈胜交谈")
+        assert session.current_scene_id == "dawn_rally", \
+            f"期望 dawn_rally，实际 {session.current_scene_id}"
         moral = hv.values["moral_debt"]._compute_raw_value()
         assert moral > 0  # watch_soldiers_abused: +5 moral_debt
 
-        # ── 回合 2：dawn_rally ───────────────────────────────
-        # 若场景未跳转，先用场景内动作触发跳转
-        if session.current_scene_id != "dawn_rally":
-            n2 = advance(gm, "接受铜印，参与义军")
-            assert session.current_scene_id in (
-                "fox_cry_fire", "dawn_rally"
-            )
+        # ── 回合 2：dawn_rally → fox_cry_fire ───────────────
+        n2 = advance(gm, "接受铜印，主动参与义军组建")
+        assert session.current_scene_id == "fox_cry_fire", \
+            f"期望 fox_cry_fire，实际 {session.current_scene_id}"
+        spirit = hv.values["revolutionary_spirit"]._compute_raw_value()
+        assert spirit >= 0  # recruit_companions: +8 revolutionary_spirit
 
-        if session.current_scene_id == "dawn_rally":
-            n2 = advance(gm, "接受铜印，主动参与义军组建")
-            # revolutionary_spirit +8 (recruit_companions)
-            spirit = hv.values["revolutionary_spirit"]._compute_raw_value()
-            # 可能已经 +8 或更多（取决于之前有无其他 action）
-            assert spirit >= 0
+        # ── 回合 3：fox_cry_fire → kill_officer ─────────────
+        n3 = advance(gm, "跟随陈胜行动")
+        assert session.current_scene_id == "kill_officer", \
+            f"期望 kill_officer，实际 {session.current_scene_id}"
 
-        # ── 跳转至 fox_cry_fire ─────────────────────────────
-        if session.current_scene_id in ("fox_cry_fire", "dawn_rally"):
-            n3 = advance(gm, "调查狐狸叫声的来源")
+        # ── 回合 4：kill_officer → deliberation ─────────────
+        n4 = advance(gm, "亲手杀死县尉")
+        assert session.current_scene_id == "deliberation", \
+            f"期望 deliberation，实际 {session.current_scene_id}"
+        moral_kill = hv.values["moral_debt"]._compute_raw_value()
+        assert moral_kill >= 10  # kill_officer: +15 moral_debt
 
-        # ── fox_cry_fire → kill_officer ────────────────────
-        if session.current_scene_id in ("fox_cry_fire",):
-            n4 = advance(gm, "跟随陈胜行动")
+        # ── 回合 5：deliberation → spirit_awakened ──────────
+        n5 = advance(gm, "参与决策，计划下一步行动")
+        assert session.current_scene_id == "spirit_awakened", \
+            f"期望 spirit_awakened，实际 {session.current_scene_id}"
 
-        # ── kill_officer ────────────────────────────────────
-        if session.current_scene_id in ("kill_officer",):
-            n5 = advance(gm, "亲手杀死县尉")
-            # 验证 moral_debt 大幅增加
-            moral_kill = hv.values["moral_debt"]._compute_raw_value()
-            assert moral_kill >= 10  # kill_officer: +15 moral_debt
-
-        # ── deliberation ────────────────────────────────────
-        if session.current_scene_id in ("deliberation",):
-            n6 = advance(gm, "参与决策，计划下一步行动")
-
-        # ── spirit_awakened ─────────────────────────────────
-        if session.current_scene_id in ("spirit_awakened",):
-            n7 = advance(gm, "第一个站出来，呼应陈胜的号召")
-
-        # ── ending ───────────────────────────────────────────
+        # ── 回合 6：spirit_awakened → ending ─────────────────
+        n6 = advance(gm, "第一个站出来，呼应陈胜的号召")
         assert session.current_scene_id == "ending", \
             f"期望 ending，实际 {session.current_scene_id}"
 
