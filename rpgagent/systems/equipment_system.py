@@ -100,7 +100,7 @@ class Equipment:
 
 # ─── 装备模板 ──────────────────────────────────────────
 
-WEAPON_TEMPLATES = {
+WE行动力ON_TEMPLATES = {
     "fists": Equipment(
         id="fists", name="拳头", slot="weapon",
         rarity=Rarity.COMMON,
@@ -200,7 +200,7 @@ ACCESSORY_TEMPLATES = {
         description="智力+2，学识系技能+1",
         stats=EquipmentStats(intelligence=2),
         requirement_level=4,
-    },
+    ),
     "strength_belt": Equipment(
         id="strength_belt", name="力量腰带", slot="accessory_b",
         rarity=Rarity.RARE,
@@ -213,7 +213,7 @@ ACCESSORY_TEMPLATES = {
 
 
 def get_template_equipment(template_id: str) -> Optional[Equipment]:
-    for templates in [WEAPON_TEMPLATES, ARMOR_TEMPLATES, OFFHAND_TEMPLATES, ACCESSORY_TEMPLATES]:
+    for templates in [WE行动力ON_TEMPLATES, ARMOR_TEMPLATES, OFFHAND_TEMPLATES, ACCESSORY_TEMPLATES]:
         if template_id in templates:
             return templates[template_id]
     return None

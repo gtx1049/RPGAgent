@@ -84,6 +84,9 @@ options: <选项列表>（如果是 choice，格式：选项名|描述|触发条
 combat_data: <战斗数据>（如果是 combat）
 narrative_hint: <给玩家的叙事内容>
 action_tag: <本次玩家行为触发的数值标签，如 huff_and_puff / trick_pig / threaten_pig / give_up / eat_pig / run_away，**必填**，对应 hidden_value_actions 中的键>
+roll: <行动名称>（如果本次行动需要骰点判定，如"潜行"、"推门"等）
+attribute: <使用的属性键>（可选，默认 strength，可选 dexterity/constitution/intelligence/wisdom/charisma）
+dc: <难度阈值 1-100>（可选，默认 50；参考：30=轻松，50=五五开，65=难搞，80=几无可能）
 [/GM_COMMAND]
 """
 
@@ -103,8 +106,11 @@ DB_MODE_EXTRA_TEMPLATE = """
 PLAYER_STATUS_TEMPLATE = """
 - 生命值: {hp}/{max_hp}
 - 体力值: {stamina}/{max_stamina}
+- 等级: {level}（经验 {exp}/{exp_to_level}）
+- 行动点: {action_points}/{max_action_points}
 - 力量: {strength} | 敏捷: {agility} | 智力: {intelligence} | 魅力: {charisma}
 - 当前背包: {inventory}
+- 技能点: {skill_points}点 | 已学技能: {learned_skills}
 """
 
 # ────────────────────────────────────────────────
@@ -160,6 +166,7 @@ class PromptBuilder:
         dialogue_sys: Optional[DialogueSystem] = None,
         hidden_value_sys: Optional[HiddenValueSystem] = None,
         npc_mem_sys: Optional[NpcMemorySystem] = None,
+        skill_sys: Any = None,
         # ── db 模式参数 ──
         db: Any = None,
         current_scene_id: str = "",
@@ -174,6 +181,7 @@ class PromptBuilder:
         self.dialogue_sys = dialogue_sys
         self.hidden_value_sys = hidden_value_sys
         self.npc_mem_sys = npc_mem_sys
+        self.skill_sys = skill_sys
 
         # ── db 模式 ──
         self.db = db
@@ -196,19 +204,32 @@ class PromptBuilder:
             # db 模式：玩家状态由 session 管理，此处简示
             return "（玩家状态由系统管理，可通过 status 命令查看）"
         stats = (self.stats_sys.get_snapshot() if self.stats_sys else {})
+        ability = stats.get("ability", {})
         inv = (self.inventory_sys.list_items() if self.inventory_sys else [])
         inv_str = ", ".join([f"{i['name']}×{i['quantity']}" for i in inv]) or "（空）"
+        skill_points = getattr(self.skill_sys, "skill_points", 0) if self.skill_sys else 0
+        learned = []
+        if self.skill_sys:
+            learned = [s["name"] for s in self.skill_sys.list_learned()]
+        learned_str = "、".join(learned) if learned else "无"
 
         return PLAYER_STATUS_TEMPLATE.format(
             hp=stats.get("hp", "?"),
             max_hp=stats.get("max_hp", "?"),
             stamina=stats.get("stamina", "?"),
             max_stamina=stats.get("max_stamina", "?"),
-            strength=stats.get("strength", "?"),
-            agility=stats.get("agility", "?"),
-            intelligence=stats.get("intelligence", "?"),
-            charisma=stats.get("charisma", "?"),
+            level=stats.get("level", "?"),
+            exp=stats.get("exp", "?"),
+            exp_to_level=stats.get("exp_to_level", "?"),
+            action_points=stats.get("action_points", "?"),
+            max_action_points=stats.get("max_action_points", "?"),
+            strength=ability.get("strength", "?"),
+            agility=ability.get("dexterity", "?"),
+            intelligence=ability.get("intelligence", "?"),
+            charisma=ability.get("charisma", "?"),
             inventory=inv_str,
+            skill_points=skill_points,
+            learned_skills=learned_str,
         )
 
     def _build_hidden_values_section(self) -> str:

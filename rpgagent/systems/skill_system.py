@@ -11,7 +11,7 @@
 
 每次升级获得技能点，可分配到技能上。
 被动技能：常驻效果（如夜视、铁胃）
-主动技能：消耗行动点释放
+主动技能：消耗行动力释放
 """
 
 from dataclasses import dataclass, field
@@ -20,7 +20,7 @@ from enum import Enum
 
 
 class SkillType(Enum):
-    ACTIVE = "主动"    # 消耗行动点
+    ACTIVE = "主动"    # 消耗行动力
     PASSIVE = "被动"   # 常驻生效
 
 
@@ -30,7 +30,7 @@ class Skill:
     name: str
     description: str
     skill_type: SkillType
-    cost: int = 1                  # 行动点消耗（主动技能）
+    cost: int = 1                  # 行动力消耗（主动技能）
     rank: int = 0                 # 当前等级
     max_rank: int = 5             # 最大等级
     attribute_key: str = "intelligence"  # 主属性
@@ -88,7 +88,7 @@ class SkillBook:
             Skill(
                 id="power_attack",
                 name="强力攻击",
-                description="消耗2行动点，本回合近战伤害+4，但命中-3",
+                description="消耗2行动力，本回合近战伤害+4，但命中-3",
                 skill_type=SkillType.ACTIVE,
                 cost=2,
                 attribute_key="strength",
@@ -98,7 +98,7 @@ class SkillBook:
             Skill(
                 id="quick-attack",
                 name="快速攻击",
-                description="消耗1行动点，本回合可额外攻击一次（每级+1次）",
+                description="消耗1行动力，本回合可额外攻击一次（每级+1次）",
                 skill_type=SkillType.ACTIVE,
                 cost=1,
                 attribute_key="dexterity",

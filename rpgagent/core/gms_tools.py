@@ -251,6 +251,102 @@ class GMSTools:
         
         return ToolResponse(content=[TextBlock(type="text", text=log + saved_msg)])
 
+    # ── 技能系统 ──────────────────────────────────
+
+    def get_skill_status(self) -> ToolResponse:
+        """获取当前技能状态（技能点、已学技能列表）"""
+        skill_sys = self.gm.skill_sys
+        learned = skill_sys.list_learned()
+        available = skill_sys.list_available()
+        lines = [
+            f"【技能系统】可用技能点: {skill_sys.skill_points} 点",
+            "",
+            "── 已学习技能 ──",
+        ]
+        if not learned:
+            lines.append("  尚无已学技能")
+        for s in learned:
+            lines.append(
+                f"  • {s['name']} Lv.{s['rank']}/{s['max_rank']} "
+                f"[{s['type']}] {s['description']}"
+            )
+        lines.append("")
+        lines.append("── 可学习技能（未学习，选取前8个） ──")
+        if not available:
+            lines.append("  已学习全部技能")
+        for s in available[:8]:
+            lines.append(
+                f"  • {s['name']} [{s['type']}] 需{s['cost']}点 | {s['description']}"
+            )
+        return ToolResponse(content=[TextBlock(type="text", text="\n".join(lines))])
+
+    def learn_skill(self, skill_id: str, ranks: int = 1) -> ToolResponse:
+        """学习或升级技能（消耗技能点）"""
+        skill_sys = self.gm.skill_sys
+        skill = skill_sys.book.get(skill_id)
+        if not skill:
+            return ToolResponse(content=[TextBlock(type="text", text=f"未找到技能ID: {skill_id}")])
+        current = skill_sys.learned.get(skill_id, 0)
+        if current >= skill.max_rank:
+            return ToolResponse(content=[TextBlock(type="text", text=f"「{skill.name}」已达最高级（{skill.max_rank}级）")])
+        if skill_sys.skill_points < ranks:
+            return ToolResponse(content=[TextBlock(type="text", text=f"技能点不足：需要{ranks}点，当前{skill_sys.skill_points}点")])
+        success = skill_sys.learn_skill(skill_id, ranks)
+        if success:
+            new_rank = skill_sys.learned.get(skill_id, 0)
+            self._sync_session()
+            return ToolResponse(content=[TextBlock(type="text", text=f"✅ 学会「{skill.name}」→ Lv.{new_rank}/{skill.max_rank}，剩余{skill_sys.skill_points}点")])
+        return ToolResponse(content=[TextBlock(type="text", text="❌ 学习失败")])
+
+    def grant_skill_points(self, amount: int, reason: str = "") -> ToolResponse:
+        """奖励技能点（如完成任务、升级奖励等）"""
+        skill_sys = self.gm.skill_sys
+        skill_sys.add_skill_points(amount)
+        self._sync_session()
+        reason_str = f"（{reason}）" if reason else ""
+        return ToolResponse(content=[TextBlock(type="text", text=f"🎁 获得 {amount} 点技能点 {reason_str}，现有 {skill_sys.skill_points} 点")])
+
+    # ── 骰点判定 ───────────────────────────────────────
+
+    def roll_check(
+        self,
+        attribute: str,
+        dc: int = 50,
+        action_hint: str = "",
+    ) -> ToolResponse:
+        """
+        执行 d100 骰点判定。
+
+        Args:
+            attribute: 属性键名（strength/dexterity/constitution/intelligence/wisdom/charisma）
+            dc: 难度阈值 1-100（参考：30=轻松，50=五五开，65=难搞，80=几无可能）
+            action_hint: 行动描述（如"潜行绕过守卫"），会嵌入叙事
+        """
+        roll_sys = self.gm.roll_sys
+        if not roll_sys:
+            return ToolResponse(content=[TextBlock(type="text", text="骰点系统未初始化")])
+        try:
+            result = roll_sys.check(
+                attribute_key=attribute,
+                base_difficulty=dc,
+                narrative_hint=action_hint,
+            )
+            return ToolResponse(content=[TextBlock(type="text", text=result.description)])
+        except Exception as e:
+            return ToolResponse(content=[TextBlock(type="text", text=f"判定失败：{e}")])
+
+    # ── 技能列表 ───────────────────────────────────────
+
+    def list_all_skills(self) -> ToolResponse:
+        """列出所有技能（显示已学/未学状态）"""
+        skill_sys = self.gm.skill_sys
+        lines = ["【全部技能列表】"]
+        for skill in skill_sys.book.skills.values():
+            rank = skill_sys.learned.get(skill.id, 0)
+            status = f"Lv.{rank}/{skill.max_rank}" if rank > 0 else "未学习"
+            lines.append(f"  • {skill.name} {status} [{skill.skill_type.value}] {skill.description}")
+        return ToolResponse(content=[TextBlock(type="text", text="\n".join(lines))])
+
     # ── 状态同步 ─────────────────────────────────
 
     def _sync_session(self):
@@ -285,4 +381,9 @@ def create_gms_tools(game_master: Any) -> list:
         tools.get_available_options,
         tools.check_threshold_trigger,
         tools.generate_adventure_log,
+        tools.get_skill_status,
+        tools.learn_skill,
+        tools.grant_skill_points,
+        tools.list_all_skills,
+        tools.roll_check,
     ]

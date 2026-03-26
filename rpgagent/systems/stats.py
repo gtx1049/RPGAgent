@@ -1,18 +1,18 @@
 # systems/stats.py - 角色属性系统（D&D 风格扩展）
 """
-D&D 风格六属性 + RPG 数值 + 行动点系统
+D&D 风格六属性 + RPG 数值 + 行动力系统
 
 属性修正 = (属性值 - 10) / 2（向下取整）
 
-行动点（AP）：
+行动力（行动力）：
 - 每回合开始时恢复至最大
-- 普通行动消耗1AP，特殊行动消耗更多
-- AP耗尽时只能执行免费动作（说话、观察）
+- 普通行动消耗1行动力，特殊行动消耗更多
+- 行动力耗尽时只能执行免费动作（说话、观察）
 """
 
 from dataclasses import dataclass, field
 from typing import Dict
-from ..config.settings import DEFAULT_STATS, DEFAULT_AP
+from ..config.settings import DEFAULT_STATS, DEFAULT_ACTION_POWER
 from .interface import IStatsSystem
 
 
@@ -53,8 +53,8 @@ class Stats:
     max_hp: int = 100
     stamina: int = 100
     max_stamina: int = 100
-    action_points: int = 3   # 行动点（每回合消耗）
-    max_action_points: int = 3
+    action_power: int = 3   # 行动力（每回合消耗）
+    max_action_power: int = 3
     level: int = 1           # 等级
     exp: int = 0             # 经验值
     exp_to_level: int = 100  # 升级所需经验
@@ -65,8 +65,8 @@ class Stats:
             "max_hp": self.max_hp,
             "stamina": self.stamina,
             "max_stamina": self.max_stamina,
-            "action_points": self.action_points,
-            "max_action_points": self.max_action_points,
+            "action_power": self.action_power,
+            "max_action_power": self.max_action_power,
             "level": self.level,
             "exp": self.exp,
             "exp_to_level": self.exp_to_level,
@@ -83,13 +83,13 @@ class StatsSystem(IStatsSystem):
 
     def __init__(self, initial: Dict = None):
         defaults = DEFAULT_STATS.copy()
-        defaults["action_points"] = DEFAULT_AP
-        defaults["max_action_points"] = DEFAULT_AP
+        defaults["action_power"] = DEFAULT_ACTION_POWER
+        defaults["max_action_power"] = DEFAULT_ACTION_POWER
         if initial:
             defaults.update(initial)
         self.stats = Stats(**{k: defaults[k] for k in [
             "hp", "max_hp", "stamina", "max_stamina",
-            "action_points", "max_action_points", "level", "exp", "exp_to_level"
+            "action_power", "max_action_power", "level", "exp", "exp_to_level"
         ] if k in defaults})
         self.ability = AbilityScores(**{k: defaults[k] for k in [
             "strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"
@@ -106,8 +106,8 @@ class StatsSystem(IStatsSystem):
             self.stats.hp = max(0, min(new_val, self.stats.max_hp))
         elif key in ("stamina", "max_stamina"):
             self.stats.stamina = max(0, min(new_val, self.stats.max_stamina))
-        elif key in ("action_points",):
-            self.stats.action_points = max(0, min(new_val, self.stats.max_action_points))
+        elif key in ("action_power",):
+            self.stats.action_power = max(0, min(new_val, self.stats.max_action_power))
         else:
             setattr(self.stats, key, new_val)
 
@@ -129,15 +129,15 @@ class StatsSystem(IStatsSystem):
         return self.modify("stamina", abs(amount))
 
     def use_ap(self, amount: int = 1) -> bool:
-        """消耗行动点，返回是否成功（AP不足时返回False）"""
-        if self.stats.action_points >= amount:
-            self.modify("action_points", -amount)
+        """消耗行动力，返回是否成功（行动力不足时返回False）"""
+        if self.stats.action_power >= amount:
+            self.modify("action_power", -amount)
             return True
         return False
 
     def refresh_ap(self):
-        """新回合开始，重置行动点"""
-        self.stats.action_points = self.stats.max_action_points
+        """新回合开始，重置行动力"""
+        self.stats.action_power = self.stats.max_action_power
 
     def gain_exp(self, amount: int) -> Dict:
         """获得经验值，检查是否升级"""
@@ -150,8 +150,8 @@ class StatsSystem(IStatsSystem):
             # 升级奖励
             self.stats.max_hp += 10
             self.stats.hp = self.stats.max_hp
-            self.stats.max_action_points = min(self.stats.max_action_points + 1, 6)
-            self.stats.action_points = self.stats.max_action_points
+            self.stats.max_action_power = min(self.stats.max_action_power + 1, 6)
+            self.stats.action_power = self.stats.max_action_power
             leveled_up.append(self.stats.level)
         return {"leveled_up": leveled_up, "level": self.stats.level, "exp": self.stats.exp}
 

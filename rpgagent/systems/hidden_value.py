@@ -1120,7 +1120,7 @@ class HiddenValueSystem:
             for t, eff in hv.effects.items():
                 eff.trigger_fired = False
 
-            # 用 saved_effects 恢复可持久化字段（通过公共 API）
+            # 用 saved_effects 恢复可持久化字段（通过公共 行动力I）
             self.load_effects_snapshot(vid, saved_effects)
 
             # 3) 通过记录回放重建 level_idx 和 trigger_fired

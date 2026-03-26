@@ -8,7 +8,7 @@ class TestStats:
         assert stats_system.get("hp") == 100
         assert stats_system.get("max_hp") == 100
         assert stats_system.get("stamina") == 100
-        assert stats_system.get("action_points") == 3
+        assert stats_system.get("action_power") == 3
         # 能力值通过 ability 属性访问
         assert stats_system.ability.strength == 10
         assert stats_system.ability.dexterity == 10
@@ -58,20 +58,20 @@ class TestStats:
         stats_system.take_damage(999)
         assert stats_system.is_alive() is False
 
-    def test_action_points(self, stats_system):
-        assert stats_system.get("action_points") == 3
+    def test_action_power(self, stats_system):
+        assert stats_system.get("action_power") == 3
         ok = stats_system.use_ap(1)
         assert ok is True
-        assert stats_system.get("action_points") == 2
+        assert stats_system.get("action_power") == 2
         ok = stats_system.use_ap(5)
         assert ok is False  # 不足
-        assert stats_system.get("action_points") == 2
+        assert stats_system.get("action_power") == 2
 
     def test_refresh_ap(self, stats_system):
         stats_system.use_ap(3)
-        assert stats_system.get("action_points") == 0
+        assert stats_system.get("action_power") == 0
         stats_system.refresh_ap()
-        assert stats_system.get("action_points") == 3
+        assert stats_system.get("action_power") == 3
 
     def test_snapshot(self, stats_system):
         snap = stats_system.get_snapshot()
@@ -122,10 +122,10 @@ class TestStatsDataclass:
         s = Stats(hp=80)
         d = s.to_dict()
         assert d["hp"] == 80
-        assert d["action_points"] == 3
+        assert d["action_power"] == 3
 
     def test_from_dict(self):
-        d = {"hp": 60, "max_hp": 100, "stamina": 50, "action_points": 2}
+        d = {"hp": 60, "max_hp": 100, "stamina": 50, "action_power": 2}
         s = Stats.from_dict(d)
         assert s.hp == 60
-        assert s.action_points == 2
+        assert s.action_power == 2

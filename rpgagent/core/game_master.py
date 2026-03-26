@@ -86,11 +86,13 @@ class GameMaster:
         from rpgagent.systems.inventory import InventorySystem
         from rpgagent.systems.dialogue import DialogueSystem
         from rpgagent.systems.hidden_value import HiddenValueSystem
+        from rpgagent.systems.skill_system import SkillSystem
 
         self.stats_sys = StatsSystem()
         self.moral_sys = MoralDebtSystem()
         self.inv_sys = InventorySystem()
         self.dialogue_sys = DialogueSystem()
+        self.skill_sys = SkillSystem()
 
         # 隐藏数值系统（从 meta.json 读取配置，支持道德债务/理智/成长等多种隐藏数值）
         meta = self.game_loader.meta
@@ -113,6 +115,11 @@ class GameMaster:
 
         # 初始化 AgentScope 模型（使用 AnthropicChatModel，支持 /v1/messages 端点）
         # thinking={"type": "disabled"} 防止模型输出 thinking 块干扰 GM_COMMAND 解析
+
+        # 骰点判定系统
+        from rpgagent.systems.roll_system import RollSystem
+        self.roll_sys = RollSystem(self.stats_sys, self.skill_sys)
+
         self.model = AnthropicChatModel(
             model_name=model_name,
             api_key=api_key,
@@ -228,6 +235,9 @@ class GameMaster:
 
         self.session.add_history("gm", llm_output)
 
+        # 记录升级前的等级（用于检测是否升级）
+        level_before = self.stats_sys.stats.level
+
         # 解析 GM_COMMAND
         cmd = GMCommandParser.parse(llm_output)
         narrative = GMCommandParser.extract_narrative(llm_output)
@@ -250,6 +260,28 @@ class GameMaster:
 
         # 执行指令
         if cmd:
+            # ── 骰点判定 ──────────────────────────────────────────
+            # GM 通过 roll 字段发起判定请求（格式：roll: <行动名> | attribute: <属性> | dc: <难度>）
+            roll_result = None
+            if "roll" in cmd and cmd["roll"].strip():
+                try:
+                    attr = cmd.get("attribute", "strength").strip()
+                    dc_raw = cmd.get("dc", "50").strip()
+                    # dc 在 roll_system 中是 1-100 难度阈值
+                    dc = int(dc_raw) if dc_raw.isdigit() else 50
+                    action_hint = cmd.get("roll", "").strip()
+                    roll_result = self.roll_sys.check(
+                        attribute_key=attr,
+                        base_difficulty=dc,
+                        narrative_hint=action_hint,
+                    )
+                    cmd["_roll_result"] = roll_result
+                    # 将判定结果嵌入叙事
+                    roll_block = f"\n🎲 **判定结果**\n{roll_result.description}\n"
+                    narrative = narrative + roll_block
+                except (ValueError, KeyError) as e:
+                    narrative = narrative + f"\n⚠️ 骰点解析失败：{e}\n"
+
             self._execute_command(cmd, player_input)
 
         self._sync_session()
@@ -344,12 +376,70 @@ class GameMaster:
             except ValueError:
                 pass
 
+        # ── 技能学习指令 ───────────────────────────────────
+        # skill_learn: 学习/升级技能（消耗技能点）
+        if "skill_learn" in cmd:
+            skill_id = cmd.get("skill_learn", "").strip()
+            try:
+                ranks = int(cmd.get("skill_ranks", "1"))
+            except ValueError:
+                ranks = 1
+            if skill_id:
+                success = self.skill_sys.learn_skill(skill_id, ranks)
+                if not success:
+                    skill = self.skill_sys.book.get(skill_id)
+                    current = self.skill_sys.learned.get(skill_id, 0)
+                    if skill and current >= skill.max_rank:
+                        self.session.flags["_skill_msg"] = f"「{skill.name}」已达最高级"
+                    elif self.skill_sys.skill_points < ranks:
+                        self.session.flags["_skill_msg"] = f"技能点不足，当前剩余{self.skill_sys.skill_points}点"
+                    else:
+                        self.session.flags["_skill_msg"] = f"无法学习技能「{skill_id}」"
+                else:
+                    skill = self.skill_sys.book.get(skill_id)
+                    new_rank = self.skill_sys.learned.get(skill_id, 0)
+                    self.session.flags["_skill_msg"] = (
+                        f"学会「{skill.name}」{new_rank}级（消耗{ranks}点技能点，剩余{self.skill_sys.skill_points}点）"
+                        if skill else f"学会「{skill_id}」至{new_rank}级"
+                    )
+
+        # skill_points_grant: 奖励技能点（如升级奖励）
+        if "skill_points_grant" in cmd:
+            try:
+                amount = int(cmd["skill_points_grant"])
+                self.skill_sys.add_skill_points(amount)
+                self.session.flags["_skill_msg"] = f"获得{amount}点技能点（现有{self.skill_sys.skill_points}点）"
+            except ValueError:
+                pass
+
+        # skill_reset: 重置所有技能（退还技能点）
+        if "skill_reset" in cmd and cmd.get("skill_reset", "").lower() in ("1", "true", "yes"):
+            total_spent = sum(
+                self.skill_sys.book.get(sid).max_rank
+                for sid, rank in self.skill_sys.learned.items()
+                if self.skill_sys.book.get(sid)
+            )
+            self.skill_sys.learned.clear()
+            self.skill_sys.add_skill_points(total_spent)
+            self.session.flags["_skill_msg"] = f"技能已重置，返还{total_spent}点技能点"
+
+
         # 属性修改指令
         if "stat_delta" in cmd and "stat_name" in cmd:
             try:
                 stat = cmd["stat_name"]
                 delta = int(cmd["stat_delta"])
-                self.stats_sys.modify(stat, delta)
+                # 如果是经验值变化，调用 gain_exp 处理升级逻辑
+                if stat == "exp":
+                    level_before = self.stats_sys.stats.level
+                    result = self.stats_sys.gain_exp(delta)
+                    for new_level in result.get("leveled_up", []):
+                        self.skill_sys.add_skill_points(2)
+                        self.session.flags["_skill_msg"] = (
+                            f"🎉 升级至 Lv.{new_level}！获得2点技能点（现有{self.skill_sys.skill_points}点）"
+                        )
+                else:
+                    self.stats_sys.modify(stat, delta)
             except ValueError:
                 pass
 
@@ -374,6 +464,9 @@ class GameMaster:
                 "_npc_memories": self.npc_mem_sys.get_snapshot(),
             },
         )
+        # 同步技能数据
+        self.session.skill_points = self.skill_sys.skill_points
+        self.session.learned_skills = self.skill_sys.learned.copy()
         self.session.increment_turn()
 
     def apply_combat_result(
@@ -429,11 +522,17 @@ class GameMaster:
         stats = self.stats_sys.get_snapshot()
         moral = self.moral_sys.get_snapshot()
         scene_title = self.current_scene.title if self.current_scene else "?"
+        learned = self.skill_sys.list_learned()
+        skill_summary = (
+            f"技能点 {self.skill_sys.skill_points}点 | "
+            f"已学技能: {', '.join(s['name'] for s in learned) if learned else '无'}"
+        )
         return (
             f"【状态】HP {stats['hp']}/{stats['max_hp']} | "
             f"体力 {stats['stamina']}/{stats['max_stamina']} | "
             f"道德债务 {moral['level']}（{moral['debt']}分） | "
-            f"场景 {scene_title}"
+            f"场景 {scene_title} | "
+            f"{skill_summary}"
         )
 
     def reset_dm(self) -> None:
