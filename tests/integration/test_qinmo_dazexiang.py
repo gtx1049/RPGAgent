@@ -100,6 +100,14 @@ class MockModel:
             "next_scene: kill_officer\n"
             "[/GM_COMMAND]"
         ),
+        "fox_cry_fire_observe": (
+            "夜色深沉。你跟随陈胜和吴广，借着篝火的微光向县尉帐篷摸去。\n\n"
+            "[GM_COMMAND]\n"
+            "action_tag: fox_cry_fire\n"
+            "player_input: 跟随陈胜行动\n"
+            "next_scene: kill_officer\n"
+            "[/GM_COMMAND]"
+        ),
         # ── kill_officer ──────────────────────────────────────
         "kill_officer_strike": (
             "县尉的帐篷就在不远处。他的鼾声隔着帐篷布传来。\n\n"
@@ -171,6 +179,8 @@ class MockModel:
             key = f"{scene_id}_investigate"
         elif any(k in input_key for k in ["不理", "不管"]):
             key = f"{scene_id}_ignore"
+        elif any(k in input_key for k in ["跟随", "跟着"]) and scene_id == "fox_cry_fire":
+            key = f"{scene_id}_observe"
         elif any(k in input_key for k in ["杀死", "动手"]) and "犹豫" not in input_key:
             key = f"{scene_id}_strike"
         elif any(k in input_key for k in ["犹豫", "害怕", "发抖"]):
@@ -261,9 +271,11 @@ def gm(context_loader, game_session, hidden_value_configs, roll_sys):
         content = msg.content if hasattr(msg, "content") else str(msg)
         lines = content.split("\n")
         player_input = ""
-        for line in lines:
-            if line.startswith("【玩家行动】"):
-                player_input = line.replace("【玩家行动】", "").strip()
+        # build_user_prompt uses "[你的行动]\n{player_input}" format
+        for i, line in enumerate(lines):
+            if line.strip() == "[你的行动]":
+                if i + 1 < len(lines):
+                    player_input = lines[i + 1].strip()
                 break
         scene_id = game_session.current_scene_id
         return MockModel.get_response(scene_id, player_input)
@@ -388,7 +400,7 @@ class TestDazexiangHiddenValues:
 class TestDazexiangEndToEnd:
     """端到端战役测试：完整遍历第一章场景图"""
 
-    @pytest.mark.xfail(reason="LLM-dependent: scene transitions require GM to emit correct action_tag via MockModel")
+    @pytest.mark.xfail(reason="LLM-dependent: scene transitions require real GM/LLM to emit correct action_tags")
     def test_full_chapter_path_with_gm(self, gm):
         """走完第一章主路径：daze_camp → dawn_rally → fox_cry_fire → kill_officer → deliberation → spirit_awakened → ending"""
         session = gm.session

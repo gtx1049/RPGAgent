@@ -52,6 +52,6 @@
 
 ## GM_COMMAND
 
-action_tag: confront_officer
+action_tag: speak_up_for_others
 player_input: 你感到反抗的怒火已在胸中燃起，你准备好了
-next_scene: kill_officer
+next_scene: ending

@@ -40,8 +40,26 @@
 
 ---
 
-## GM_COMMAND
+## GM_COMMAND（默认/沉默）
 
 action_tag: keep_silent
 player_input: 你没有立即表态，而是保持了沉默
 next_scene: kill_officer
+
+## GM_COMMAND（决策参与）
+
+action_tag: make_plans
+player_input: 参与决策，计划下一步行动
+next_scene: spirit_awakened
+
+## GM_COMMAND（逃跑）
+
+action_tag: run_away
+player_input: 考虑逃离
+next_scene: spirit_awakened
+
+## GM_COMMAND（热血回应）
+
+action_tag: speak_up_for_others
+player_input: 表示愿意同生共死
+next_scene: spirit_awakened
