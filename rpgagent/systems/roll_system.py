@@ -1,21 +1,19 @@
-# systems/roll_system.py - D20 骰点判定系统
+# systems/roll_system.py - 简化为成功率的判定系统
 """
-玩家行动需要通过 d20 判定。
-公式：d20 + 属性修正 vs 难度等级（DC）
+行动判定结果分 4 档，直接显示给玩家：
+- 轻松（≥70% 成功率）：大多数普通人能完成的事
+- 五五开（40-69%）：有风险，需要一定能力
+- 难搞（20-39%）：困难任务，只有熟练者能完成
+- 几无可能（<20%）：几乎不可能，需要特殊手段或运气
 
-属性修正 = (属性值 - 10) / 2（向下取整）
+内部成功率计算：
+  基础成功率 = (20 - DC + 10) / 20 × 100%
+  最终成功率 = 基础成功率 + 属性修正（每点修正 ±5%）
 
-难度等级：
-- 简单 DC 10：普通社交、采集
-- 中等 DC 15：战斗、潜行、欺骗
-- 困难 DC 20：高风险行动
-- 极难 DC 25：传奇级行动
-
-判定结果：
-- 1 = 大失败（自动失败）
-- 20 = 大成功（自动成功 + 额外效果）
-- d20 + mod >= DC = 成功
-- d20 + mod < DC = 失败
+属性修正 = (属性值 - 10) / 2
+- 力量10 → 力量修正 0
+- 力量12 → 力量修正 +1 → 成功率 +5%
+- 力量8  → 力量修正 -1 → 成功率 -5%
 """
 
 import random
@@ -24,157 +22,196 @@ from typing import Optional
 from enum import Enum
 
 
-class DifficultyLevel(Enum):
-    TRIVIAL = 5      # 容易
-    EASY = 10        # 简单
-    MEDIUM = 15      # 中等
-    HARD = 20       # 困难
-    VERY_HARD = 25   # 极难
-    NEARLY_IMPOSSIBLE = 30  # 几乎不可能
+class DifficultyTier(Enum):
+    """难度档位（显示给玩家）"""
+    EASY = "轻松"           # ≥70%
+    RISKY = "五五开"        # 40-69%
+    HARD = "难搞"           # 20-39%
+    NEAR_IMPOSSIBLE = "几无可能"  # <20%
 
 
 @dataclass
-class RollResult:
-    """单次 d20 判定结果"""
-    roll: int          # 掷出的 d20 点数
-    modifier: int      # 属性/技能修正
-    total: int         # 最终值（roll + modifier）
-    difficulty: int    # 难度等级 DC
-    success: bool      # 是否成功
-    critical: bool     # 是否大成功（20）
-    fumble: bool       # 是否大失败（1）
-    description: str   # 结果描述
+class CheckResult:
+    """判定结果"""
+    tier: DifficultyTier       # 难度档位
+    roll: int                 # 掷出的随机数 1-100
+    threshold: int             # 成功阈值（1-100）
+    modifier: int             # 属性修正
+    success: bool            # 是否成功
+    critical: bool            # 大成功（掷出96-100）
+    fumble: bool             # 大失败（掷出1-5）
+    description: str          # 叙事描述
+
+
+# ─── 成功率阈值配置 ────────────────────────────────
+
+TIER_THRESHOLDS = {
+    DifficultyTier.NEAR_IMPOSSIBLE: 20,   # < 20
+    DifficultyTier.HARD: 40,               # 20-39
+    DifficultyTier.RISKY: 70,              # 40-69
+    DifficultyTier.EASY: 100,              # ≥70
+}
+
+TIER_NAMES_CN = {
+    DifficultyTier.EASY: "轻松",
+    DifficultyTier.RISKY: "五五开",
+    DifficultyTier.HARD: "难搞",
+    DifficultyTier.NEAR_IMPOSSIBLE: "几无可能",
+}
+
+# 行动描述前缀（嵌入叙事用）
+TIER_NARRATIVE = {
+    DifficultyTier.EASY: "这件事对你来说轻而易举",
+    DifficultyTier.RISKY: "这件事有一定风险，你没有十足把握",
+    DifficultyTier.HARD: "这对你来说相当困难，需要拼尽全力",
+    DifficultyTier.NEAR_IMPOSSIBLE: "这几乎是不可能完成的任务",
+}
+
+
+def tier_from_probability(probability: float) -> DifficultyTier:
+    """根据成功率概率返回档位"""
+    pct = probability * 100
+    if pct >= 70:
+        return DifficultyTier.EASY
+    elif pct >= 40:
+        return DifficultyTier.RISKY
+    elif pct >= 20:
+        return DifficultyTier.HARD
+    else:
+        return DifficultyTier.NEAR_IMPOSSIBLE
+
+
+def tier_name(tier: DifficultyTier) -> str:
+    return TIER_NAMES_CN[tier]
 
 
 class RollSystem:
-    """d20 骰点判定系统"""
-
-    D20_SIDES = 20
+    """简化成功率判定系统"""
 
     def __init__(self, stats_sys, skill_sys=None):
         self.stats_sys = stats_sys
         self.skill_sys = skill_sys
-        self._seed = None  # 可设置随机种子用于测试
 
-    def _roll_d20(self) -> int:
-        """掷 d20，返回 1-20"""
-        if self._seed is not None:
-            # 测试用确定性随机
-            random.seed(self._seed)
-        return random.randint(1, self.D20_SIDES)
+    def _roll_d100(self) -> int:
+        """掷百面骰（1-100）"""
+        return random.randint(1, 100)
 
     @staticmethod
     def attribute_modifier(attribute_value: int) -> int:
-        """属性值 → 修正值（d20 规则：(属性-10)/2，向下取整）"""
+        """属性修正：每 ±2 属性值 = ±5% 成功率"""
         return (attribute_value - 10) // 2
 
-    def get_modifier(self, attribute_key: str, skill_key: Optional[str] = None) -> int:
-        """
-        获取完整修正值 = 属性修正 + 技能修正（如果有）
-        """
-        attr_val = self.stats_sys.get(attribute_key)
-        mod = self.attribute_modifier(attr_val)
+    def get_modifier(self, attribute_key: str) -> int:
+        """获取玩家属性修正"""
+        return self.stats_sys.get_modifier(attribute_key)
 
-        if skill_key and self.skill_sys:
-            skill_bonus = self.skill_sys.get_skill_bonus(skill_key)
-            mod += skill_bonus
-
-        return mod
-
-    def roll(
+    def get_success_probability(
         self,
         attribute_key: str,
-        skill_key: Optional[str] = None,
-        difficulty: int = 15,
-        advantage: bool = False,
-        disadvantage: bool = False,
-    ) -> RollResult:
+        base_difficulty: int = 50,
+    ) -> float:
         """
-        执行 d20 判定。
+        计算给定属性下的成功概率。
+
+        base_difficulty: 基础难度阈值（1-100）
+        - 轻松行动：30-40（高成功率）
+        - 五五开：50-60（中等成功率）
+        - 难搞：65-80（低成功率）
+        - 几无可能：80+（极低成功率）
+        """
+        modifier = self.get_modifier(attribute_key)
+        # 阈值经过属性修正后，再换算成成功率
+        adjusted = max(5, min(95, base_difficulty - modifier * 5))
+        probability = (100 - adjusted) / 100.0
+        return max(0.0, min(1.0, probability))
+
+    def get_tier(
+        self,
+        attribute_key: str,
+        base_difficulty: int = 50,
+    ) -> tuple[DifficultyTier, float]:
+        """
+        获取难度档位和对应成功率。
+        返回 (档位, 成功率百分比)
+        """
+        prob = self.get_success_probability(attribute_key, base_difficulty)
+        return tier_from_probability(prob), prob
+
+    def check(
+        self,
+        attribute_key: str,
+        base_difficulty: int = 50,
+        narrative_hint: str = "",
+    ) -> CheckResult:
+        """
+        执行判定。
 
         参数：
-        - attribute_key: 属性键（strength, agility, intelligence 等）
-        - skill_key: 技能键（可选）
-        - difficulty: 难度等级 DC
-        - advantage: 优势（掷2个d20，取较高）
-        - disadvantage: 劣势（掷2个d20，取较低）
+        - attribute_key: 使用的属性（strength/dexterity 等）
+        - base_difficulty: 基础难度（1-100），参考值：
+          * 30 = 轻松（70%基础成功率）
+          * 50 = 五五开
+          * 65 = 难搞
+          * 80 = 几无可能
+        - narrative_hint: 行动名称（如"用力推开大石"）
 
-        返回：RollResult
+        返回：CheckResult
         """
-        modifier = self.get_modifier(attribute_key, skill_key)
+        modifier = self.get_modifier(attribute_key)
 
-        # 优势/劣势
-        if advantage and not disadvantage:
-            roll1 = self._roll_d20()
-            roll2 = self._roll_d20()
-            roll = max(roll1, roll2)
-            roll_type = f"2d20H({roll1},{roll2})"
-        elif disadvantage and not advantage:
-            roll1 = self._roll_d20()
-            roll2 = self._roll_d20()
-            roll = min(roll1, roll2)
-            roll_type = f"2d20L({roll1},{roll2})"
-        else:
-            roll = self._roll_d20()
-            roll_type = f"d20({roll})"
+        # 计算成功阈值
+        adjusted_threshold = max(5, min(95, base_difficulty - modifier * 5))
+        success_threshold = 100 - adjusted_threshold  # 1-100 中需要掷出 >= 此值
 
-        total = roll + modifier
-        success = total >= difficulty
+        # 掷骰
+        roll = self._roll_d100()
 
-        # 大成功/大失败
-        critical = (roll == 20)
-        fumble = (roll == 1)
+        # 判定
+        success = roll >= success_threshold
 
-        # 自动成功/失败（1和大成功20仍然要计算）
+        # 大成功 / 大失败
+        critical = roll >= 96
+        fumble = roll <= 5
         if fumble:
             success = False
-        if critical:
+        elif critical:
             success = True
+
+        # 档位
+        prob = self.get_success_probability(attribute_key, base_difficulty)
+        tier = tier_from_probability(prob)
 
         # 描述
         if critical:
-            desc = "💥 大成功！"
+            tier_desc = "💥 大成功！远远超出预期"
         elif fumble:
-            desc = "💀 大失败！"
+            tier_desc = "💀 大失败！情况比你想象的更糟"
         elif success:
-            margin = total - difficulty
-            if margin >= 10:
-                desc = f"✅ 大成功（超过DC {margin}点）"
-            else:
-                desc = f"✅ 成功（超过DC {margin}点）"
+            tier_desc = f"✅ 成功（{roll} ≥ {success_threshold}）"
         else:
-            margin = difficulty - total
-            desc = f"❌ 失败（差 {margin}点）"
+            tier_desc = f"❌ 失败（{roll} < {success_threshold}）"
 
-        desc += f" [{roll_type} + {modifier} = {total} vs DC {difficulty}]"
+        modifier_str = f"+{modifier}" if modifier >= 0 else str(modifier)
+        tier_str = TIER_NAMES_CN[tier]
+        hint = f"【{tier_str}】" if narrative_hint else ""
 
-        return RollResult(
+        description = (
+            f"🎲 {hint}{narrative_hint}\n"
+            f"   {tier_desc} | 属性修正 {modifier_str} | 阈值 {success_threshold}\n"
+            f"   {TIER_NARRATIVE[tier]}"
+        )
+
+        return CheckResult(
+            tier=tier,
             roll=roll,
+            threshold=success_threshold,
             modifier=modifier,
-            total=total,
-            difficulty=difficulty,
             success=success,
             critical=critical,
             fumble=fumble,
-            description=desc,
+            description=description,
         )
 
-    def roll_for_opponent(
-        self,
-        attacker_roll: RollResult,
-        defense_attribute: str = "agility",
-        base_defense: int = 10,
-    ) -> RollResult:
-        """
-        防御方判定（用于对抗性检定，如敏捷回避）
-        返回防御方结果，对比攻击方是否穿透
-        """
-        defense_result = self.roll(defense_attribute, difficulty=base_defense)
-        return defense_result
-
-    def format_roll_check(self, result: RollResult, action_name: str) -> str:
-        """格式化为叙事文本"""
-        return (
-            f"🎲 {action_name}判定\n"
-            f"   {result.description}\n"
-        )
+    def format_result(self, result: CheckResult, action: str = "") -> str:
+        """格式化判定结果为叙事文本（嵌入 GM 叙事用）"""
+        return result.description

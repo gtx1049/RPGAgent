@@ -14,6 +14,7 @@ RPGAgent CLI - rpg 命令行工具
 
 import argparse
 import asyncio
+import datetime
 import sys
 from pathlib import Path
 
@@ -366,6 +367,12 @@ def main():
     # rpg saves
     p_saves = sub.add_parser("saves", help="列出存档")
 
+    # rpg log
+    p_log = sub.add_parser("log", help="查看冒险日志")
+    p_log.add_argument("game_id", nargs="?", help="剧本 ID（查看指定剧本的日志）")
+    p_log.add_argument("--latest", action="store_true", help="显示最新日志内容")
+    p_log.add_argument("filename", nargs="?", help="日志文件名（act_xxx.md）")
+
     # rpg install
     p_install = sub.add_parser("install", help="安装剧本包（.gamepkg 文件）")
     p_install.add_argument("package", help=".gamepkg 文件路径")
@@ -387,6 +394,7 @@ def main():
         "start": cmd_start,
         "serve": cmd_serve,
         "saves": cmd_saves,
+        "log": cmd_log,
         "install": cmd_install,
         "remove": cmd_remove,
         "pack": cmd_pack,
