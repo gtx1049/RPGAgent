@@ -277,6 +277,70 @@ def cmd_saves(args):
     return 0
 
 
+# ── log ──────────────────────────────────────────────
+
+def cmd_log(args):
+    """查看冒险日志"""
+    from pathlib import Path
+
+    log_dir = Path.home() / ".openclaw" / "RPGAgent" / "logs"
+    if args.game_id:
+        log_dir = log_dir / args.game_id
+
+    if not log_dir.exists():
+        print(f"错误: 日志目录不存在（游戏 '{args.game_id or '任意'}' 尚无冒险日志）")
+        return 1
+
+    if args.latest:
+        # 显示最新日志
+        files = sorted(log_dir.glob("act_*.md"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if not files:
+            print("错误: 尚无冒险日志")
+            return 1
+        content = files[0].read_text(encoding="utf-8")
+        print(content)
+        return 0
+
+    if args.filename:
+        # 显示指定日志
+        log_path = log_dir / args.filename
+        if not log_path.exists():
+            print(f"错误: 日志文件不存在 '{args.filename}'")
+            return 1
+        print(log_path.read_text(encoding="utf-8"))
+        return 0
+
+    # 列出所有日志
+    game_dirs = [log_dir] if args.game_id else [
+        d for d in log_dir.iterdir() if d.is_dir()
+    ]
+    found = False
+    for gd in game_dirs:
+        md_files = sorted(gd.glob("act_*.md"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if not md_files:
+            continue
+        found = True
+        title = f"  【{gd.name}】" if not args.game_id else ""
+        print(f"\n{title}{'冒险日志':=^46}\n" if not args.game_id else f"\n{'冒险日志':=^50}\n")
+        for f in md_files:
+            mtime = datetime.datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+            # 读取标题
+            title_line = ""
+            try:
+                with open(f, "r", encoding="utf-8") as fh:
+                    first = fh.readline().strip()
+                    if first.startswith("#"):
+                        title_line = first.lstrip("#").strip()
+            except Exception:
+                pass
+            print(f"  {mtime}  {title_line or f.name}")
+        if not args.game_id:
+            print()
+    if not found:
+        print("没有找到任何冒险日志。")
+    return 0
+
+
 # ── main ─────────────────────────────────────────────
 
 def main():

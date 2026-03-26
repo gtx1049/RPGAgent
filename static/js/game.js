@@ -378,5 +378,97 @@ async function launchGame(gameId, playerName) {
   setAwaitingInput(false);
 }
 
+// ── 冒险日志 Modal ────────────────────────────────
+
+function openLogModal() {
+  const overlay = $("log-modal-overlay");
+  if (!overlay) return;
+  overlay.classList.add("open");
+  if (!state.sessionId) {
+    $("log-list").innerHTML = '<div class="log-list-item"><div class="log-list-title">无会话</div></div>';
+    return;
+  }
+  loadLogList();
+}
+
+function closeLogModal() {
+  const overlay = $("log-modal-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+async function loadLogList() {
+  const listEl = $("log-list");
+  listEl.innerHTML = '<div class="log-list-item"><div class="log-list-title" style="color:var(--text-dim)">加载中…</div></div>';
+  try {
+    const r = await fetch(`/api/logs/${state.sessionId}`);
+    if (!r.ok) throw new Error("加载失败");
+    const logs = await r.json();
+    if (!logs || logs.length === 0) {
+      listEl.innerHTML = '<div class="log-list-item"><div class="log-list-title" style="color:var(--text-dim)">暂无日志</div></div>';
+      return;
+    }
+    listEl.innerHTML = "";
+    logs.forEach(log => {
+      const item = document.createElement("div");
+      item.className = "log-list-item";
+      item.dataset.filename = log.filename;
+      item.innerHTML = `
+        <div class="log-list-title">${log.act_title || log.filename}</div>
+        <div class="log-list-date">${log.created_at}</div>`;
+      item.addEventListener("click", () => loadLogContent(log.filename, item));
+      listEl.appendChild(item);
+    });
+  } catch {
+    listEl.innerHTML = '<div class="log-list-item"><div class="log-list-title" style="color:var(--accent)">加载失败</div></div>';
+  }
+}
+
+async function loadLogContent(filename, itemEl) {
+  // 高亮选中
+  document.querySelectorAll(".log-list-item").forEach(el => el.classList.remove("active"));
+  if (itemEl) itemEl.classList.add("active");
+
+  const contentEl = $("log-content");
+  contentEl.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px">加载中…</div>';
+  try {
+    const r = await fetch(`/api/logs/${state.sessionId}/${filename}`);
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    // 用简单 Markdown 渲染（标题 + 粗体 + 列表）
+    const html = data.content
+      .replace(/^######\s+(.*)$/gm, '<h6 style="color:var(--text-dim);margin:4px 0">$1</h6>')
+      .replace(/^#####\s+(.*)$/gm, '<h5 style="color:var(--text-dim);margin:6px 0">$1</h5>')
+      .replace(/^####\s+(.*)$/gm, '<h4 style="color:var(--gold);margin:8px 0">$1</h4>')
+      .replace(/^###\s+(.*)$/gm, '<h3 style="color:var(--gold);margin:10px 0 6px">$1</h3>')
+      .replace(/^##\s+(.*)$/gm, '<h2 style="color:var(--gold);margin:12px 0 8px;border-bottom:1px solid var(--border);padding-bottom:4px">$1</h2>')
+      .replace(/^#\s+(.*)$/gm, '<h1 style="color:var(--gold);margin:14px 0 10px">$1</h1>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--gold)">$1</strong>')
+      .replace(/^\|(.+)\|$/gm, (_, row) => {
+        const cells = row.split('|').map(c => `<td style="padding:4px 8px;border:1px solid var(--border)">${c.trim()}</td>`).join('');
+        return `<table style="border-collapse:collapse;width:100%;margin:6px 0"><tr>${cells}</tr></table>`;
+      })
+      .replace(/^- (.+)$/gm, '<div style="margin:3px 0">• $1</div>')
+      .replace(/\n\n/g, '</p><p style="margin:6px 0">')
+      .replace(/\n/g, '<br>');
+    contentEl.innerHTML = `<p style="margin:6px 0">${html}</p>`;
+  } catch {
+    contentEl.innerHTML = '<div style="color:var(--accent);text-align:center;padding:20px">读取失败</div>';
+  }
+}
+
+// 点击 overlay 背景关闭
+document.addEventListener("DOMContentLoaded", () => {
+  const overlay = $("log-modal-overlay");
+  if (overlay) {
+    overlay.addEventListener("click", e => {
+      if (e.target === overlay) closeLogModal();
+    });
+  }
+  // ESC 关闭
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") closeLogModal();
+  });
+});
+
 // 启动
 initSelectScreen();

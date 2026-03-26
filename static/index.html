@@ -42,6 +42,11 @@
   <!-- 侧边栏 -->
   <div id="sidebar">
 
+    <!-- 冒险日志按钮 -->
+    <div class="panel">
+      <button id="log-btn" onclick="openLogModal()">📜 冒险日志</button>
+    </div>
+
     <!-- 状态 -->
     <div class="panel">
       <div class="panel-title">状态</div>
@@ -91,6 +96,22 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- 冒险日志 Modal -->
+<div id="log-modal-overlay">
+  <div id="log-modal">
+    <div id="log-modal-header">
+      <h3>📜 冒险日志</h3>
+      <button id="log-modal-close" onclick="closeLogModal()">×</button>
+    </div>
+    <div id="log-modal-body">
+      <div id="log-list"></div>
+      <div id="log-content">
+        <div id="log-empty">选择一个日志查看</div>
+      </div>
+    </div>
   </div>
 </div>
 
