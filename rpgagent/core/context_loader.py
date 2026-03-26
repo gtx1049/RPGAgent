@@ -56,6 +56,7 @@ class GameLoader:
         self.characters: Dict[str, Character] = {}
         self.scenes: Dict[str, Scene] = {}
         self.custom_systems: Dict[str, Any] = {}
+        self._characters_raw: Dict[str, Dict] = {}  # 原始JSON数据（含teammate_config等扩展字段）
 
     def load(self) -> bool:
         """加载整个剧本，返回成功与否"""
@@ -120,6 +121,7 @@ class GameLoader:
                     acquaintances=data.get("acquaintances", {}),
                 )
                 self.characters[char.id] = char
+                self._characters_raw[char.id] = data  # 保留原始数据（含teammate_config等扩展字段）
 
     def _load_scenes(self):
         scenes_dir = self.game_path / "scenes"

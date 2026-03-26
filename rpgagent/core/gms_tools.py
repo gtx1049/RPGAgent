@@ -337,6 +337,80 @@ class GMSTools:
 
     # ── 技能列表 ───────────────────────────────────────
 
+    # ── 队友系统 ───────────────────────────────────────
+
+    def list_recruitable_teammates(self) -> ToolResponse:
+        """列出所有可招募的队友（尚未加入的NPC）"""
+        tm = self.gm.teammate_sys
+        profiles = tm.list_profiles()
+        if not profiles:
+            return ToolResponse(content=[TextBlock(type="text", text="目前没有可招募的队友。")])
+
+        lines = ["【可招募队友】"]
+        for p in profiles:
+            is_active = tm.is_active(p["id"])
+            status = "（已入队）" if is_active else "（可招募）"
+            skills = ", ".join(p["available_skills"]) if p["available_skills"] else "无"
+            lines.append(
+                f"  · {p['name']} {status}\n"
+                f"    性格: {p['personality']} | 初始HP: {p['hp']} | 技能: {skills}\n"
+                f"    {p['description'][:50]}"
+            )
+        return ToolResponse(content=[TextBlock(type="text", text="\n".join(lines))])
+
+    def list_active_teammates(self) -> ToolResponse:
+        """列出当前队伍中的队友状态"""
+        tm = self.gm.teammate_sys
+        active = tm.list_active()
+        if not active:
+            return ToolResponse(content=[TextBlock(type="text", text="队伍中暂无队友。")])
+
+        lines = ["【当前队友】"]
+        for s in active:
+            profile = tm.get_profile(s["profile_id"])
+            name = profile.name if profile else s["profile_id"]
+            alive = "存活" if s["is_alive"] else "倒下"
+            ap_bar = "●" * s["action_power"] + "○" * (s["max_action_power"] - s["action_power"])
+            loyalty_bar = "❤" * (s["loyalty"] // 20) + "♡" * (5 - s["loyalty"] // 20)
+            lines.append(
+                f"  · {name} | HP {s['hp']}/{s['max_hp']} | "
+                f"AP {ap_bar} | 忠诚 {loyalty_bar} | {alive}"
+            )
+        return ToolResponse(content=[TextBlock(type="text", text="\n".join(lines))])
+
+    def recruit_teammate(self, teammate_id: str) -> ToolResponse:
+        """招募指定NPC为队友（通过 teammate_recruit GM_COMMAND）"""
+        result = self.gm.teammate_sys.recruit(teammate_id)
+        msg = result.get("message", str(result))
+        return ToolResponse(content=[TextBlock(type="text", text=msg)])
+
+    def get_teammate_status(self, teammate_id: str) -> ToolResponse:
+        """查看指定队友的详细状态"""
+        tm = self.gm.teammate_sys
+        state = tm.get_active(teammate_id)
+        profile = tm.get_profile(teammate_id)
+        if not profile:
+            return ToolResponse(content=[TextBlock(type="text", text=f"未找到队友：{teammate_id}")])
+        if not state or not state.is_alive:
+            return ToolResponse(content=[TextBlock(type="text", text=f"「{profile.name}」不在队伍中或已倒下。")])
+
+        ap_bar = "●" * state.action_power + "○" * (state.max_action_power - state.action_power)
+        loyalty_bar = "❤" * (state.loyalty // 20) + "♡" * (5 - state.loyalty // 20)
+        cds = ", ".join(f"{k}({v}回合)" for k, v in state.cooldowns.items()) or "无"
+        text = (
+            f"【{profile.name}】\n"
+            f"HP: {state.hp}/{state.max_hp} | "
+            f"AP: {ap_bar} | "
+            f"忠诚: {loyalty_bar}\n"
+            f"性格: {profile.personality}\n"
+            f"可用技能: {', '.join(profile.available_skills) or '无'}\n"
+            f"技能冷却: {cds}\n"
+            f"{profile.description}"
+        )
+        return ToolResponse(content=[TextBlock(type="text", text=text)])
+
+    # ── 技能列表 ───────────────────────────────────────
+
     def list_all_skills(self) -> ToolResponse:
         """列出所有技能（显示已学/未学状态）"""
         skill_sys = self.gm.skill_sys
@@ -364,6 +438,10 @@ class GMSTools:
                 for npc_id, info in self.gm.dialogue_sys.get_all_relations().items()
             },
             hidden_values=hidden_value_snapshot,
+            flags={
+                "_npc_memories": self.gm.npc_mem_sys.get_snapshot(),
+                "_teammates": self.gm.teammate_sys.get_snapshot(),
+            },
         )
 
 

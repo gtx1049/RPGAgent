@@ -22,7 +22,7 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 from .game_manager import get_manager
-from .routes import games, logs
+from .routes import games, logs, teammates
 from ..config.settings import HOST, PORT
 
 _static_dir = _project_root / "static"
@@ -56,6 +56,7 @@ app.add_middleware(
 
 app.include_router(games.router, prefix="/api")
 app.include_router(logs.router, prefix="/api")
+app.include_router(teammates.router, prefix="/api")
 
 
 # ─── 静态首页 ───────────────────────────────────────

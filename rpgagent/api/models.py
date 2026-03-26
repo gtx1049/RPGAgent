@@ -83,6 +83,62 @@ class SaveInfo(BaseModel):
     created_at: str
 
 
+# ─── 队友 ────────────────────────────────────────────
+
+class TeammateProfile(BaseModel):
+    id: str
+    name: str
+    description: str
+    strength: int = 10
+    dexterity: int = 10
+    constitution: int = 10
+    intelligence: int = 10
+    wisdom: int = 10
+    charisma: int = 10
+    hp: int = 80
+    max_hp: int = 80
+    stamina: int = 80
+    max_stamina: int = 80
+    action_power: int = 2
+    max_action_power: int = 2
+    personality: str = "balanced"
+    loyalty: int = 50
+    available_skills: list[str] = []
+    recruitable: bool = False
+
+
+class TeammateState(BaseModel):
+    profile_id: str
+    hp: int
+    max_hp: int
+    stamina: int
+    max_stamina: int
+    action_power: int
+    max_action_power: int
+    loyalty: int
+    is_alive: bool = True
+    is_exhausted: bool = False
+    buffs: list[str] = []
+    cooldowns: dict[str, int] = {}
+
+
+class TeammateRecruitRequest(BaseModel):
+    teammate_id: str
+
+
+class TeammateDismissRequest(BaseModel):
+    teammate_id: str
+
+
+class TeammateLoyaltyRequest(BaseModel):
+    teammate_id: str
+    delta: int
+
+
+class TeammateActionRequest(BaseModel):
+    session_id: str
+
+
 # ─── WebSocket 消息 ──────────────────────────────────
 
 class WSClientMessage(BaseModel):

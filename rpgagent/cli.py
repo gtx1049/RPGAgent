@@ -28,7 +28,7 @@ from rpgagent.core.context_loader import ContextLoader
 from rpgagent.core.session import Session
 from rpgagent.core.game_master import GameMaster
 from rpgagent.api.server import run as run_server
-from rpgagent.systems.gamepkg import PackageManager, PackageCorruptedError, InvalidMetaError, GamePkgError
+from rpgagent.systems.gamepkg import PackageManager, PackageCorruptedError, InvalidMetaError, GamePkgError, MetaMissingError
 
 
 def _build_loader() -> ContextLoader:

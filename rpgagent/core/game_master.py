@@ -126,6 +126,11 @@ class GameMaster:
         from rpgagent.systems.acquisition import AcquisitionSystem
         self.acquisition_sys = AcquisitionSystem()
 
+        # 队友系统（可招募NPC作为队友）
+        from rpgagent.systems.teammate_system import TeammateSystem
+        self.teammate_sys = TeammateSystem()
+        self._register_teammates_from_loader()
+
         self.model = AnthropicChatModel(
             model_name=model_name,
             api_key=api_key,
@@ -174,6 +179,24 @@ class GameMaster:
                     "acquaintances": char.acquaintances or {},
                 })
         self.npc_mem_sys.register_npc_with_config(npc_configs)
+
+    def _register_teammates_from_loader(self):
+        """从 GameLoader 批量注册可招募队友"""
+        if not self.game_loader:
+            return
+        for npc_id, char in self.game_loader.characters.items():
+            # 构造 NPC 数据字典（GameLoader.character 是字符串字典）
+            npc_data = {
+                "id": npc_id,
+                "name": char.name,
+                "description": char.description or "",
+                "role": char.role,
+                "acquaintances": char.acquaintances or {},
+            }
+            # 如果角色 JSON 中包含队友配置，则注册
+            raw_char = self.game_loader._characters_raw.get(npc_id, {})
+            npc_data.update(raw_char)
+            self.teammate_sys.load_from_npc(npc_id, npc_data)
 
     @property
     def dm(self) -> agent.ReActAgent:
@@ -513,6 +536,38 @@ class GameMaster:
                 self.session.flags["_merchant_wares"] = wares
                 self.session.flags["_merchant_id"] = npc_id
 
+        # ── 队友系统指令 ─────────────────────────────────────
+        # teammate_recruit: 招募队友
+        if "teammate_recruit" in cmd:
+            teammate_id = cmd.get("teammate_recruit", "").strip()
+            if teammate_id:
+                result = self.teammate_sys.recruit(teammate_id)
+                self.session.flags["_teammate_recruit"] = result
+
+        # teammate_dismiss: 移除队友
+        if "teammate_dismiss" in cmd:
+            teammate_id = cmd.get("teammate_dismiss", "").strip()
+            if teammate_id:
+                dismissed = self.teammate_sys.dismiss(teammate_id)
+                profile = self.teammate_sys.get_profile(teammate_id)
+                name = profile.name if profile else teammate_id
+                self.session.flags["_teammate_dismiss"] = {
+                    "teammate_id": teammate_id,
+                    "permanently_left": dismissed,
+                    "message": f"「{name}」离队了。" if dismissed else f"「{name}」的忠诚度下降了。",
+                }
+
+        # teammate_loyalty_delta: 修改队友忠诚度
+        if "teammate_loyalty_delta" in cmd:
+            try:
+                teammate_id = cmd.get("teammate_id", "").strip()
+                delta = int(cmd.get("teammate_loyalty_delta", "0"))
+                if teammate_id:
+                    new_val = self.teammate_sys.modify_loyalty(teammate_id, delta)
+                    self.session.flags["_teammate_loyalty_msg"] = f"队友忠诚度变为 {new_val}/100"
+            except ValueError:
+                pass
+
         # 主动作力消耗
         if "stat_delta" in cmd and "stat_name" in cmd:
             try:
@@ -551,6 +606,7 @@ class GameMaster:
             hidden_values=hidden_value_snapshot,
             flags={
                 "_npc_memories": self.npc_mem_sys.get_snapshot(),
+                "_teammates": self.teammate_sys.get_snapshot(),
             },
         )
         # 同步技能数据
@@ -623,15 +679,18 @@ class GameMaster:
         equip_summary = ", ".join(
             f"{v['name']}" for v in equipped.values() if v
         ) or "无"
-        return (
+        teammate_summary = self.teammate_sys.get_status_summary()
+        status_lines = [
             f"【状态】HP {stats['hp']}/{stats['max_hp']} | "
             f"体力 {stats['stamina']}/{stats['max_stamina']} | "
             f"行动力 {ap_bar}（{ap}/{max_ap}） | "
             f"道德债务 {moral['level']}（{moral['debt']}分） | "
             f"装备: {equip_summary} | "
-            f"场景 {scene_title} | "
-            f"{skill_summary}"
-        )
+            f"场景 {scene_title}",
+            f"{skill_summary}",
+            f"【队友】{teammate_summary}",
+        ]
+        return "\n".join(status_lines)
 
     def reset_dm(self) -> None:
         """重置 DM Agent（换场/重开时调用）"""
