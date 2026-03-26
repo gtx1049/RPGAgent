@@ -88,9 +88,10 @@ def tier_name(tier: DifficultyTier) -> str:
 class RollSystem:
     """简化成功率判定系统"""
 
-    def __init__(self, stats_sys, skill_sys=None):
+    def __init__(self, stats_sys, skill_sys=None, equipment_sys=None):
         self.stats_sys = stats_sys
         self.skill_sys = skill_sys
+        self.equipment_sys = equipment_sys
 
     def _roll_d100(self) -> int:
         """掷百面骰（1-100）"""
@@ -102,8 +103,14 @@ class RollSystem:
         return (attribute_value - 10) // 2
 
     def get_modifier(self, attribute_key: str) -> int:
-        """获取玩家属性修正"""
-        return self.stats_sys.get_modifier(attribute_key)
+        """获取玩家属性修正（含装备加成）"""
+        base = self.stats_sys.get_modifier(attribute_key)
+        # 装备属性加成
+        if self.equipment_sys:
+            bonus = self.equipment_sys.total_bonus
+            equip_bonus = getattr(bonus, attribute_key, 0)
+            return base + equip_bonus
+        return base
 
     def get_success_probability(
         self,

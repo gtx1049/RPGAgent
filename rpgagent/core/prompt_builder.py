@@ -107,8 +107,9 @@ PLAYER_STATUS_TEMPLATE = """
 - 生命值: {hp}/{max_hp}
 - 体力值: {stamina}/{max_stamina}
 - 等级: {level}（经验 {exp}/{exp_to_level}）
-- 行动点: {action_points}/{max_action_points}
+- 行动力: {ap_bar}（{action_power}/{max_action_power}，●=可用 ○=已消耗）
 - 力量: {strength} | 敏捷: {agility} | 智力: {intelligence} | 魅力: {charisma}
+- 当前装备: {equipped_summary}
 - 当前背包: {inventory}
 - 技能点: {skill_points}点 | 已学技能: {learned_skills}
 """
@@ -167,6 +168,7 @@ class PromptBuilder:
         hidden_value_sys: Optional[HiddenValueSystem] = None,
         npc_mem_sys: Optional[NpcMemorySystem] = None,
         skill_sys: Any = None,
+        equipment_sys: Any = None,
         # ── db 模式参数 ──
         db: Any = None,
         current_scene_id: str = "",
@@ -182,6 +184,7 @@ class PromptBuilder:
         self.hidden_value_sys = hidden_value_sys
         self.npc_mem_sys = npc_mem_sys
         self.skill_sys = skill_sys
+        self.equipment_sys = equipment_sys
 
         # ── db 模式 ──
         self.db = db
@@ -213,6 +216,13 @@ class PromptBuilder:
             learned = [s["name"] for s in self.skill_sys.list_learned()]
         learned_str = "、".join(learned) if learned else "无"
 
+        # 装备摘要
+        equip_summary = "无"
+        if self.equipment_sys:
+            equipped = self.equipment_sys.get_equipped()
+            equip_items = [v["name"] for v in equipped.values() if v]
+            equip_summary = "、".join(equip_items) if equip_items else "无"
+
         return PLAYER_STATUS_TEMPLATE.format(
             hp=stats.get("hp", "?"),
             max_hp=stats.get("max_hp", "?"),
@@ -221,12 +231,14 @@ class PromptBuilder:
             level=stats.get("level", "?"),
             exp=stats.get("exp", "?"),
             exp_to_level=stats.get("exp_to_level", "?"),
-            action_points=stats.get("action_points", "?"),
-            max_action_points=stats.get("max_action_points", "?"),
+            ap_bar="●" * stats.get("action_power", 0) + "○" * (stats.get("max_action_power", 3) - stats.get("action_power", 0)),
+            action_power=stats.get("action_power", 0),
+            max_action_power=stats.get("max_action_power", "?"),
             strength=ability.get("strength", "?"),
             agility=ability.get("dexterity", "?"),
             intelligence=ability.get("intelligence", "?"),
             charisma=ability.get("charisma", "?"),
+            equipped_summary=equip_summary,
             inventory=inv_str,
             skill_points=skill_points,
             learned_skills=learned_str,

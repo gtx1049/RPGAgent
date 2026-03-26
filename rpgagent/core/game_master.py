@@ -87,12 +87,14 @@ class GameMaster:
         from rpgagent.systems.dialogue import DialogueSystem
         from rpgagent.systems.hidden_value import HiddenValueSystem
         from rpgagent.systems.skill_system import SkillSystem
+        from rpgagent.systems.equipment_system import EquipmentSystem
 
         self.stats_sys = StatsSystem()
         self.moral_sys = MoralDebtSystem()
         self.inv_sys = InventorySystem()
         self.dialogue_sys = DialogueSystem()
         self.skill_sys = SkillSystem()
+        self.equipment_sys = EquipmentSystem()
 
         # 隐藏数值系统（从 meta.json 读取配置，支持道德债务/理智/成长等多种隐藏数值）
         meta = self.game_loader.meta
@@ -118,7 +120,7 @@ class GameMaster:
 
         # 骰点判定系统
         from rpgagent.systems.roll_system import RollSystem
-        self.roll_sys = RollSystem(self.stats_sys, self.skill_sys)
+        self.roll_sys = RollSystem(self.stats_sys, self.skill_sys, self.equipment_sys)
 
         self.model = AnthropicChatModel(
             model_name=model_name,
@@ -137,6 +139,8 @@ class GameMaster:
             self.dialogue_sys,
             hidden_value_sys=self.hidden_value_sys,
             npc_mem_sys=self.npc_mem_sys,
+            skill_sys=self.skill_sys,
+            equipment_sys=self.equipment_sys,
         )
 
         # 场景触发引擎
@@ -204,11 +208,19 @@ class GameMaster:
     def process_input(self, player_input: str) -> Tuple[str, Optional[Dict]]:
         """
         处理玩家输入：
-        1. 构造 user_prompt（附当前状态摘要）
-        2. 调用 AgentScope DM Agent 生成叙事
-        3. 解析 GM_COMMAND，更新数值系统
-        4. 返回叙事内容
+        1. 检查行动力，耗尽则刷新
+        2. 消耗 1 行动力
+        3. 构造 user_prompt（附当前状态摘要）
+        4. 调用 AgentScope DM Agent 生成叙事
+        5. 解析 GM_COMMAND，更新数值系统
+        6. 返回叙事内容
         """
+        # ── 行动力检查 ──────────────────────────────
+        # 如果行动力为0，说明上一轮已耗尽，自动刷新
+        if self.stats_sys.get("action_power") <= 0:
+            self.stats_sys.refresh_ap()
+            self.session.add_history("system", "【回合开始】行动力已刷新。")
+
         scene = self.get_current_scene()
         if not scene:
             return "[系统错误] 当前场景未找到。", None
@@ -307,6 +319,17 @@ class GameMaster:
     def _execute_command(self, cmd: Dict[str, Any], player_input: str = ""):
         """执行 GM_COMMAND 指令"""
         action = cmd.get("action", "narrative")
+
+        # ── 行动力消耗 ───────────────────────────
+        # 消耗行动力的行为类型（非叙事行动本身也需要消耗）
+        ap_cost_actions = {"narrative", "combat", "choice", "skill_use", "item_use", "explore"}
+        if action in ap_cost_actions:
+            if not self.stats_sys.use_ap(1):
+                # 行动力耗尽，仅允许观察（look/observe）
+                if player_input and not any(k in player_input for k in ["看看", "观察", "look", "observe", "检查"]):
+                    self.session.add_history("system", "【行动力耗尽】你感到力不从心，只能勉强观察周围环境。")
+                    self.session.flags["_ap_exhausted"] = True
+                    return
 
         # ── 隐藏数值系统：通过 action_tag 触发数值变化 ──
         if self.hidden_value_sys and "action_tag" in cmd:
@@ -523,14 +546,23 @@ class GameMaster:
         moral = self.moral_sys.get_snapshot()
         scene_title = self.current_scene.title if self.current_scene else "?"
         learned = self.skill_sys.list_learned()
+        ap = stats.get("action_power", 0)
+        max_ap = stats.get("max_action_power", 3)
+        ap_bar = "●" * ap + "○" * (max_ap - ap)
         skill_summary = (
             f"技能点 {self.skill_sys.skill_points}点 | "
             f"已学技能: {', '.join(s['name'] for s in learned) if learned else '无'}"
         )
+        equipped = self.equipment_sys.get_equipped()
+        equip_summary = ", ".join(
+            f"{v['name']}" for v in equipped.values() if v
+        ) or "无"
         return (
             f"【状态】HP {stats['hp']}/{stats['max_hp']} | "
             f"体力 {stats['stamina']}/{stats['max_stamina']} | "
+            f"行动力 {ap_bar}（{ap}/{max_ap}） | "
             f"道德债务 {moral['level']}（{moral['debt']}分） | "
+            f"装备: {equip_summary} | "
             f"场景 {scene_title} | "
             f"{skill_summary}"
         )
