@@ -18,14 +18,14 @@ import pytest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 
-from core.game_master import GameMaster, GMCommandParser
-from core.context_loader import GameLoader, GameMeta, Scene
-from core.session import Session
-from systems.hidden_value import HiddenValueSystem
-from systems.stats import StatsSystem
-from systems.moral_debt import MoralDebtSystem
-from systems.dialogue import DialogueSystem
-from systems.inventory import InventorySystem
+from rpgagent.core.game_master import GameMaster, GMCommandParser
+from rpgagent.core.context_loader import GameLoader, GameMeta, Scene
+from rpgagent.core.session import Session
+from rpgagent.systems.hidden_value import HiddenValueSystem
+from rpgagent.systems.stats import StatsSystem
+from rpgagent.systems.moral_debt import MoralDebtSystem
+from rpgagent.systems.dialogue import DialogueSystem
+from rpgagent.systems.inventory import InventorySystem
 
 
 # ──────────────────────────────────────────────
@@ -79,6 +79,7 @@ class MockGameLoaderWithHV:
         }
         self.meta = meta
         self.setting = "测试世界观设定"
+        self.characters = {}
         self.scenes = {
             "scene_01": Scene(
                 id="scene_01",
@@ -116,6 +117,7 @@ class MockGameLoaderNoHV:
         meta.hidden_value_actions = {}
         self.meta = meta
         self.setting = "无隐藏数值世界观"
+        self.characters = {}
         self.scenes = {
             "scene_01": Scene(
                 id="scene_01",
@@ -187,7 +189,7 @@ class TestGMCommandParserEdgeCases:
 
     def test_parse_whitespace_variation(self):
         """解析支持空格/换行变化"""
-        from core.game_master import GMCommandParser
+        from rpgagent.core.game_master import GMCommandParser
         text = """
         [GM_COMMAND]
               action    :    narrative
@@ -200,7 +202,7 @@ class TestGMCommandParserEdgeCases:
 
     def test_parse_empty_value(self):
         """空值字段不抛异常"""
-        from core.game_master import GMCommandParser
+        from rpgagent.core.game_master import GMCommandParser
         text = "[GM_COMMAND]\naction:\nnext_scene:\n[/GM_COMMAND]"
         cmd = GMCommandParser.parse(text)
         assert cmd["action"] == ""
@@ -208,13 +210,13 @@ class TestGMCommandParserEdgeCases:
 
     def test_parse_no_command_block(self):
         """无 GM_COMMAND 块返回 None"""
-        from core.game_master import GMCommandParser
+        from rpgagent.core.game_master import GMCommandParser
         assert GMCommandParser.parse("普通叙事内容") is None
         assert GMCommandParser.parse("") is None
 
     def test_extract_narrative_removes_all_commands(self):
         """extract_narrative 能去除多个 GM_COMMAND 块"""
-        from core.game_master import GMCommandParser
+        from rpgagent.core.game_master import GMCommandParser
         text = (
             "第一段叙事\n"
             "[GM_COMMAND]action: narrative[/GM_COMMAND]\n"
@@ -460,7 +462,7 @@ class TestGameMasterSyncSession:
 class TestGameMasterProcessInput:
     """process_input 完整流程（不含真实 LLM 调用）"""
 
-    @patch("core.game_master.GameMaster.dm", new_callable=lambda: MagicMock())
+    @patch("rpgagent.core.game_master.GameMaster.dm", new_callable=lambda: MagicMock())
     def test_process_input_returns_narrative(self, mock_dm, hv_game_master):
         """process_input 从 LLM 输出中提取纯叙事内容"""
         mock_dm.reply.return_value = "你走进村庄，看到村口站着一个老人。"
@@ -469,7 +471,7 @@ class TestGameMasterProcessInput:
         assert "村庄" in narrative
         assert "[GM_COMMAND]" not in narrative
 
-    @patch("core.game_master.GameMaster.dm", new_callable=lambda: MagicMock())
+    @patch("rpgagent.core.game_master.GameMaster.dm", new_callable=lambda: MagicMock())
     def test_process_input_parses_and_executes_command(self, mock_dm, hv_game_master):
         """process_input 解析并执行 GM_COMMAND"""
         mock_dm.reply.return_value = (
@@ -488,7 +490,7 @@ class TestGameMasterProcessInput:
         # HiddenValue 已更新
         assert hv_game_master.hidden_value_sys.values["moral_debt"]._compute_raw_value() == 5
 
-    @patch("core.game_master.GameMaster.dm", new_callable=lambda: MagicMock())
+    @patch("rpgagent.core.game_master.GameMaster.dm", new_callable=lambda: MagicMock())
     def test_process_input_narrative_only_no_command(self, mock_dm, hv_game_master):
         """纯叙事（无 GM_COMMAND）时 cmd=None"""
         mock_dm.reply.return_value = "你站在原地，没有做任何事。"
@@ -496,7 +498,7 @@ class TestGameMasterProcessInput:
         narrative, cmd = hv_game_master.process_input("站着不动")
         assert cmd is None
 
-    @patch("core.game_master.GameMaster.dm", new_callable=lambda: MagicMock())
+    @patch("rpgagent.core.game_master.GameMaster.dm", new_callable=lambda: MagicMock())
     def test_process_input_unknown_scene_no_crash(self, mock_dm, hv_game_master):
         """process_input 处理 next_scene 指向不存在场景时不抛异常"""
         mock_dm.reply.return_value = (

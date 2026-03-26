@@ -1,6 +1,6 @@
 # tests/unit/test_inventory.py
 import pytest
-from systems.inventory import InventorySystem, Item
+from rpgagent.systems.inventory import InventorySystem, Item
 
 
 class TestInventorySystem:

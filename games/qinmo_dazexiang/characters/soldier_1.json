@@ -1,0 +1,9 @@
+{
+  "id": "soldier_1",
+  "name": "戍卒甲",
+  "role": "npc",
+  "description": "一个沉默的年轻农夫，与你同乡。他蹲在角落里，不时抬头看向雨幕。",
+  "acquaintances": {
+    "soldier_2": 0.6
+  }
+}

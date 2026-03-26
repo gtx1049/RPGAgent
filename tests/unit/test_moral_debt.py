@@ -1,6 +1,6 @@
 # tests/unit/test_moral_debt.py
 import pytest
-from systems.moral_debt import MoralDebtSystem, DEBT_LEVELS
+from rpgagent.systems.moral_debt import MoralDebtSystem, DEBT_LEVELS
 
 
 class TestMoralDebtSystem:

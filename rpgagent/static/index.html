@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RPGAgent</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --danger: #f85149;
+    --warn: #d29922;
+    --success: #3fb950;
+    --hp: #f85149;
+    --stamina: #d29922;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', 'PingFang SC', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ─── 顶栏 ─── */
+  header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 13px;
+  }
+  .logo { font-weight: bold; font-size: 16px; color: var(--accent); }
+  .game-title { color: var(--muted); }
+  .turn-badge { background: var(--border); padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+  .ws-status { font-size: 11px; margin-left: auto; }
+  .ws-status.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .ws-status.connected .dot { background: var(--success); }
+
+  /* ─── 主布局 ─── */
+  main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ─── 叙事区 ─── */
+  #narrative {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scroll-behavior: smooth;
+  }
+  .narrative-block {
+    line-height: 1.8;
+    max-width: 680px;
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+  .narrative-block .meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .narrative-block.player-input { color: var(--accent); font-style: italic; }
+  .narrative-block.player-input::before { content: "› "; }
+
+  /* ─── 选项按钮 ─── */
+  .options-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-width: 680px;
+  }
+  .option-btn {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: border-color 0.2s;
+  }
+  .option-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ─── 右侧面板 ─── */
+  aside {
+    width: 260px;
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .panel {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-title {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+
+  /* 数值条 */
+  .stat-bar { margin-bottom: 10px; }
+  .stat-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .stat-track { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .stat-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
+  .stat-fill.hp { background: var(--hp); }
+  .stat-fill.stamina { background: var(--stamina); }
+
+  /* 隐藏数值 */
+  .hidden-value { margin-bottom: 10px; }
+  .hv-name { font-size: 12px; margin-bottom: 4px; }
+  .hv-indicator { display: flex; gap: 3px; }
+  .hv-dot { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--border); }
+  .hv-dot.active { background: var(--warn); border-color: var(--warn); }
+
+  /* 背包 */
+  .inv-list { display: flex; flex-direction: column; gap: 4px; }
+  .inv-item { font-size: 12px; color: var(--text); }
+  .inv-item .qty { color: var(--muted); }
+
+  /* NPC关系 */
+  .npc-list { display: flex; flex-direction: column; gap: 8px; }
+  .npc-card { font-size: 12px; }
+  .npc-name { font-weight: 500; }
+  .npc-rel { color: var(--muted); font-size: 11px; }
+
+  /* ─── 底部输入 ─── */
+  footer {
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    gap: 10px;
+  }
+  #input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+    resize: none;
+    font-family: inherit;
+  }
+  #input:focus { border-color: var(--accent); }
+  #input::placeholder { color: var(--muted); }
+  #send {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  #send:hover { opacity: 0.85; }
+  #send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ─── 开始界面 ─── */
+  #start-screen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    z-index: 100;
+  }
+  #start-screen h1 { font-size: 32px; color: var(--accent); }
+  #start-screen p { color: var(--muted); max-width: 400px; text-align: center; }
+  #start-screen select, #start-screen input {
+    background: var(--panel); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 14px; border-radius: 6px;
+    font-size: 14px; outline: none;
+  }
+  #start-screen select { width: 200px; }
+  #start-screen input { width: 200px; }
+  #start-btn {
+    background: var(--accent); color: #fff;
+    border: none; padding: 12px 32px; border-radius: 6px;
+    cursor: pointer; font-size: 16px;
+  }
+  #start-btn:hover { opacity: 0.85; }
+</style>
+</head>
+<body>
+
+<!-- 开始界面 -->
+<div id="start-screen">
+  <h1>RPGAgent</h1>
+  <p>选择剧本，开始你的冒险</p>
+  <select id="game-select"><option>加载中...</option></select>
+  <input id="player-name-input" placeholder="你的名字" value="玩家" />
+  <button id="start-btn">开始冒险</button>
+</div>
+
+<!-- 游戏界面 -->
+<div id="game-ui" style="display:none; height:100vh; display:flex; flex-direction:column;">
+
+  <header>
+    <span class="logo">RPGAgent</span>
+    <span class="game-title" id="game-name-label">—</span>
+    <span class="turn-badge" id="turn-badge">回合 0</span>
+    <span class="ws-status" id="ws-status">
+      <span class="dot"></span> 连接中
+    </span>
+  </header>
+
+  <main>
+    <div id="narrative"></div>
+
+    <aside>
+      <div class="panel">
+        <div class="panel-title">角色状态</div>
+        <div class="stat-bar">
+          <div class="stat-label"><span>HP</span><span id="hp-text">100/100</span></div>
+          <div class="stat-track"><div class="stat-fill hp" id="hp-bar" style="width:100%"></div></div>
+        </div>
+        <div class="stat-bar">
+          <div class="stat-label"><span>体力</span><span id="stamina-text">100/100</span></div>
+          <div class="stat-track"><div class="stat-fill stamina" id="stamina-bar" style="width:100%"></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">隐藏数值</div>
+        <div class="hidden-value">
+          <div class="hv-name">道德债务</div>
+          <div class="hv-indicator" id="moral-dots"></div>
+          <div style="font-size:11px; color:var(--muted); margin-top:4px;" id="moral-level">—</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">背包</div>
+        <div class="inv-list" id="inv-list"><span style="font-size:12px;color:var(--muted)">空</span></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">人物关系</div>
+        <div class="npc-list" id="npc-list"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <textarea id="input" rows="1" placeholder="输入你的行动..."></textarea>
+    <button id="send">发送</button>
+  </footer>
+
+</div>
+
+<script>
+const BASE = '/api';
+let sessionId = null;
+let ws = null;
+
+// ─── 开始界面 ───────────────────────────────────────
+
+async function loadGames() {
+  const res = await fetch(`${BASE}/games`);
+  const games = await res.json();
+  const sel = document.getElementById('game-select');
+  sel.innerHTML = games.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+}
+
+document.getElementById('start-btn').addEventListener('click', async () => {
+  const gameId = document.getElementById('game-select').value;
+  const playerName = document.getElementById('player-name-input').value || '玩家';
+
+  const res = await fetch(`${BASE}/games/${gameId}/start`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({player_name: playerName}),
+  });
+  const data = await res.json();
+  sessionId = data.session_id;
+
+  document.getElementById('game-name-label').textContent = data.game_id;
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('game-ui').style.display = 'flex';
+
+  // 初始叙事
+  appendNarrative(data.scene.content || data.scene.title, 'scene');
+
+  // 连接 WebSocket
+  connectWS();
+});
+
+loadGames();
+
+// ─── WebSocket ──────────────────────────────────────
+
+function connectWS() {
+  ws = new WebSocket(`ws://${location.host}/ws/${sessionId}`);
+
+  ws.onopen = () => {
+    document.getElementById('ws-status').className = 'ws-status connected';
+    document.getElementById('ws-status').innerHTML = '<span class="dot"></span> 已连接';
+  };
+
+  ws.onclose = () => {
+    document.getElementById('ws-status').className = 'ws-status';
+    document.getElementById('ws-status').innerHTML = '<span class="dot"></span> 断开';
+  };
+
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'narrative') {
+      streamNarrative(msg.content, msg.done);
+    } else if (msg.type === 'options') {
+      showOptions(msg.options || []);
+    } else if (msg.type === 'status_update') {
+      updateStatus(msg.extra || {});
+    } else if (msg.type === 'scene_change') {
+      appendNarrative(`\n[场景切换：${msg.content}]\n`, 'scene');
+    } else if (msg.type === 'error') {
+      appendNarrative(`[错误] ${msg.content}`, 'error');
+    }
+  };
+}
+
+// ─── 叙事显示 ───────────────────────────────────────
+
+// 流式叙事状态
+let streamBlock = null;
+let streamTypingTimer = null;
+
+function streamNarrative(text, done) {
+  // 第一块内容：创建新的叙事块
+  if (!streamBlock) {
+    streamBlock = document.createElement('div');
+    streamBlock.className = 'narrative-block';
+    streamBlock.innerHTML = '';
+    document.getElementById('narrative').appendChild(streamBlock);
+  }
+  // 追加内容
+  streamBlock.innerHTML += text.replace(/\n/g, '<br>');
+  document.getElementById('narrative').scrollTop = 99999;
+  if (done) {
+    streamBlock = null;
+    document.getElementById('send').disabled = false;
+  }
+}
+
+function appendNarrative(text, type='normal') {
+  const div = document.createElement('div');
+  div.className = 'narrative-block';
+  if (type === 'player') div.className += ' player-input';
+  if (type === 'scene') div.className += ' narrative-block';
+  if (type === 'error') div.style.color = 'var(--danger)';
+  div.innerHTML = text.replace(/\n/g, '<br>');
+  document.getElementById('narrative').appendChild(div);
+  document.getElementById('narrative').scrollTop = 99999;
+}
+
+function showOptions(options) {
+  const bar = document.createElement('div');
+  bar.className = 'options-bar';
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.textContent = opt;
+    btn.onclick = () => {
+      document.getElementById('input').value = opt;
+      sendAction();
+      bar.remove();
+    };
+    bar.appendChild(btn);
+  });
+  document.getElementById('narrative').appendChild(bar);
+}
+
+// ─── 状态更新 ───────────────────────────────────────
+
+function updateStatus(s) {
+  // HP
+  const hp = s.hp ?? 100, maxHp = s.max_hp ?? 100;
+  document.getElementById('hp-text').textContent = `${hp}/${maxHp}`;
+  document.getElementById('hp-bar').style.width = `${(hp/maxHp*100).toFixed(0)}%`;
+
+  // 体力
+  const st = s.stamina ?? 100, maxSt = s.max_stamina ?? 100;
+  document.getElementById('stamina-text').textContent = `${st}/${maxSt}`;
+  document.getElementById('stamina-bar').style.width = `${(st/maxSt*100).toFixed(0)}%`;
+
+  // 回合
+  document.getElementById('turn-badge').textContent = `回合 ${s.turn ?? 0}`;
+
+  // 道德债务
+  const level = s.moral_debt_level || '—';
+  const value = s.moral_debt_value ?? 0;
+  document.getElementById('moral-level').textContent = `${level}（${value}分）`;
+  // 5个dots
+  const dots = Math.min(5, Math.ceil(value / 20));
+  document.getElementById('moral-dots').innerHTML =
+    Array.from({length:5},(_,i) => `<div class="hv-dot ${i<dots?'active':''}"></div>`).join('');
+
+  // NPC 关系面板
+  const npcList = document.getElementById('npc-list');
+  const npcRelations = s.npc_relations || {};
+  const npcEntries = Object.entries(npcRelations);
+  if (npcEntries.length === 0) {
+    npcList.innerHTML = '<span style="font-size:12px;color:var(--muted)">暂无关系</span>';
+  } else {
+    npcList.innerHTML = npcEntries.map(([id, data]) => {
+      const sign = data.value >= 0 ? '+' : '';
+      return `<div class="npc-card">
+        <div class="npc-name">${data.name}</div>
+        <div class="npc-rel">${data.level}（${sign}${data.value}）</div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ─── 发送行动 ───────────────────────────────────────
+
+async function sendAction() {
+  const input = document.getElementById('input');
+  const text = input.value.trim();
+  if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+  input.value = '';
+  appendNarrative(text, 'player');
+  ws.send(JSON.stringify({action: 'player_input', content: text}));
+  document.getElementById('send').disabled = true;
+  // 按钮在叙事流结束时（done=True）由 streamNarrative 重新启用
+}
+
+document.getElementById('send').addEventListener('click', sendAction);
+document.getElementById('input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendAction();
+  }
+});
+
+</script>
+</body>
+</html>

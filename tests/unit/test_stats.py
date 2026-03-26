@@ -1,6 +1,6 @@
 # tests/unit/test_stats.py
 import pytest
-from systems.stats import StatsSystem, Stats
+from rpgagent.systems.stats import StatsSystem, Stats
 
 
 class TestStats:

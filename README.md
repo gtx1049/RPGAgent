@@ -40,6 +40,8 @@ RPGAgent/
 ├── README.md
 ├── requirements.txt
 ├── pytest.ini
+├── cli.py                        # 命令行入口（rpg list/start/serve/saves）
+├── main.py                       # 旧版交互式入口（保留）
 │
 ├── config/
 │   └── settings.py               # 全局配置（模型/路径/默认值）
@@ -120,17 +122,31 @@ cp .env.example .env
 
 参考 `games/example/` 示例结构。
 
-### 4. 启动游戏
+### 4. 启动游戏（终端模式）
 
 ```bash
-python main.py
+python cli.py start <game_id>        # 开始游戏，例如：
+python cli.py start example          # 开始"示例剧本·第一夜"
+python cli.py start three_little_pigs  # 开始"三只小猪"
+
+# 查看可用剧本
+python cli.py list
+
+# 游戏内命令：quit / status / save [名] / help
 ```
 
 ### 5. 启动 Web 前端（可选）
 
 ```bash
-python -m api.server
+python cli.py serve
 # 浏览器打开 http://localhost:7860
+```
+
+### 6. 存档管理
+
+```bash
+python cli.py saves    # 查看存档列表
+# 游戏内：save [名]  保存当前进度
 ```
 
 Web 前端通过 WebSocket 与后端实时通信，支持流式叙事、状态栏实时刷新。

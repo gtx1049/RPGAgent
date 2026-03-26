@@ -18,3 +18,7 @@
 - 假装受伤博取同情
 - 声称有好东西要给他看
 - 放弃这间，去看砖房
+
+---
+
+> 📝 DM 指引：当玩家选择"多吹几次"或成功"骗他开门"时，场景应过渡到 **wood_house_won**。过渡时在叙事末尾标注 `[GM_COMMAND]\naction: transition\nnext_scene: wood_house_won\n[/GM_command]`

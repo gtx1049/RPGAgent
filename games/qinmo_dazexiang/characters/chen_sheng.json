@@ -1,0 +1,11 @@
+{
+  "id": "chen_sheng",
+  "name": "陈胜",
+  "role": "npc",
+  "description": "阳城人，字涉。身材高大，目光深沉。他说话不多，但每次开口，人们都会听。",
+  "acquaintances": {
+    "wu_guang": 0.9,
+    "soldier_1": 0.4,
+    "soldier_2": 0.3
+  }
+}

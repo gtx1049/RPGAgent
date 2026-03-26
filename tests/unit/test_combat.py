@@ -1,7 +1,7 @@
 # tests/unit/test_combat.py
 import pytest
 from unittest.mock import patch, MagicMock
-from systems.combat import CombatSystem, CombatResult
+from rpgagent.systems.combat import CombatSystem, CombatResult
 
 
 class TestCombatSystem:

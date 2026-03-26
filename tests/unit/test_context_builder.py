@@ -8,14 +8,14 @@ import json
 import tempfile
 from pathlib import Path
 
-from core.context_builder import PromptBuilder
-from core.context_loader import GameLoader, GameMeta, Scene
-from systems.hidden_value import HiddenValueSystem, HiddenValue, LevelEffect
-from systems.moral_debt import MoralDebtSystem
-from systems.dialogue import DialogueSystem
-from systems.inventory import InventorySystem
-from systems.stats import StatsSystem
-from data.database import Database
+from rpgagent.core.context_builder import PromptBuilder
+from rpgagent.core.context_loader import GameLoader, GameMeta, Scene
+from rpgagent.systems.hidden_value import HiddenValueSystem, HiddenValue, LevelEffect
+from rpgagent.systems.moral_debt import MoralDebtSystem
+from rpgagent.systems.dialogue import DialogueSystem
+from rpgagent.systems.inventory import InventorySystem
+from rpgagent.systems.stats import StatsSystem
+from rpgagent.data.database import Database
 
 
 # ──────────────────────────────────────────────

@@ -18,3 +18,7 @@
 - 假装友善，骗他开门
 - 直接威胁他
 - 找借口离开
+
+---
+
+> 📝 DM 指引：当玩家选择"吹倒草屋"或成功"骗他开门"时，场景应过渡到 **straw_house_won**。过渡时在叙事末尾标注 `[GM_COMMAND]\naction: transition\nnext_scene: straw_house_won\n[/GM_COMMAND]`

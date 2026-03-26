@@ -1,14 +1,14 @@
 # tests/unit/test_gm_command_parser.py
 import pytest
-from systems.moral_debt import MoralDebtSystem
-from systems.dialogue import DialogueSystem
+from rpgagent.systems.moral_debt import MoralDebtSystem
+from rpgagent.systems.dialogue import DialogueSystem
 
 
 class TestGMCommandParser:
     """测试 GameMaster 的 GM_COMMAND 解析逻辑"""
 
     def test_parse_full_command(self):
-        from core.game_master import GMCommandParser
+        from rpgagent.core.game_master import GMCommandParser
         text = """
         叙事内容开始...
         [GM_COMMAND]
@@ -27,19 +27,19 @@ class TestGMCommandParser:
         assert cmd["moral_debt_source"] == "目睹暴行"
 
     def test_parse_narrative_only(self):
-        from core.game_master import GMCommandParser
+        from rpgagent.core.game_master import GMCommandParser
         text = "这里只有叙事内容，没有任何指令块。"
         cmd = GMCommandParser.parse(text)
         assert cmd is None
 
     def test_parse_mixed(self):
-        from core.game_master import GMCommandParser
+        from rpgagent.core.game_master import GMCommandParser
         text = "[GM_COMMAND]\naction: narrative\n[/GM_COMMAND]"
         cmd = GMCommandParser.parse(text)
         assert cmd["action"] == "narrative"
 
     def test_extract_narrative(self):
-        from core.game_master import GMCommandParser
+        from rpgagent.core.game_master import GMCommandParser
         text = """
         你走进房间，看到桌上有一把剑。
 
@@ -59,7 +59,7 @@ class TestMoralDebtIntegration:
     """测试道德债务系统与 GM_COMMAND 的联动"""
 
     def test_execute_moral_debt_delta(self):
-        from core.game_master import GMCommandParser
+        from rpgagent.core.game_master import GMCommandParser
         sys = MoralDebtSystem()
 
         cmd = {
@@ -96,7 +96,7 @@ class TestMoralDebtIntegration:
 
     def test_parse_action_tag(self):
         """测试 action_tag 字段解析（HiddenValueSystem 联动）"""
-        from core.game_master import GMCommandParser
+        from rpgagent.core.game_master import GMCommandParser
 
         text = """
         你选择了袖手旁观。
@@ -114,7 +114,7 @@ class TestMoralDebtIntegration:
 
     def test_parse_combat_command(self):
         """测试战斗指令解析"""
-        from core.game_master import GMCommandParser
+        from rpgagent.core.game_master import GMCommandParser
 
         text = """
         [GM_COMMAND]
@@ -134,7 +134,7 @@ class TestMoralDebtIntegration:
 
     def test_extract_narrative_with_multiple_commands(self):
         """多行 GM_COMMAND 块不影响 narrative 提取"""
-        from core.game_master import GMCommandParser
+        from rpgagent.core.game_master import GMCommandParser
 
         text = """
         你走进昏暗的房间。

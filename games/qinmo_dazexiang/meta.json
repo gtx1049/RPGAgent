@@ -1,0 +1,55 @@
+{
+  "id": "qinmo_dazexiang",
+  "name": "秦末·大泽乡",
+  "version": "1.0",
+  "author": "RPGAgent",
+  "summary": "公元前209年，你是一名被征召入伍的戍卒。大雨困住了九百人，前路是死路一条。陈胜说：要么我们死，要么我们反。",
+  "tags": ["历史", "秦末", "起义", "第一章", "完整战役"],
+  "first_scene": "daze_camp",
+  "systems_enabled": {
+    "moral_debt": true,
+    "combat": true
+  },
+  "hidden_values": [
+    {
+      "id": "moral_debt",
+      "name": "道德债务",
+      "description": "你的沉默与不作为会在内心累积债务。值越高，你与昔日良善的距离越远。",
+      "direction": "ascending",
+      "thresholds": [0, 11, 26, 51, 76],
+      "effects": {
+        "0":  {"narrative_tone": "内心平静，尚未背负任何重量", "locked_options": []},
+        "11": {"narrative_tone": "内心开始有声音", "locked_options": []},
+        "26": {"narrative_tone": "你开始合理化自己的沉默", "locked_options": ["主动干预"]},
+        "51": {"narrative_tone": "你已经习惯了", "locked_options": ["主动干预", "积极行动"]},
+        "76": {"narrative_tone": "你不再相信正直有意义", "locked_options": ["主动干预", "积极行动", "道德洁癖选项"], "trigger_scene": "moral_collapse"}
+      }
+    },
+    {
+      "id": "revolutionary_spirit",
+      "name": "反抗意志",
+      "description": "你内心对暴政的怒火有多旺盛。它会决定你在关键时刻敢不敢动手。",
+      "direction": "ascending",
+      "thresholds": [0, 20, 50, 80],
+      "effects": {
+        "0":  {"narrative_tone": "你只想活着回家", "locked_options": []},
+        "20": {"narrative_tone": "心中有一丝不甘", "locked_options": []},
+        "50": {"narrative_tone": "怒火在胸口燃烧", "locked_options": []},
+        "80": {"narrative_tone": "死亦为鬼雄", "locked_options": [], "trigger_scene": "spirit_awakened"}
+      }
+    }
+  ],
+  "hidden_value_actions": {
+    "watch_soldiers_abused":        {"moral_debt": 5,  "revolutionary_spirit": 3},
+    "keep_silent":                  {"moral_debt": 3,  "revolutionary_spirit": 0},
+    "comfort_fellow_conscript":     {"moral_debt": -2, "revolutionary_spirit": 2},
+    "speak_up_for_others":         {"moral_debt": -3, "revolutionary_spirit": 5},
+    "confront_officer":             {"revolutionary_spirit": 10, "moral_debt": -2},
+    "kill_officer":                 {"revolutionary_spirit": 25, "moral_debt": 15},
+    "hesitate_to_act":              {"revolutionary_spirit": -5, "moral_debt": 5},
+    "run_away":                     {"revolutionary_spirit": -15},
+    "recruit_companions":           {"revolutionary_spirit": 8},
+    "make_plans":                   {"revolutionary_spirit": 5},
+    "fox_cry_fire":                 {"revolutionary_spirit": 20, "moral_debt": 8}
+  }
+}

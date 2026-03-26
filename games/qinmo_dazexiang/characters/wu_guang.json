@@ -1,0 +1,11 @@
+{
+  "id": "wu_guang",
+  "name": "吴广",
+  "role": "npc",
+  "description": "阳夏人，字叔。性情豪爽，善抚人心。士兵们都愿意跟着他。",
+  "acquaintances": {
+    "chen_sheng": 0.9,
+    "soldier_1": 0.5,
+    "soldier_2": 0.4
+  }
+}

@@ -12,8 +12,8 @@
 
 import pytest
 
-from systems.hidden_value import HiddenValueSystem
-from data.database import Database
+from rpgagent.systems.hidden_value import HiddenValueSystem
+from rpgagent.data.database import Database
 
 
 # ────────────────────────────────────────────────

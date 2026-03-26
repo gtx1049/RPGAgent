@@ -1,6 +1,6 @@
 # tests/unit/test_dialogue.py
 import pytest
-from systems.dialogue import DialogueSystem, DialogueLine, RELATION_LEVELS
+from rpgagent.systems.dialogue import DialogueSystem, DialogueLine, RELATION_LEVELS
 
 
 class TestDialogueSystem:

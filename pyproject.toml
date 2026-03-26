@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rpgagent"
+version = "0.1.0"
+description = "LLM-driven RPG game engine with hidden stat system"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "RPGAgent Team"}
+]
+keywords = ["rpg", "game-engine", "llm", "dm", "tabletop"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "agentscope>=0.1.0",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "websockets>=12.0",
+    "pydantic>=2.0",
+    "pytest>=8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.3.0",
+]
+
+[project.scripts]
+rpg = "rpgagent.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rpgagent*"]
+exclude = ["rpgagent.tests*", "rpgagent.scripts*", "rpgagent.docs*"]
+
+[tool.setuptools.package-data]
+rpgagent = ["py.typed", "static/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"

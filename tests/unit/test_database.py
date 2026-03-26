@@ -8,14 +8,14 @@ import json
 import pytest
 import tempfile
 from pathlib import Path
-from systems.hidden_value import HiddenValueSystem
+from rpgagent.systems.hidden_value import HiddenValueSystem
 
 
 class TestDatabaseBasics:
     """数据库初始化与连接"""
 
     def test_init_creates_schema(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("test_init", db_dir=tmp_path)
         assert db.db_path.exists()
         # schema 初始化不抛异常即可
@@ -23,7 +23,7 @@ class TestDatabaseBasics:
         assert all(v == 0 for v in stats.values())
 
     def test_game_id_in_path(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("my_quest_v1", db_dir=tmp_path)
         assert db.db_path.name == "my_quest_v1.db"
         assert db.game_id == "my_quest_v1"
@@ -33,7 +33,7 @@ class TestWorldEvents:
     """世界事件表"""
 
     def test_insert_and_query_events(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("events_test", db_dir=tmp_path)
 
         id1 = db.insert_event(turn=1, scene_id="scene_01", summary="进入村庄")
@@ -46,7 +46,7 @@ class TestWorldEvents:
         assert events[0]["id"] == id2
 
     def test_query_events_by_turn(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("events_turn_test", db_dir=tmp_path)
 
         db.insert_event(turn=1, scene_id="s1", summary="event 1")
@@ -58,7 +58,7 @@ class TestWorldEvents:
         assert events[0]["summary"] == "event 2"
 
     def test_insert_event_with_tags(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("events_tags_test", db_dir=tmp_path)
 
         db.insert_event(turn=1, scene_id="s1", summary="触发伏笔",
@@ -71,7 +71,7 @@ class TestNPCState:
     """NPC 状态表"""
 
     def test_upsert_and_get_npc_state(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("npc_test", db_dir=tmp_path)
 
         db.upsert_npc_state(
@@ -89,7 +89,7 @@ class TestNPCState:
         assert json.loads(state["flags"])["drunk"] is True
 
     def test_upsert_npc_updates_existing(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("npc_update_test", db_dir=tmp_path)
 
         db.upsert_npc_state("liubei", name="刘备", relation_value=50)
@@ -99,7 +99,7 @@ class TestNPCState:
         assert state["relation_value"] == 80
 
     def test_get_all_npc_states(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("npc_all_test", db_dir=tmp_path)
 
         db.upsert_npc_state("npc1", name="NPC1")
@@ -109,7 +109,7 @@ class TestNPCState:
         assert len(all_npcs) == 2
 
     def test_query_npcs_in_scene(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("npc_scene_test", db_dir=tmp_path)
 
         db.upsert_npc_state("guard", name="守卫", current_location="gate")
@@ -125,7 +125,7 @@ class TestDialogueHistory:
     """对话历史表"""
 
     def test_insert_and_query_dialogue(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("dialogue_test", db_dir=tmp_path)
 
         db.insert_dialogue(
@@ -143,7 +143,7 @@ class TestDialogueHistory:
         assert "张辽" in dialogues[0]["summary"]
 
     def test_get_npc_dialogue_summary(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("dialogue_summary_test", db_dir=tmp_path)
 
         db.insert_dialogue("npc_x", 1, "npc", "第一句", summary="第一句摘要")
@@ -156,7 +156,7 @@ class TestDialogueHistory:
         assert summary[0]["summary"] == "第二句摘要"
 
     def test_dialogue_query_respects_limit(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("dialogue_limit_test", db_dir=tmp_path)
 
         for i in range(20):
@@ -170,7 +170,7 @@ class TestHiddenValuePersistence:
     """隐藏数值表的 CRUD（独立于 HiddenValueSystem 的纯数据库测试）"""
 
     def test_insert_and_get_records(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("hv_records_test", db_dir=tmp_path)
 
         db.insert_hidden_value_record(
@@ -197,7 +197,7 @@ class TestHiddenValuePersistence:
         assert records[0]["source"] == "再次沉默"
 
     def test_upsert_and_get_state(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("hv_state_test", db_dir=tmp_path)
 
         db.upsert_hidden_value_state(
@@ -213,7 +213,7 @@ class TestHiddenValuePersistence:
         assert state["level"] == 2
 
     def test_upsert_state_updates_level(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("hv_state_update_test", db_dir=tmp_path)
 
         db.upsert_hidden_value_state("test_hv", name="测试", level=1)
@@ -223,7 +223,7 @@ class TestHiddenValuePersistence:
         assert state["level"] == 3
 
     def test_get_all_hidden_value_states(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("hv_all_test", db_dir=tmp_path)
 
         db.upsert_hidden_value_state("hv_a", name="A", level=0)
@@ -234,7 +234,7 @@ class TestHiddenValuePersistence:
 
     def test_records_order_newest_first(self, tmp_path):
         """验证记录按 id 倒序（最新优先）"""
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("hv_order_test", db_dir=tmp_path)
 
         for i in range(5):
@@ -251,7 +251,7 @@ class TestSceneFlags:
     """场景标记表"""
 
     def test_set_and_get_flag(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("flags_test", db_dir=tmp_path)
 
         db.set_scene_flag("quest_accepted", True)
@@ -261,12 +261,12 @@ class TestSceneFlags:
         assert db.get_scene_flag("chapter") == 3
 
     def test_get_nonexistent_flag(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("flags_none_test", db_dir=tmp_path)
         assert db.get_scene_flag("never_set") is None
 
     def test_set_flag_overwrites(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("flags_overwrite_test", db_dir=tmp_path)
 
         db.set_scene_flag("counter", 10)
@@ -275,7 +275,7 @@ class TestSceneFlags:
         assert db.get_scene_flag("counter") == 99
 
     def test_get_all_scene_flags(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("flags_all_test", db_dir=tmp_path)
 
         db.set_scene_flag("a", 1)
@@ -292,7 +292,7 @@ class TestSaves:
     """存档表"""
 
     def test_save_and_load_snapshot(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("saves_test", db_dir=tmp_path)
 
         snapshot = {
@@ -309,12 +309,12 @@ class TestSaves:
         assert loaded["stats"]["hp"] == 80
 
     def test_load_nonexistent_save(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("saves_none_test", db_dir=tmp_path)
         assert db.load_snapshot("ghost_save") is None
 
     def test_save_overwrites(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("saves_overwrite_test", db_dir=tmp_path)
 
         db.save_snapshot("save_x", {"v": 1})
@@ -324,7 +324,7 @@ class TestSaves:
         assert loaded["v"] == 999
 
     def test_list_saves(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("saves_list_test", db_dir=tmp_path)
 
         db.save_snapshot("save_a", {"a": 1}, slot=0)
@@ -338,7 +338,7 @@ class TestDatabaseStats:
     """统计方法"""
 
     def test_stats_counts_all_tables(self, tmp_path):
-        from data.database import Database
+        from rpgagent.data.database import Database
         db = Database("stats_all_test", db_dir=tmp_path)
 
         # 写一些数据
@@ -363,7 +363,7 @@ class TestDatabaseIntegrationHiddenValueSystem:
 
     def test_hidden_value_system_full_round_trip(self, tmp_path):
         """save_to_db → 新实例 load_from_db，数据完全一致"""
-        from data.database import Database
+        from rpgagent.data.database import Database
 
         db = Database("hvs_integration_test", db_dir=tmp_path)
 
@@ -435,7 +435,7 @@ class TestDatabaseIntegrationHiddenValueSystem:
 
     def test_save_to_db_with_empty_records(self, tmp_path):
         """没有任何 records 时 save_to_db 不应出错"""
-        from data.database import Database
+        from rpgagent.data.database import Database
 
         db = Database("hvs_empty_test", db_dir=tmp_path)
 
@@ -452,7 +452,7 @@ class TestDatabaseIntegrationHiddenValueSystem:
 
     def test_multiple_save_calls_are_idempotent(self, tmp_path):
         """多次 save_to_db 不产生重复记录"""
-        from data.database import Database
+        from rpgagent.data.database import Database
 
         db = Database("hvs_idempotent_test", db_dir=tmp_path)
 

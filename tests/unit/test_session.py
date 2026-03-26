@@ -3,7 +3,7 @@ import pytest
 import json
 import tempfile
 from pathlib import Path
-from core.session import Session, GameState, SaveFile
+from rpgagent.core.session import Session, GameState, SaveFile
 
 
 class TestSession:

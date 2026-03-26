@@ -6,13 +6,13 @@ PromptBuilder 单元测试。
 
 import pytest
 from unittest.mock import MagicMock
-from core.prompt_builder import PromptBuilder, SYSTEM_PROMPT_TEMPLATE
-from core.context_loader import Scene, GameMeta, GameLoader
-from systems.stats import StatsSystem
-from systems.moral_debt import MoralDebtSystem
-from systems.inventory import InventorySystem, Item
-from systems.dialogue import DialogueSystem
-from systems.hidden_value import HiddenValueSystem, LevelEffect
+from rpgagent.core.prompt_builder import PromptBuilder, SYSTEM_PROMPT_TEMPLATE
+from rpgagent.core.context_loader import Scene, GameMeta, GameLoader
+from rpgagent.systems.stats import StatsSystem
+from rpgagent.systems.moral_debt import MoralDebtSystem
+from rpgagent.systems.inventory import InventorySystem, Item
+from rpgagent.systems.dialogue import DialogueSystem
+from rpgagent.systems.hidden_value import HiddenValueSystem, LevelEffect
 
 
 # ────────────────────────────────────────────────
@@ -34,7 +34,7 @@ class MockGameLoader:
 
     def get_scene(self, scene_id):
         """返回模拟场景（title=scene_id）"""
-        from core.context_loader import Scene
+        from rpgagent.core.context_loader import Scene
         return Scene(id=scene_id, title=f"场景·{scene_id}", content="")
 
 

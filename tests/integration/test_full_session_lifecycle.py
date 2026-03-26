@@ -16,15 +16,15 @@ import tempfile
 import shutil
 from pathlib import Path
 
-from core.session import Session, SaveFile, GameState
-from core.context_loader import GameLoader, GameMeta, Scene
-from core.prompt_builder import PromptBuilder
-from systems.stats import StatsSystem
-from systems.moral_debt import MoralDebtSystem
-from systems.inventory import InventorySystem, Item
-from systems.dialogue import DialogueSystem
-from systems.hidden_value import HiddenValueSystem, HiddenValue, LevelEffect
-from data.database import Database
+from rpgagent.core.session import Session, SaveFile, GameState
+from rpgagent.core.context_loader import GameLoader, GameMeta, Scene
+from rpgagent.core.prompt_builder import PromptBuilder
+from rpgagent.systems.stats import StatsSystem
+from rpgagent.systems.moral_debt import MoralDebtSystem
+from rpgagent.systems.inventory import InventorySystem, Item
+from rpgagent.systems.dialogue import DialogueSystem
+from rpgagent.systems.hidden_value import HiddenValueSystem, HiddenValue, LevelEffect
+from rpgagent.data.database import Database
 
 
 # ────────────────────────────────────────────────

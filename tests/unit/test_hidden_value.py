@@ -1,7 +1,7 @@
 # tests/unit/test_hidden_value.py
 import pytest
 from contextlib import contextmanager
-from systems.hidden_value import (
+from rpgagent.systems.hidden_value import (
     HiddenValue, HiddenValueSystem, LevelEffect, HiddenValueRecord
 )
 
@@ -632,7 +632,7 @@ class TestHiddenValueSystemPersistence:
         import json
         import sqlite3
         from pathlib import Path
-        from systems.hidden_value import HiddenValueSystem
+        from rpgagent.systems.hidden_value import HiddenValueSystem
 
         db_path = tmp_path / "test_hv.db"
         conn = sqlite3.connect(str(db_path))
