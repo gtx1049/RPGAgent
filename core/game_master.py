@@ -130,9 +130,12 @@ class GameMaster:
         # AgentScope Agent（用于生成叙事）
         self._agent: Optional[agent.ReActAgent] = None
 
+        # GMS 工具集（AgentScope Toolkit）
+        self._toolkit: Optional[Any] = None
+
     @property
     def dm(self) -> agent.ReActAgent:
-        """懒加载 DM Agent"""
+        """懒加载 DM Agent（带 GMS 工具集）"""
         if self._agent is None:
             scene = self.get_current_scene()
             sys_prompt = (
@@ -141,11 +144,21 @@ class GameMaster:
                 else "你是RPG游戏主持人。"
             )
             from agentscope.formatter._openai_formatter import OpenAIChatFormatter
+            from core.gms_tools import create_gms_tools
+            from agentscope.tool import Toolkit
+
+            # 创建 Toolkit 并注册 GMS 工具
+            self._toolkit = Toolkit()
+            tool_funcs = create_gms_tools(self)
+            for func in tool_funcs:
+                self._toolkit.register_tool_function(func)
+
             self._agent = agent.ReActAgent(
                 name="GameMaster",
                 sys_prompt=sys_prompt,
                 model=self.model,
                 formatter=OpenAIChatFormatter(),
+                toolkit=self._toolkit,
                 max_iters=10,
                 print_hint_msg=False,
             )

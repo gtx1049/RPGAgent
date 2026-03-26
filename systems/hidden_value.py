@@ -306,6 +306,14 @@ class HiddenValue:
             for r in self.records[-n:]
         ]
 
+    def get_value(self) -> int:
+        """返回当前原始累积值"""
+        return self._compute_raw_value()
+
+    def get_current_level_name(self) -> str:
+        """返回当前档位名称（当前为 level_idx 的字符串）"""
+        return str(self.level_idx)
+
     def get_snapshot(self) -> Dict[str, Any]:
         return {
             "id": self.id,
@@ -937,6 +945,44 @@ class HiddenValueSystem:
                 "narrative_hint": eff.narrative_hint,
             }
         return result
+
+    # ────────────────────────────────────────────────
+    # gms_tools.py 兼容层（补充缺失的方法）
+    # ────────────────────────────────────────────────
+
+    def get_hidden_value(self, hidden_value_id: str) -> "Optional[HiddenValue]":
+        """返回指定 ID 的 HiddenValue，不存在则返回 None"""
+        return self.values.get(hidden_value_id)
+
+    def get_all_levels(self) -> Dict[str, int]:
+        """返回 {hidden_value_id: level_idx}"""
+        return {vid: hv.level_idx for vid, hv in self.values.items()}
+
+    def get_all_level_names(self) -> Dict[str, str]:
+        """返回 {hidden_value_id: level_name}（当前为 level_idx 的字符串形式）"""
+        return {vid: str(hv.level_idx) for vid, hv in self.values.items()}
+
+    @property
+    def hidden_values(self) -> Dict[str, "HiddenValue"]:
+        """属性别名，兼容 gms_tools.py 的 hv_sys.hidden_values 访问"""
+        return self.values
+
+    def is_option_locked_by_any(self, option_type: str) -> bool:
+        """检查任意 HiddenValue 是否锁定了给定选项类型"""
+        for hv in self.values.values():
+            if option_type in hv.get_locked_options():
+                return True
+        return False
+
+    def check_trigger(self, scene_id: str, turn: int) -> Optional[str]:
+        """
+        检查是否有待触发的场景。
+        参数 scene_id 和 turn 被忽略，仅返回第一个待执行场景。
+        """
+        pending = self.get_pending_triggered_scenes()
+        if pending:
+            return next(iter(pending.values()))
+        return None
 
     def save_to_db(self, db) -> None:
         """
