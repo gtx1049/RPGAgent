@@ -101,8 +101,17 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 continue
 
             if action == "player_input":
-                content = msg.get("content", "").strip()
+                from rpgagent.utils.sanitize import sanitize_for_llm
+                raw_content = msg.get("content", "").strip()
+                if not raw_content:
+                    continue
+                # 过滤注入攻击
+                content = sanitize_for_llm(raw_content)
                 if not content:
+                    await websocket.send_json({
+                        "type": "error",
+                        "content": "输入内容包含违规字符，已被系统拦截。",
+                    })
                     continue
 
                 # 生成叙事（可能耗时）
