@@ -41,13 +41,24 @@ DEFAULT_STATS = {
     "max_hp": 100,
     "stamina": 100,
     "max_stamina": 100,
-    "strength": 10,
-    "agility": 10,
-    "intelligence": 10,
-    "charisma": 10,
+    "action_points": 3,
+    "max_action_points": 3,
+    "level": 1,
+    "exp": 0,
+    "exp_to_level": 100,
+    # D&D 六属性
+    "strength": 10,      # 力量
+    "dexterity": 10,    # 敏捷
+    "constitution": 10,  # 体质
+    "intelligence": 10,  # 智力
+    "wisdom": 10,       # 感知
+    "charisma": 10,     # 魅力
 }
 
 DEFAULT_MORAL_DEBT = 0  # 道德债务初始值
+
+# 行动点系统
+DEFAULT_AP = 3  # 每回合行动点
 
 # 战斗系统
 COMBAT_DICE = 20  # d20 系统

@@ -306,11 +306,11 @@ class GameMaster:
                         action_tag=action_tag,
                     )
 
-        if action == "transition":
-            next_scene = cmd.get("next_scene")
-            if next_scene:
-                self.session.update_state(scene_id=next_scene)
-                self.current_scene = self.game_loader.get_scene(next_scene)
+        # 场景切换指令（next_scene 字段在任何 action 类型下均可触发）
+        next_scene = cmd.get("next_scene")
+        if next_scene:
+            self.session.update_state(scene_id=next_scene)
+            self.current_scene = self.game_loader.get_scene(next_scene)
 
         # 道德债务指令
         if "moral_debt_delta" in cmd:
