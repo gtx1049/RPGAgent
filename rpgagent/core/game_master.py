@@ -122,6 +122,10 @@ class GameMaster:
         from rpgagent.systems.roll_system import RollSystem
         self.roll_sys = RollSystem(self.stats_sys, self.skill_sys, self.equipment_sys)
 
+        # 装备获取系统（战利品/宝箱/NPC交易）
+        from rpgagent.systems.acquisition import AcquisitionSystem
+        self.acquisition_sys = AcquisitionSystem()
+
         self.model = AnthropicChatModel(
             model_name=model_name,
             api_key=api_key,
@@ -446,8 +450,70 @@ class GameMaster:
             self.skill_sys.add_skill_points(total_spent)
             self.session.flags["_skill_msg"] = f"技能已重置，返还{total_spent}点技能点"
 
+        # ── 装备获取指令 ─────────────────────────────────────
+        # grant_equipment: 战利品/奖励直接发放装备
+        if "grant_equipment" in cmd:
+            equip_id = cmd.get("grant_equipment", "").strip()
+            if equip_id:
+                from rpgagent.systems.equipment_system import get_template_equipment
+                equip = get_template_equipment(equip_id)
+                if equip:
+                    result = self.acquisition_sys.grant_equipment(equip)
+                    self.session.flags["_loot_item"] = result
+                    self.session.flags["_loot_message"] = (
+                        f"【获得装备】{result['rarity_display']}「{equip.name}」"
+                        f"（{equip.slot}槽）"
+                        f"{' 技能：' + equip.stats.skill_id if equip.stats.skill_id else ''}"
+                    )
+                    # 自动装备（如果对应槽位为空）
+                    current = self.equipment_sys.equipped.get(equip.slot)
+                    if current is None:
+                        eq_result = self.equipment_sys.equip(equip)
+                        self.session.flags["_loot_message"] += f"\n已自动装备「{equip.name}」到「{equip.slot}」槽。"
+                        # 更新 bonus 到 stats
+                        self.stats_sys.recalculate_from_equipment(self.equipment_sys.total_bonus)
+                    else:
+                        self.session.flags["_loot_message"] += f"\n「{equip.slot}」槽已有「{current.name}」，可输入「换装 {equip.name}」替换。"
 
-        # 属性修改指令
+        # open_chest: 开启宝箱
+        if "open_chest" in cmd:
+            chest_id = cmd.get("open_chest", "").strip()
+            if chest_id:
+                result = self.acquisition_sys.open_chest(chest_id)
+                self.session.flags["_chest_result"] = result
+                if result["success"]:
+                    detail = result["detail"]
+                    msgs = []
+                    for item in detail["items"]:
+                        grant = self.acquisition_sys.grant_equipment(item)
+                        self.session.flags["_loot_item"] = grant
+                        msgs.append(f"{grant['rarity_display']}「{item.name}」")
+                        # 自动装备
+                        current = self.equipment_sys.equipped.get(item.slot)
+                        if current is None:
+                            self.equipment_sys.equip(item)
+                    gold = detail.get("gold", 0)
+                    item_str = "、".join(msgs) if msgs else "空空如也"
+                    gold_str = f"，金币 +{gold}" if gold > 0 else ""
+                    self.session.flags["_loot_message"] = (
+                        f"【开启宝箱「{detail['chest_name']}」】\n"
+                        f"获得了：{item_str}{gold_str}"
+                    )
+                    if gold > 0:
+                        self.stats_sys.modify("gold", gold)
+                else:
+                    self.session.flags["_loot_message"] = f"【宝箱】{result['message']}"
+
+        # npc_trade / buy_equipment: NPC 交易（展示商品）
+        if "npc_trade" in cmd or "buy_equipment" in cmd:
+            npc_id = cmd.get("npc_trade", "") or cmd.get("buy_equipment", "")
+            npc_id = npc_id.strip() if npc_id else ""
+            if npc_id:
+                wares = self.acquisition_sys.get_merchant_wares(npc_id)
+                self.session.flags["_merchant_wares"] = wares
+                self.session.flags["_merchant_id"] = npc_id
+
+        # 主动作力消耗
         if "stat_delta" in cmd and "stat_name" in cmd:
             try:
                 stat = cmd["stat_name"]

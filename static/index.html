@@ -49,7 +49,7 @@
 
     <!-- 状态 -->
     <div class="panel">
-      <div class="panel-title">状态</div>
+      <div class="panel-title">角色状态</div>
       <div class="stat-row">
         <span id="hp-label">HP —/—</span>
         <div class="stat-bar-wrap">
@@ -62,11 +62,36 @@
           <div class="stat-bar-fill" id="stamina-fill" style="width:100%"></div>
         </div>
       </div>
+      <!-- 行动力 -->
+      <div class="stat-row">
+        <span>行动力</span>
+        <div id="ap-dots">
+          <span class="ap-dot" id="ap-1">●</span>
+          <span class="ap-dot" id="ap-2">●</span>
+          <span class="ap-dot" id="ap-3">●</span>
+        </div>
+      </div>
       <div class="stat-row">
         <span>道德债务</span>
         <span class="moral-badge" id="moral-badge">—</span>
       </div>
       <div class="turn-counter" id="turn-counter">第 0 回合</div>
+    </div>
+
+    <!-- 技能 -->
+    <div class="panel" id="skills-panel">
+      <div class="panel-title">已学技能</div>
+      <div id="skills-list">
+        <div style="font-size:12px;color:var(--text-dim)">暂无已学技能</div>
+      </div>
+    </div>
+
+    <!-- 装备 -->
+    <div class="panel" id="equip-panel">
+      <div class="panel-title">当前装备</div>
+      <div id="equip-list">
+        <div style="font-size:12px;color:var(--text-dim)">无装备</div>
+      </div>
     </div>
 
     <!-- NPC 关系 -->
@@ -77,23 +102,34 @@
       </div>
     </div>
 
-    <!-- 选项 -->
-    <div id="options-area" style="display:none; border-bottom:1px solid var(--border)">
+    <!-- 选项（GM给出的选项） -->
+    <div id="options-area" style="display:none">
       <div class="panel-title">选项</div>
     </div>
 
-    <!-- 输入 -->
-    <div id="input-area">
-      <textarea
-        id="player-input"
-        rows="3"
-        placeholder="输入你的行动或对话…"
-        disabled
-      ></textarea>
-      <div class="btn-row">
-        <button class="btn-primary" id="submit-btn" disabled>发送</button>
-        <button class="btn-secondary" id="status-btn" onclick="send({action:'get_status'})">状态</button>
+    <!-- 行动按钮 -->
+    <div class="panel" id="action-panel">
+      <div class="panel-title">行动</div>
+      <div id="action-buttons">
+        <!-- 基础行动按钮，由JS动态渲染 -->
       </div>
+      <!-- 自定义行动输入框（默认隐藏） -->
+      <div id="custom-action-box" style="display:none; margin-top:10px">
+        <textarea
+          id="custom-input"
+          rows="2"
+          placeholder="描述你的行动或对话…"
+        ></textarea>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn-primary" id="custom-submit-btn" onclick="submitCustomAction()">发送</button>
+          <button class="btn-secondary" onclick="cancelCustomAction()">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 状态按钮 -->
+    <div class="panel">
+      <button class="btn-secondary" style="width:100%" onclick="send({action:'get_status'})">查看完整状态</button>
     </div>
 
   </div>

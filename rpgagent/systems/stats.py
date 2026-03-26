@@ -94,6 +94,7 @@ class StatsSystem(IStatsSystem):
         self.ability = AbilityScores(**{k: defaults[k] for k in [
             "strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"
         ] if k in defaults})
+        self.gold = 0  # 金币（独立属性，不在 Stats dataclass 中）
 
     def get(self, key: str) -> int:
         return getattr(self.stats, key, 0)
@@ -108,6 +109,9 @@ class StatsSystem(IStatsSystem):
             self.stats.stamina = max(0, min(new_val, self.stats.max_stamina))
         elif key in ("action_power",):
             self.stats.action_power = max(0, min(new_val, self.stats.max_action_power))
+        elif key == "gold":
+            self.gold = max(0, new_val)
+            return self.gold
         else:
             setattr(self.stats, key, new_val)
 
@@ -162,6 +166,7 @@ class StatsSystem(IStatsSystem):
     def get_snapshot(self) -> Dict:
         return {
             **self.stats.to_dict(),
+            "gold": self.gold,
             "ability": self.ability.to_dict(),
             "ability_modifiers": {
                 "strength": self.ability.modifier("strength"),

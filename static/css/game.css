@@ -586,3 +586,208 @@ body {
   #sidebar { display: none; }
   body { font-size: 14px; }
 }
+
+/* ── 行动力点 ─────────────────────────── */
+#ap-dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.ap-dot {
+  font-size: 14px;
+  color: var(--stamina-color);
+  transition: color 0.3s;
+  line-height: 1;
+}
+
+.ap-dot.spent {
+  color: var(--bg-primary);
+  opacity: 0.3;
+}
+
+/* ── 技能列表 ─────────────────────────── */
+#skills-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skill-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+  margin: 2px 0;
+}
+
+.skill-tag:hover {
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.skill-tag.passive {
+  background: var(--bg-input);
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.skill-tag.passive:hover {
+  border-color: var(--border);
+  color: var(--text-dim);
+}
+
+.skill-tag .skill-rank {
+  font-size: 10px;
+  color: var(--gold);
+  margin-left: 2px;
+}
+
+/* ── 装备列表 ─────────────────────────── */
+#equip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.equip-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: var(--bg-panel);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.equip-item .equip-slot {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.equip-item .equip-name {
+  color: var(--text);
+  font-weight: bold;
+}
+
+.rarity-common { color: #aaa; }
+.rarity-uncommon { color: #1eff00; }
+.rarity-rare { color: #0070dd; }
+.rarity-epic { color: #a335ee; }
+.rarity-legendary { color: #ff8000; }
+
+/* ── 行动按钮 ─────────────────────────── */
+#action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.action-btn {
+  padding: 6px 10px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.action-btn:hover {
+  border-color: var(--accent);
+  color: #fff;
+  background: var(--bg-input);
+}
+
+.action-btn:active {
+  transform: scale(0.96);
+}
+
+.action-btn.skill-btn {
+  border-color: var(--accent2);
+}
+
+.action-btn.skill-btn:hover {
+  border-color: var(--gold);
+}
+
+.action-btn.special-btn {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.action-btn.special-btn:hover {
+  background: rgba(240, 192, 64, 0.1);
+}
+
+.action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#action-panel textarea {
+  width: 100%;
+  padding: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  resize: none;
+  outline: none;
+  line-height: 1.5;
+}
+
+#action-panel textarea:focus {
+  border-color: var(--accent);
+}
+
+#custom-submit-btn {
+  flex: 1;
+  padding: 7px;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ── GM选项按钮（来自GM的选项）───────────── */
+.gm-option-btn {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.gm-option-btn:hover {
+  background: var(--bg-input);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.gm-option-btn:active {
+  transform: scale(0.98);
+}

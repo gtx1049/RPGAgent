@@ -183,10 +183,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         "max_hp": stats.get("max_hp", 0),
                         "stamina": stats.get("stamina", 0),
                         "max_stamina": stats.get("max_stamina", 0),
+                        "action_power": stats.get("action_power", 0),
+                        "max_action_power": stats.get("max_action_power", 3),
                         "moral_debt_level": moral.get("level", ""),
                         "moral_debt_value": moral.get("debt", 0),
                         "turn": session.turn,
                         "npc_relations": npc_relations,
+                        "skills": session.gm.skill_sys.list_learned(),
+                        "equipped": session.gm.equipment_sys.get_equipped(),
                     },
                 })
 
@@ -219,10 +223,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         "max_hp": stats.get("max_hp", 0),
                         "stamina": stats.get("stamina", 0),
                         "max_stamina": stats.get("max_stamina", 0),
+                        "action_power": stats.get("action_power", 0),
+                        "max_action_power": stats.get("max_action_power", 3),
                         "moral_debt_level": moral.get("level", ""),
                         "moral_debt_value": moral.get("debt", 0),
                         "turn": session.turn,
                         "npc_relations": npc_relations,
+                        "skills": session.gm.skill_sys.list_learned(),
+                        "equipped": session.gm.equipment_sys.get_equipped(),
                     },
                 })
 
