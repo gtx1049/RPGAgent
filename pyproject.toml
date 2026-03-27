@@ -47,7 +47,7 @@ include = ["rpgagent*"]
 exclude = ["rpgagent.tests*", "rpgagent.scripts*", "rpgagent.docs*"]
 
 [tool.setuptools.package-data]
-rpgagent = ["py.typed", "static/*"]
+rpgagent = ["py.typed", "static/**/*"]
 
 [tool.ruff]
 line-length = 100

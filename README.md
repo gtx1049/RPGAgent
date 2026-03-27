@@ -29,7 +29,7 @@ RPGAgent 是一个基于大模型上下文能力的 RPG 游戏引擎。核心思
 | **双模式 Prompt 构建** | memory 模式（内存数值系统）和 db 模式（SQLite 按需查询）二合一，支持 hidden_value_sys 直接注入 |
 | **WebSocket 实时交互** | FastAPI + WebSocket 流式叙事，前端 `static/index.html` |
 | **REST API** | FastAPI 完整 CRUD：开始游戏/玩家行动/存档/读档 |
-| **可测试** | systems/ 全套单元测试，**323 个测试全部通过** |
+| **可测试** | systems/ 全套单元测试，**352 个测试全部通过（1 xfail）** |
 
 ---
 
