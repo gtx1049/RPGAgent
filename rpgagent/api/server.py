@@ -23,7 +23,7 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 from .game_manager import get_manager
-from .routes import games, logs, teammates, market, debug as debug_module, debug
+from .routes import games, logs, teammates, market, debug as debug_module, achievements, cg
 from ..config.settings import HOST, PORT, IMAGE_GENERATOR_CACHE_DIR
 
 _static_dir = _project_root.parent / "static"
@@ -60,6 +60,7 @@ app.include_router(logs.router, prefix="/api")
 app.include_router(teammates.router, prefix="/api")
 app.include_router(market.router, prefix="/api")
 app.include_router(debug_module.router, prefix="/api")
+app.include_router(achievements.router, prefix="/api")
 
 # CG 缓存目录静态文件服务
 from fastapi.staticfiles import StaticFiles
@@ -265,6 +266,52 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         "equipped": session.gm.equipment_sys.get_equipped(),
                     },
                 })
+
+            elif action == "get_achievements":
+                ach_sys = session.gm.achievement_sys
+                if ach_sys:
+                    await websocket.send_json({
+                        "type": "achievements",
+                        "content": "",
+                        "extra": {
+                            "achievements": ach_sys.list_achievements(),
+                            "unlocked_count": len(ach_sys.get_unlocked()),
+                            "total_count": len(ach_sys._achievements),
+                        },
+                    })
+                else:
+                    await websocket.send_json({
+                        "type": "achievements",
+                        "content": "",
+                        "extra": {"achievements": [], "unlocked_count": 0, "total_count": 0},
+                    })
+
+            elif action == "get_achievements_unlocked":
+                ach_sys = session.gm.achievement_sys
+                if ach_sys:
+                    unlocked = ach_sys.get_unlocked()
+                    await websocket.send_json({
+                        "type": "achievements_unlocked",
+                        "content": "",
+                        "extra": {
+                            "achievements": [
+                                {
+                                    "id": u.achievement_id,
+                                    "unlocked_at_turn": u.unlocked_at_turn,
+                                    "scene_id": u.scene_id,
+                                    "narrative": u.narrative,
+                                }
+                                for u in unlocked
+                            ],
+                            "count": len(unlocked),
+                        },
+                    })
+                else:
+                    await websocket.send_json({
+                        "type": "achievements_unlocked",
+                        "content": "",
+                        "extra": {"achievements": [], "count": 0},
+                    })
 
     except WebSocketDisconnect:
         pass
