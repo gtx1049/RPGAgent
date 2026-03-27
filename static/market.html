@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>剧本市场 - RPGAgent</title>
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --surface: #161923;
+      --surface2: #1e2330;
+      --border: #2a2f3d;
+      --gold: #c9a84c;
+      --gold-dim: #7a6230;
+      --text: #e0d8c8;
+      --text-dim: #7a7468;
+      --accent: #8b5cf6;
+      --accent-dim: #4c3280;
+      --green: #3ecf6e;
+      --red: #e05555;
+      --font: "Noto Serif SC", "Source Han Serif CN", "SimSun", serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+
+    /* atmosphere */
+    .glow { position: fixed; pointer-events: none; z-index: 0; }
+    .glow-1 { top: -200px; left: -200px; width: 600px; height: 600px; background: radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%); }
+    .glow-2 { bottom: -300px; right: -100px; width: 500px; height: 500px; background: radial-gradient(circle, rgba(201,168,76,0.06) 0%, transparent 70%); }
+
+    /* header */
+    header {
+      position: relative; z-index: 10;
+      padding: 24px 32px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    header .logo { font-size: 1.4rem; color: var(--gold); letter-spacing: 0.05em; }
+    header .logo span { color: var(--text-dim); font-size: 0.85rem; margin-left: 10px; }
+    header .actions { display: flex; gap: 10px; align-items: center; }
+    .btn {
+      padding: 7px 18px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--surface2); color: var(--text); cursor: pointer;
+      font-family: var(--font); font-size: 0.85rem; transition: all 0.15s;
+    }
+    .btn:hover { border-color: var(--gold); color: var(--gold); }
+    .btn-gold { border-color: var(--gold-dim); color: var(--gold); background: rgba(201,168,76,0.08); }
+    .btn-gold:hover { background: rgba(201,168,76,0.18); }
+
+    /* tag filter bar */
+    .filter-bar {
+      position: relative; z-index: 10;
+      padding: 12px 32px; border-bottom: 1px solid var(--border);
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    }
+    .filter-label { color: var(--text-dim); font-size: 0.78rem; margin-right: 4px; }
+    .tag-chip {
+      padding: 3px 12px; border-radius: 20px; border: 1px solid var(--border);
+      background: var(--surface2); color: var(--text-dim);
+      font-size: 0.75rem; cursor: pointer; transition: all 0.15s;
+    }
+    .tag-chip:hover, .tag-chip.active { border-color: var(--gold); color: var(--gold); }
+    .tag-chip.active { background: rgba(201,168,76,0.12); }
+
+    /* main content */
+    .main { position: relative; z-index: 10; padding: 24px 32px; }
+    .section-title { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 14px; }
+
+    /* game grid */
+    .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .game-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 18px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden;
+    }
+    .game-card::before {
+      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .game-card:hover { border-color: var(--gold-dim); transform: translateY(-2px); }
+    .game-card:hover::before { opacity: 1; }
+
+    .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .card-name { font-size: 1.05rem; color: var(--gold); font-weight: 600; line-height: 1.3; }
+    .card-version { font-size: 0.7rem; color: var(--text-dim); background: var(--surface2); padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); }
+    .card-author { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 8px; }
+    .card-summary { font-size: 0.82rem; color: var(--text-dim); line-height: 1.6; margin-bottom: 12px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .card-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px; }
+    .card-tag { font-size: 0.68rem; padding: 2px 8px; border-radius: 4px; background: var(--accent-dim); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.3); }
+    .card-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid var(--border); }
+    .card-meta { font-size: 0.72rem; color: var(--text-dim); }
+    .card-meta .ok { color: var(--green); }
+    .card-meta .warn { color: var(--red); }
+    .card-btn { padding: 5px 14px; font-size: 0.78rem; }
+
+    .source-badge { position: absolute; top: 10px; right: 10px; font-size: 0.62rem; padding: 2px 6px; border-radius: 4px; background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border); }
+
+    /* loading / empty */
+    .loading { text-align: center; color: var(--text-dim); padding: 60px; font-size: 0.9rem; }
+    .empty { text-align: center; color: var(--text-dim); padding: 60px; }
+    .empty .empty-icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.3; }
+
+    /* detail panel */
+    .detail-overlay {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+      justify-content: center; align-items: center;
+    }
+    .detail-overlay.show { display: flex; }
+    .detail-panel {
+      background: var(--surface); border: 1px solid var(--gold-dim); border-radius: 12px;
+      padding: 28px; width: min(560px, 90vw); max-height: 85vh; overflow-y: auto;
+      position: relative;
+    }
+    .detail-close { position: absolute; top: 14px; right: 14px; background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.2rem; }
+    .detail-close:hover { color: var(--text); }
+    .detail-name { font-size: 1.3rem; color: var(--gold); margin-bottom: 4px; }
+    .detail-meta { font-size: 0.78rem; color: var(--text-dim); margin-bottom: 14px; display: flex; gap: 12px; flex-wrap: wrap; }
+    .detail-section { margin-bottom: 16px; }
+    .detail-section-title { font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+    .detail-summary { font-size: 0.85rem; line-height: 1.7; color: var(--text); }
+    .detail-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+    .detail-tags .card-tag { font-size: 0.75rem; }
+    .detail-warn { background: rgba(224,85,85,0.1); border: 1px solid rgba(224,85,85,0.3); border-radius: 6px; padding: 10px; font-size: 0.78rem; color: var(--red); margin-top: 10px; }
+    .detail-actions { display: flex; gap: 10px; margin-top: 18px; }
+
+    /* count bar */
+    .count-bar { font-size: 0.78rem; color: var(--text-dim); margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="glow glow-1"></div>
+  <div class="glow glow-2"></div>
+
+  <header>
+    <div class="logo">⚔ 剧本市场 <span>RPGAgent</span></div>
+    <div class="actions">
+      <button class="btn" onclick="location.href='/'">返回主页</button>
+      <button class="btn" onclick="loadGames()">刷新</button>
+    </div>
+  </header>
+
+  <div class="filter-bar">
+    <span class="filter-label">标签:</span>
+    <div id="tag-filters"></div>
+  </div>
+
+  <div class="main">
+    <div class="count-bar" id="count-bar"></div>
+    <div class="section-title">剧本列表</div>
+    <div id="game-list">
+      <div class="loading">加载中…</div>
+    </div>
+  </div>
+
+  <!-- detail overlay -->
+  <div class="detail-overlay" id="detail-overlay" onclick="if(event.target===this)closeDetail()">
+    <div class="detail-panel" id="detail-panel"></div>
+  </div>
+
+  <script>
+    let allGames = [];
+    let activeTag = null;
+
+    async function loadGames() {
+      const div = document.getElementById('game-list');
+      div.innerHTML = '<div class="loading">加载中…</div>';
+      try {
+        const resp = await fetch('/api/market/games');
+        allGames = await resp.json();
+        renderTags();
+        renderGames();
+      } catch(e) {
+        div.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div>加载失败，请刷新重试</div>';
+      }
+    }
+
+    async function loadTags() {
+      try {
+        const resp = await fetch('/api/market/tags');
+        const tags = await resp.json();
+        renderTagFilters(tags);
+      } catch(e) {}
+    }
+
+    function renderTagFilters(tags) {
+      const container = document.getElementById('tag-filters');
+      if (!tags.length) {
+        container.innerHTML = '<span style="font-size:0.75rem;color:var(--text-dim)">暂无标签</span>';
+        return;
+      }
+      container.innerHTML = tags.map(t =>
+        `<button class="tag-chip${activeTag===t?' active':''}" onclick="toggleTag('${t}')">${t}</button>`
+      ).join('');
+    }
+
+    function renderTags() {
+      const tags = [...new Set(allGames.flatMap(g => g.tags || []))].sort();
+      renderTagFilters(tags);
+    }
+
+    function toggleTag(tag) {
+      activeTag = activeTag === tag ? null : tag;
+      renderTags();
+      renderGames();
+    }
+
+    function filtered() {
+      if (!activeTag) return allGames;
+      return allGames.filter(g => (g.tags || []).includes(activeTag));
+    }
+
+    function renderGames() {
+      const container = document.getElementById('game-list');
+      const countBar = document.getElementById('count-bar');
+      const games = filtered();
+
+      countBar.textContent = activeTag
+        ? `标签「${activeTag}」下共有 ${games.length} 个剧本`
+        : `共 ${games.length} 个剧本`;
+
+      if (!games.length) {
+        container.innerHTML = `<div class="empty"><div class="empty-icon">📭</div>${activeTag ? '该标签下暂无剧本' : '未找到任何剧本，请先安装剧本'}</div>`;
+        return;
+      }
+
+      container.innerHTML = `<div class="game-grid">${games.map(g => `
+        <div class="game-card" onclick="showDetail('${g.id}')">
+          ${g.source === 'builtin' ? '<div class="source-badge">内置</div>' : ''}
+          <div class="card-header">
+            <div class="card-name">${esc(g.name)}</div>
+            <div class="card-version">v${esc(g.version)}</div>
+          </div>
+          <div class="card-author">${esc(g.author || '未知作者')}</div>
+          <div class="card-summary">${esc(g.summary || '暂无简介')}</div>
+          ${g.tags&&g.tags.length?`<div class="card-tags">${g.tags.slice(0,3).map(t=>`<span class="card-tag">${esc(t)}</span>`).join('')}</div>`:''}
+          <div class="card-footer">
+            <div class="card-meta">
+              场景 ${g.scene_count} · 人物 ${g.character_count}
+              ${g.engine_compatible
+                ? ` <span class="ok">✓</span>`
+                : ` <span class="warn" title="${esc(g.engine_msg)}">⚠ 引擎</span>`}
+            </div>
+          </div>
+        </div>
+      `).join('')}</div>`;
+    }
+
+    function showDetail(id) {
+      const g = allGames.find(x => x.id === id);
+      if (!g) return;
+      const panel = document.getElementById('detail-panel');
+      panel.innerHTML = `
+        <button class="detail-close" onclick="closeDetail()">✕</button>
+        <div class="detail-name">${esc(g.name)}</div>
+        <div class="detail-meta">
+          <span>v${esc(g.version)}</span>
+          <span>${esc(g.author || '未知作者')}</span>
+          ${g.source==='builtin'?'<span>内置剧本</span>':'<span>用户安装</span>'}
+          ${g.engine_version_required?`<span>引擎要求 ≥${g.engine_version_required}</span>`:''}
+        </div>
+        <div class="detail-section">
+          <div class="detail-section-title">简介</div>
+          <div class="detail-summary">${esc(g.summary || '暂无简介')}</div>
+        </div>
+        ${g.tags&&g.tags.length?`
+        <div class="detail-section">
+          <div class="detail-section-title">标签</div>
+          <div class="detail-tags">${g.tags.map(t=>`<span class="card-tag">${esc(t)}</span>`).join('')}</div>
+        </div>`:''}
+        <div class="detail-section">
+          <div class="detail-section-title">统计</div>
+          <div class="detail-summary" style="color:var(--text-dim)">
+            场景文件: ${g.scene_count} 个 &nbsp;|&nbsp; 人物卡: ${g.character_count} 个
+          </div>
+        </div>
+        ${!g.engine_compatible?`<div class="detail-warn">⚠ ${esc(g.engine_msg)}</div>`:''}
+        <div class="detail-actions">
+          <button class="btn btn-gold card-btn" onclick="startGame('${g.id}')">开始冒险</button>
+          <button class="btn card-btn" onclick="closeDetail()">关闭</button>
+        </div>
+      `;
+      document.getElementById('detail-overlay').classList.add('show');
+    }
+
+    function closeDetail() {
+      document.getElementById('detail-overlay').classList.remove('show');
+    }
+
+    function startGame(id) {
+      closeDetail();
+      // redirect to game page with start action
+      location.href = `/?start=${id}`;
+    }
+
+    function esc(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;');
+    }
+
+    loadGames();
+    loadTags();
+  </script>
+</body>
+</html>
