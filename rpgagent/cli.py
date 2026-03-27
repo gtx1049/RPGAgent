@@ -10,6 +10,9 @@ RPGAgent CLI - rpg 命令行工具
     rpg pack <dir> [output]   将本地剧本目录打包为 .gamepkg
     rpg serve                 启动 Web 服务器
     rpg saves                 列出存档
+    rpg search <关键词>        从剧本市场搜索剧本
+    rpg update [--apply]      检查并安装剧本更新
+    rpg init <game_id>        创建新剧本项目脚手架
 """
 
 import argparse
@@ -45,6 +48,148 @@ def _build_loader() -> ContextLoader:
     return loader
 
 
+# ── init ─────────────────────────────────────────────
+
+def cmd_init(args):
+    """
+    创建新剧本项目脚手架。
+
+    生成的目录结构：
+        <game_id>/
+        ├── meta.json
+        ├── setting.md
+        ├── characters/
+        │   └── _template.json
+        ├── scenes/
+        │   └── act_01.md
+        └── assets/
+    """
+    game_id = args.game_id.strip()
+    if not game_id:
+        print("错误: 剧本 ID 不能为空")
+        return 1
+
+    import re
+    if not re.match(r"^[a-zA-Z0-9_-]+$", game_id):
+        print("错误: 剧本 ID 只能包含字母、数字、下划线和连字符")
+        return 1
+
+    target = Path(args.output or game_id).resolve()
+
+    if target.exists() and any(target.iterdir()):
+        print(f"错误: 目录已存在且非空：{target}")
+        return 1
+
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "characters").mkdir(exist_ok=True)
+    (target / "scenes").mkdir(exist_ok=True)
+    (target / "assets").mkdir(exist_ok=True)
+
+    # meta.json
+    meta = {
+        "id": game_id,
+        "name": args.name or game_id,
+        "version": args.version,
+        "author": args.author or "",
+        "summary": args.summary or "",
+        "tags": [t.strip() for t in (args.tags or "").split(",") if t.strip()],
+        "engine_version": args.engine_version or "0.2",
+        "first_scene": "act_01",
+    }
+    import json
+    (target / "meta.json").write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    # setting.md
+    setting = f"""# {meta['name']}
+
+> 剧本类型：{meta['tags'][0] if meta['tags'] else '自定义'}
+> 作者：{meta['author'] or '匿名'}
+> 版本：{meta['version']}
+
+## 世界观
+
+在此描述剧本的世界观背景。
+
+## 主要势力
+
+- 势力 A
+- 势力 B
+
+## 特殊规则
+
+（如有自定义数值规则或剧本专属系统，在此说明）
+"""
+    (target / "setting.md").write_text(setting, encoding="utf-8")
+
+    # characters/_template.json
+    import json as _json
+    template_char = {
+        "id": "template_npc",
+        "name": "模板NPC",
+        "role": "NPC",
+        "first_impression": "一个普通人。",
+        "personality": ["谨慎", "好奇"],
+        "speech_style": "简洁",
+        "relations": {},
+        "memory_slots": [],
+        "skills": [],
+        "knowledge": [],
+        "secrets": [],
+        "agenda": "保持自身安全，观察局势。",
+    }
+    (target / "characters" / "_template.json").write_text(
+        _json.dumps(template_char, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    # scenes/act_01.md
+    scene = f"""# 开场
+
+## 场景概述
+
+玩家进入游戏的第一个场景。
+
+## 初始状态
+
+- 地点：未知
+- 可见NPC：待定
+
+## 叙事
+
+玩家睁开眼睛，发现自己身处陌生的环境中……
+
+## 触发条件
+
+`trigger: always`
+
+## 可触发选项
+
+- [观察周围] → 触发感知检定
+- [与NPC交谈] → 对话树
+- [继续前进] → 进入下一场景
+
+## GM_COMMAND 示例
+
+```
+roll: 感知周围 | attribute: wisdom | dc: 40
+```
+
+## 下一场景
+
+`next_scene: act_02`
+"""
+    (target / "scenes" / "act_01.md").write_text(scene, encoding="utf-8")
+
+    print(f"✓ 剧本脚手架已创建：{target}")
+    print(f"\n下一步：")
+    print(f"  1. 编辑 {target / 'meta.json'} 完善剧本信息")
+    print(f"  2. 在 scenes/ 下编写场景，参考 act_01.md")
+    print(f"  3. 在 characters/ 下添加人物 JSON")
+    print(f"  4. 运行 'rpg pack {target}' 打包为 .gamepkg")
+    return 0
+
+
 # ── list ──────────────────────────────────────────────
 
 def cmd_list(args):
@@ -53,9 +198,12 @@ def cmd_list(args):
     if not games:
         print("没有找到任何剧本。请将剧本放入 games/ 目录。")
         return 0
-    print(f"\n{'='*50}")
-    print(f"  可用剧本（共 {len(games)} 个）")
-    print(f"{'='*50}\n")
+
+    from rpgagent.config.settings import ENGINE_VERSION, check_engine_version
+
+    print(f"\n{'='*55}")
+    print(f"  可用剧本（共 {len(games)} 个）  |  引擎版本 {ENGINE_VERSION}")
+    print(f"{'='*55}\n")
     for g in games:
         tags = " / ".join(g["tags"]) if g["tags"] else "无标签"
         summary = g["summary"][:70] + "..." if len(g["summary"]) > 70 else g["summary"]
@@ -63,6 +211,15 @@ def cmd_list(args):
         print(f"        标签: {tags}")
         if summary:
             print(f"        {summary}")
+
+        # 显示版本及兼容性
+        game_meta = loader.get_loader(g["id"]).meta if loader.get_loader(g["id"]) else None
+        if game_meta and game_meta.engine_version:
+            ok, msg = check_engine_version(game_meta.engine_version)
+            if ok:
+                print(f"        引擎要求: ≥{game_meta.engine_version} ✓")
+            else:
+                print(f"        引擎要求: ≥{game_meta.engine_version} ⚠️ {msg}")
         print()
     return 0
 
@@ -77,7 +234,7 @@ def cmd_install(args):
 
     mgr = PackageManager(USER_GAMES_DIR)
     try:
-        result = mgr.install(pkg_path, force=args.force)
+        result = mgr.install(pkg_path, force=args.force, skip_integrity=args.skip_integrity)
         game = result["game"]
         if result["overwritten"]:
             print(f"✓ 已覆盖安装: {game['name']}（{game['id']}）v{game['version']}")
@@ -137,8 +294,20 @@ def cmd_pack(args):
         output = output.parent / (output.name + ".gamepkg")
 
     try:
+        tags = None
+        if args.tags:
+            tags = [t.strip() for t in args.tags.split(",") if t.strip()]
+
         mgr = PackageManager(USER_GAMES_DIR)
-        result_path = mgr.pack(src, output or (src.parent / f"{src.name}.gamepkg"))
+        result_path = mgr.pack(
+            src,
+            output or (src.parent / f"{src.name}.gamepkg"),
+            engine_version=args.engine_version,
+            tags=tags,
+            author=args.author,
+            description=args.description,
+            include_checksum=not args.no_checksum,
+        )
         print(f"✓ 已打包: {result_path}")
     except (MetaMissingError, InvalidMetaError) as e:
         print(f"错误: {e}")
@@ -342,6 +511,100 @@ def cmd_log(args):
     return 0
 
 
+# ── search ───────────────────────────────────────────
+
+def cmd_search(args):
+    from rpgagent.systems.registry import RegistryClient, NetworkError, NotFoundError
+    registry_url = args.registry or None
+    client = RegistryClient(registry_url=registry_url, timeout=args.timeout)
+
+    print(f"正在从 {client.registry_url} 搜索剧本...\n")
+
+    results = client.search(args.query)
+
+    if not results:
+        print("未找到匹配的剧本。")
+        # 容错：告知用户 registry 可能不可用
+        try:
+            client.list_games()
+        except NetworkError:
+            print(f"\n⚠ 无法连接市场服务器（{client.registry_url}）。")
+            print("  请检查网络，或使用 --registry 指定其他市场地址。")
+        return 0
+
+    print(f"\n{'─'*55}")
+    print(f"  找到 {len(results)} 个剧本：")
+    print(f"{'─'*55}\n")
+    for g in results:
+        tags = " / ".join(g.tags) if g.tags else "无标签"
+        summary = g.summary[:80] + "..." if len(g.summary) > 80 else g.summary
+        print(f"  [{g.id}] {g.name}  v{g.version}")
+        print(f"        作者: {g.author}  |  标签: {tags}")
+        if summary:
+            print(f"        {summary}")
+        print()
+    print(f"使用 'rpg install {results[0].id}' 安装，或查看详情请访问市场。")
+    return 0
+
+
+# ── update ───────────────────────────────────────────
+
+def cmd_update(args):
+    from rpgagent.systems.registry import RegistryClient, NetworkError, NotFoundError
+    registry_url = args.registry or None
+    client = RegistryClient(registry_url=registry_url, timeout=args.timeout)
+    mgr = PackageManager(USER_GAMES_DIR)
+
+    print("检查剧本更新...\n")
+
+    try:
+        installed = mgr.list_installed()
+    except Exception:
+        installed = []
+
+    if not installed:
+        print("当前没有已安装的剧本（仅检查用户安装目录）。")
+        return 0
+
+    try:
+        updates = client.check_update(installed)
+    except NetworkError as e:
+        print(f"⚠ 无法连接市场服务器：{e}")
+        print("  请检查网络，或使用 --registry 指定其他市场地址。")
+        return 1
+
+    if not updates:
+        print("所有剧本均已是最新版本 ✓")
+        return 0
+
+    print(f"发现 {len(updates)} 个可用更新：\n")
+    for u in updates:
+        local = next((g for g in installed if g["id"] == u.game_id), {})
+        current = local.get("version", "1.0")
+        print(f"  [{u.game_id}]  v{current} → v{u.latest_version}")
+
+    if not args.apply:
+        print(f"\n使用 'rpg update --apply' 确认更新。")
+        return 0
+
+    print(f"\n开始更新...\n")
+    for u in updates:
+        try:
+            print(f"  更新 {u.game_id}...")
+            result = client.download_and_install(
+                u.game_id,
+                USER_GAMES_DIR,
+                force=True,
+            )
+            print(f"  ✓ {u.game_id} 已更新至 v{result['version']}")
+        except NotFoundError:
+            print(f"  ⚠ {u.game_id} 在市场中未找到（已下架？）")
+        except Exception as e:
+            print(f"  ✗ {u.game_id} 更新失败: {e}")
+    print("\n更新完成。")
+    return 0
+
+
 # ── main ─────────────────────────────────────────────
 
 def main():
@@ -377,6 +640,8 @@ def main():
     p_install = sub.add_parser("install", help="安装剧本包（.gamepkg 文件）")
     p_install.add_argument("package", help=".gamepkg 文件路径")
     p_install.add_argument("--force", action="store_true", help="覆盖已安装的同名剧本")
+    p_install.add_argument("--skip-integrity", action="store_true",
+                         help="跳过 SHA256 完整性校验（用于本地开发包）")
 
     # rpg remove
     p_remove = sub.add_parser("remove", help="卸载剧本")
@@ -386,6 +651,44 @@ def main():
     p_pack = sub.add_parser("pack", help="将本地剧本目录打包为 .gamepkg")
     p_pack.add_argument("source_dir", help="剧本根目录（含 meta.json）")
     p_pack.add_argument("output", nargs="?", help="输出 .gamepkg 路径（默认同目录下同名）")
+    p_pack.add_argument("--engine-version", dest="engine_version", default=None,
+                       help="要求的最低引擎版本（如 0.2），默认 0.2")
+    p_pack.add_argument("--tags", dest="tags", default=None,
+                       help="剧本标签，逗号分隔（如 '历史,秦末,起义'）")
+    p_pack.add_argument("--author", dest="author", default=None, help="剧本作者")
+    p_pack.add_argument("--description", dest="description", default=None, help="剧本描述")
+    p_pack.add_argument("--no-checksum", dest="no_checksum", action="store_true",
+                       help="打包时不计算和写入 SHA256 校验和")
+
+    # rpg search
+    p_search = sub.add_parser("search", help="从剧本市场搜索剧本")
+    p_search.add_argument("query", help="搜索关键词（名称/TAG/作者）")
+    p_search.add_argument("--registry", dest="registry", default=None,
+                          help="市场服务器地址（默认 https://rpgagent.market）")
+    p_search.add_argument("--timeout", type=int, default=10, dest="timeout",
+                          help="请求超时秒数（默认 10）")
+
+    # rpg update
+    p_update = sub.add_parser("update", help="检查并安装剧本更新")
+    p_update.add_argument("--apply", action="store_true",
+                         help="确认应用更新（不加此参数仅列出可用更新）")
+    p_update.add_argument("--registry", dest="registry", default=None,
+                         help="市场服务器地址（默认 https://rpgagent.market）")
+    p_update.add_argument("--timeout", type=int, default=10, dest="timeout",
+                         help="请求超时秒数（默认 10）")
+
+    # rpg init
+    p_init = sub.add_parser("init", help="创建新剧本项目脚手架")
+    p_init.add_argument("game_id", help="剧本 ID（英文，唯一标识）")
+    p_init.add_argument("--name", dest="name", default=None, help="剧本显示名称")
+    p_init.add_argument("--author", dest="author", default=None, help="作者名称")
+    p_init.add_argument("--summary", dest="summary", default=None, help="一句话简介")
+    p_init.add_argument("--tags", dest="tags", default=None, help="标签，逗号分隔（如 '历史,奇幻'）")
+    p_init.add_argument("--version", dest="version", default="1.0.0", help="版本号（默认 1.0.0）")
+    p_init.add_argument("--engine-version", dest="engine_version", default="0.2",
+                       help="要求的最低引擎版本（默认 0.2）")
+    p_init.add_argument("--output", dest="output", default=None,
+                       help="输出目录（默认与 game_id 同名）")
 
     args = parser.parse_args()
 
@@ -398,6 +701,9 @@ def main():
         "install": cmd_install,
         "remove": cmd_remove,
         "pack": cmd_pack,
+        "search": cmd_search,
+        "update": cmd_update,
+        "init": cmd_init,
     }
 
     sys.exit(commands[args.command](args))

@@ -1,0 +1,38 @@
+# docker-compose.yml - RPGAgent Docker 部署
+#
+# 用法:
+#   docker-compose up -d          # 后台启动
+#   docker-compose logs -f       # 查看日志
+#   docker-compose down          # 停止
+#
+# 访问 http://localhost:7860
+
+version: "3.8"
+
+services:
+  rpgagent:
+    build: .
+    image: rpgagent/agent:latest
+    container_name: rpgagent-server
+    restart: unless-stopped
+    ports:
+      - "7860:7860"
+    volumes:
+      # 持久化用户剧本和存档到宿主机
+      - rpgagent-data:/root/.local/share/rpgagent
+    environment:
+      - RPGAGENT_BASE=/app
+      # 可选：使用自定义模型
+      # - RPG_MODEL=gpt-4
+      # - RPG_API_KEY=your-key-here
+      # - RPG_BASE_URL=https://api.openai.com/v1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  rpgagent-data:
+    driver: local

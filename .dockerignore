@@ -1,0 +1,18 @@
+# Docker 构建上下文排除
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.pytest_cache/
+.coverage
+*.egg-info/
+.eggs/
+*.db
+node_modules/
+.env
+.env.*
+*.md
+!README.md
+tests/
+scripts/
+docs/

@@ -80,6 +80,14 @@ class GameMaster:
         if not self.game_loader:
             raise ValueError(f"未找到游戏: {game_id}")
 
+        # 引擎版本兼容性检查
+        from ..config.settings import check_engine_version
+        meta = self.game_loader.meta
+        required_engine = getattr(meta, "engine_version", None) if meta else None
+        ok, msg = check_engine_version(required_engine)
+        if not ok:
+            raise ValueError(msg)
+
         # 初始化各系统（纯Python，无LLM依赖）
         from rpgagent.systems.stats import StatsSystem
         from rpgagent.systems.moral_debt import MoralDebtSystem
@@ -235,18 +243,28 @@ class GameMaster:
     def process_input(self, player_input: str) -> Tuple[str, Optional[Dict]]:
         """
         处理玩家输入：
-        1. 检查行动力，耗尽则刷新
-        2. 消耗 1 行动力
-        3. 构造 user_prompt（附当前状态摘要）
-        4. 调用 AgentScope DM Agent 生成叙事
-        5. 解析 GM_COMMAND，更新数值系统
-        6. 返回叙事内容
+        1. 过滤注入攻击
+        2. 检查行动力，耗尽则刷新
+        3. 消耗 1 行动力
+        4. 构造 user_prompt（附当前状态摘要）
+        5. 调用 AgentScope DM Agent 生成叙事
+        6. 解析 GM_COMMAND，更新数值系统
+        7. 返回叙事内容
         """
+        # ── 注入攻击过滤（保护 LLM 不得被 prompt injection 劫持） ──
+        from rpgagent.utils.sanitize import sanitize_for_llm
+        sanitized = sanitize_for_llm(player_input)
+        if not sanitized:
+            return "[系统] 检测到违规输入，内容已被拦截。请换一种表达。", None
+        player_input = sanitized
+
         # ── 行动力检查 ──────────────────────────────
         # 如果行动力为0，说明上一轮已耗尽，自动刷新
+        new_turn = False
         if self.stats_sys.get("action_power") <= 0:
             self.stats_sys.refresh_ap()
             self.session.add_history("system", "【回合开始】行动力已刷新。")
+            new_turn = True
 
         scene = self.get_current_scene()
         if not scene:
@@ -322,6 +340,15 @@ class GameMaster:
                     narrative = narrative + f"\n⚠️ 骰点解析失败：{e}\n"
 
             self._execute_command(cmd, player_input)
+
+        # ── 隐藏数值每回合衰减 ──────────────────────────────────
+        # 在新回合开始时（AP 刷新后）应用衰减
+        # 衰减不触发 trigger_scene，因为是系统自动处理而非玩家主动行为
+        if new_turn and self.hidden_value_sys:
+            decay_results = self.hidden_value_sys.tick_all(self.session.turn_count)
+            if decay_results:
+                # 可在 session.flags 中记录衰减日志（供叙事参考，但不直接展示给玩家）
+                self.session.flags["_hv_decay"] = decay_results
 
         self._sync_session()
 

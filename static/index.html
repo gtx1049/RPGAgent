@@ -1,156 +1,137 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RPGAgent</title>
-  <link rel="stylesheet" href="/static/css/game.css">
+  <link rel="stylesheet" href="/static/css/game.css" />
 </head>
 <body>
 
-<!-- 氛围光效 -->
-<div class="atmosphere-glow top-left" id="atmo-glow-1"></div>
-<div class="atmosphere-glow bottom-right" id="atmo-glow-2"></div>
+  <!-- 氛围光效 -->
+  <div id="atmo-glow-1" class="atmosphere-glow top-left"></div>
+  <div id="atmo-glow-2" class="atmosphere-glow bottom-right"></div>
 
-<!-- 游戏开始选择页 -->
-<div id="game-select">
-  <h2>⚔ RPGAgent ⚔</h2>
-  <p>选择你的剧本，开始冒险</p>
-  <div id="game-list">
-    <div class="game-card" style="cursor:wait">
-      <div class="game-name">加载中…</div>
-      <div class="game-summary">正在读取剧本列表</div>
-    </div>
-  </div>
-</div>
-
-<!-- 主界面 -->
-<div id="topbar">
-  <h1>RPGAgent</h1>
-  <div class="scene-title" id="scene-title">—</div>
-  <span class="ws-status" id="ws-status">未连接</span>
-</div>
-
-<div id="main">
-  <!-- 叙事区 -->
-  <div id="narrative-panel">
-    <div id="narrative">
-      <!-- 叙事内容动态填充 -->
-    </div>
+  <!-- 游戏选择页 -->
+  <div id="game-select">
+    <h2>RPGAgent</h2>
+    <p>选择剧本开始冒险</p>
+    <div id="game-list"></div>
   </div>
 
-  <!-- 侧边栏 -->
-  <div id="sidebar">
+  <!-- 顶部栏 -->
+  <div id="topbar">
+    <h1>⚔ RPGAgent</h1>
+    <div class="scene-title" id="scene-title">—</div>
+    <div class="ws-status" id="ws-status">未连接</div>
+  </div>
 
-    <!-- 冒险日志按钮 -->
-    <div class="panel">
-      <button id="log-btn" onclick="openLogModal()">📜 冒险日志</button>
+  <!-- 主布局 -->
+  <div id="main">
+
+    <!-- 左侧：叙事区 -->
+    <div id="narrative-panel">
+      <div id="narrative"></div>
+
+      <!-- 选项区（GM下发选项） -->
+      <div id="options-area" style="display:none"></div>
+
+      <!-- 行动按钮 -->
+      <div id="action-panel" style="padding: 10px 14px; border-top: 1px solid var(--border); flex-shrink: 0;">
+        <div id="action-buttons"></div>
+
+        <!-- 自定义行动输入框（默认隐藏） -->
+        <div id="custom-action-box" style="display:none; margin-top: 8px;">
+          <textarea id="custom-input" rows="2" placeholder="描述你的行动……"></textarea>
+          <div class="btn-row" style="margin-top:6px;">
+            <button class="btn-secondary" onclick="cancelCustomAction()">取消</button>
+            <button id="custom-submit-btn" onclick="submitCustomAction()">发送</button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- 状态 -->
-    <div class="panel">
-      <div class="panel-title">角色状态</div>
-      <div class="stat-row">
-        <span id="hp-label">HP —/—</span>
+    <!-- 右侧：状态栏 -->
+    <div id="sidebar">
+
+      <!-- 状态数值 -->
+      <div class="panel">
+        <div class="panel-title">状态</div>
+        <div class="stat-row">
+          <span id="hp-label">HP —/—</span>
+        </div>
         <div class="stat-bar-wrap">
-          <div class="stat-bar-fill" id="hp-fill" style="width:100%"></div>
+          <div id="hp-fill" class="stat-bar-fill" style="width:100%"></div>
         </div>
-      </div>
-      <div class="stat-row">
-        <span id="stamina-label">体力 —/—</span>
+        <div class="stat-row" style="margin-top:6px;">
+          <span id="stamina-label">体力 —/—</span>
+        </div>
         <div class="stat-bar-wrap">
-          <div class="stat-bar-fill" id="stamina-fill" style="width:100%"></div>
+          <div id="stamina-fill" class="stat-bar-fill" style="width:100%"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+          <span class="panel-title" style="margin:0">行动力</span>
+          <div id="ap-dots">
+            <span id="ap-1" class="ap-dot">●</span>
+            <span id="ap-2" class="ap-dot">●</span>
+            <span id="ap-3" class="ap-dot">●</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+          <span class="panel-title" style="margin:0">道德债务</span>
+          <span class="moral-badge" id="moral-badge">—</span>
+        </div>
+        <div class="turn-counter" id="turn-counter">第 0 回合</div>
+      </div>
+
+      <!-- 技能 -->
+      <div class="panel">
+        <div class="panel-title">技能</div>
+        <div id="skills-list">
+          <div style="font-size:12px;color:var(--text-dim)">暂无已学技能</div>
         </div>
       </div>
-      <!-- 行动力 -->
-      <div class="stat-row">
-        <span>行动力</span>
-        <div id="ap-dots">
-          <span class="ap-dot" id="ap-1">●</span>
-          <span class="ap-dot" id="ap-2">●</span>
-          <span class="ap-dot" id="ap-3">●</span>
+
+      <!-- 装备 -->
+      <div class="panel">
+        <div class="panel-title">装备</div>
+        <div id="equip-list">
+          <div style="font-size:12px;color:var(--text-dim)">无装备</div>
         </div>
       </div>
-      <div class="stat-row">
-        <span>道德债务</span>
-        <span class="moral-badge" id="moral-badge">—</span>
-      </div>
-      <div class="turn-counter" id="turn-counter">第 0 回合</div>
-    </div>
 
-    <!-- 技能 -->
-    <div class="panel" id="skills-panel">
-      <div class="panel-title">已学技能</div>
-      <div id="skills-list">
-        <div style="font-size:12px;color:var(--text-dim)">暂无已学技能</div>
-      </div>
-    </div>
-
-    <!-- 装备 -->
-    <div class="panel" id="equip-panel">
-      <div class="panel-title">当前装备</div>
-      <div id="equip-list">
-        <div style="font-size:12px;color:var(--text-dim)">无装备</div>
-      </div>
-    </div>
-
-    <!-- NPC 关系 -->
-    <div class="panel">
-      <div class="panel-title">人物关系</div>
-      <div id="npc-list">
-        <div style="font-size:12px;color:var(--text-dim)">暂无关系记录</div>
-      </div>
-    </div>
-
-    <!-- 选项（GM给出的选项） -->
-    <div id="options-area" style="display:none">
-      <div class="panel-title">选项</div>
-    </div>
-
-    <!-- 行动按钮 -->
-    <div class="panel" id="action-panel">
-      <div class="panel-title">行动</div>
-      <div id="action-buttons">
-        <!-- 基础行动按钮，由JS动态渲染 -->
-      </div>
-      <!-- 自定义行动输入框（默认隐藏） -->
-      <div id="custom-action-box" style="display:none; margin-top:10px">
-        <textarea
-          id="custom-input"
-          rows="2"
-          placeholder="描述你的行动或对话…"
-        ></textarea>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button class="btn-primary" id="custom-submit-btn" onclick="submitCustomAction()">发送</button>
-          <button class="btn-secondary" onclick="cancelCustomAction()">取消</button>
+      <!-- NPC关系 -->
+      <div class="panel">
+        <div class="panel-title">NPC 关系</div>
+        <div id="npc-list">
+          <div style="font-size:12px;color:var(--text-dim)">暂无关系记录</div>
         </div>
       </div>
-    </div>
 
-    <!-- 状态按钮 -->
-    <div class="panel">
-      <button class="btn-secondary" style="width:100%" onclick="send({action:'get_status'})">查看完整状态</button>
-    </div>
+      <!-- 冒险日志按钮 -->
+      <div class="panel">
+        <button id="log-btn" onclick="openLogModal()">📜 冒险日志</button>
+      </div>
 
-  </div>
-</div>
+    </div><!-- /sidebar -->
+  </div><!-- /main -->
 
-<!-- 冒险日志 Modal -->
-<div id="log-modal-overlay">
-  <div id="log-modal">
-    <div id="log-modal-header">
-      <h3>📜 冒险日志</h3>
-      <button id="log-modal-close" onclick="closeLogModal()">×</button>
-    </div>
-    <div id="log-modal-body">
-      <div id="log-list"></div>
-      <div id="log-content">
-        <div id="log-empty">选择一个日志查看</div>
+  <!-- 冒险日志 Modal -->
+  <div id="log-modal-overlay">
+    <div id="log-modal">
+      <div id="log-modal-header">
+        <h3>📜 冒险日志</h3>
+        <button id="log-modal-close" onclick="closeLogModal()">×</button>
+      </div>
+      <div id="log-modal-body">
+        <div id="log-list"></div>
+        <div id="log-content">
+          <div id="log-empty">选择左侧日志查看内容</div>
+        </div>
       </div>
     </div>
   </div>
-</div>
 
-<script src="/static/js/game.js"></script>
+  <script src="/static/js/game.js"></script>
 </body>
 </html>

@@ -95,6 +95,12 @@ class StatsSystem(IStatsSystem):
             "strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"
         ] if k in defaults})
         self.gold = 0  # 金币（独立属性，不在 Stats dataclass 中）
+        # 装备加成追踪（用于增量更新，避免重复叠加）
+        self._prev_equip_bonus: Dict = {
+            "strength": 0, "dexterity": 0, "constitution": 0,
+            "intelligence": 0, "wisdom": 0, "charisma": 0,
+            "max_hp": 0,
+        }
 
     def get(self, key: str) -> int:
         return getattr(self.stats, key, 0)
@@ -116,6 +122,47 @@ class StatsSystem(IStatsSystem):
             setattr(self.stats, key, new_val)
 
         return getattr(self.stats, key)
+
+    def recalculate_from_equipment(self, bonus_dict: Dict) -> None:
+        """
+        根据装备加成字典增量更新属性。
+        
+        仅施加「新增/减少」的差值，避免重复叠加。
+        调用时机：装备变更后（自动装备 / 换装 / 卸装）。
+        
+        Args:
+            bonus_dict: EquipmentSystem.get_total_bonus() 返回的字典，
+                        包含 strength/dexterity/constitution/intelligence/
+                        wisdom/charisma/max_hp 等属性加成。
+        """
+        if not bonus_dict:
+            return
+
+        attrs = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
+        for attr in attrs:
+            prev = self._prev_equip_bonus.get(attr, 0)
+            curr = bonus_dict.get(attr, 0)
+            delta = curr - prev
+            if delta != 0:
+                old_val = getattr(self.ability, attr)
+                new_val = old_val + delta
+                setattr(self.ability, attr, new_val)
+                self._prev_equip_bonus[attr] = curr
+
+        # max_hp：EquipmentStats 的 max_hp 是装备提供的加值
+        prev_hp = self._prev_equip_bonus.get("max_hp", 0)
+        curr_hp = bonus_dict.get("max_hp", 0)
+        hp_delta = curr_hp - prev_hp
+        if hp_delta != 0:
+            # 同时更新 max_hp 和当前 hp（保持当前 hp 比例）
+            old_max = self.stats.max_hp
+            new_max = old_max + hp_delta
+            # HP 比例不变地上调
+            if old_max > 0:
+                hp_ratio = self.stats.hp / old_max
+                self.stats.hp = int(new_max * hp_ratio)
+            self.stats.max_hp = new_max
+            self._prev_equip_bonus["max_hp"] = curr_hp
 
     def take_damage(self, amount: int) -> int:
         return self.modify("hp", -abs(amount))

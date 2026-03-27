@@ -44,6 +44,7 @@ class GameMeta:
     hidden_values: List[Dict] = field(default_factory=dict)  # HiddenValueSystem 配置列表
     hidden_value_actions: Dict[str, Dict[str, int]] = field(default_factory=dict)  # action_map
     first_scene: Optional[str] = None  # 剧本入口场景 ID
+    engine_version: Optional[str] = None  # 要求的最低引擎版本（如 "0.2"）
 
 
 class GameLoader:
@@ -86,6 +87,7 @@ class GameLoader:
                     hidden_values=data.get("hidden_values", []),
                     hidden_value_actions=data.get("hidden_value_actions", {}),
                     first_scene=data.get("first_scene"),
+                    engine_version=data.get("engine_version"),
                 )
         else:
             self.meta = GameMeta(
@@ -134,10 +136,35 @@ class GameLoader:
                 content = f.read()
                 # 简单解析：前100字符作为标题
                 title = content.split("\n")[0].lstrip("# ").strip()
+
+                # 解析 ## Available Actions 小节，提取结构化行动选项
+                # 格式：- [action_tag] label: description
+                available_actions: List[str] = []
+                in_actions_section = False
+                for line in content.split("\n"):
+                    stripped = line.strip()
+                    if stripped == "## Available Actions":
+                        in_actions_section = True
+                        continue
+                    if in_actions_section:
+                        # 遇到另一个 ## 标题，结束 Available Actions 小节
+                        if stripped.startswith("## "):
+                            in_actions_section = False
+                            continue
+                        # 解析 - [tag] label: description 格式
+                        if stripped.startswith("- ["):
+                            bracket_end = stripped.find("]")
+                            if bracket_end != -1:
+                                available_actions.append(stripped)
+                        elif stripped.startswith("-"):
+                            # 降级：没有 [tag] 的简单选项
+                            available_actions.append(stripped)
+
                 scene = Scene(
                     id=file.stem,
                     title=title or file.stem,
                     content=content,
+                    available_actions=available_actions,
                 )
                 self.scenes[scene.id] = scene
 
