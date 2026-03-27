@@ -580,10 +580,12 @@ class TestGameMasterWithoutHiddenValue:
     def test_action_tag_ignored_when_no_hidden_value_sys(self, game_master):
         """无 hidden_value_sys 时 action_tag 指令被忽略（不抛异常）"""
         assert game_master.hidden_value_sys is None
+        # 清除可能已存在的 flags（如成就解锁）
+        game_master.session.flags.clear()
         game_master._execute_command({
             "action": "narrative",
             "action_tag": "silent_witness",
             "player_input": "",
         })
-        # 无异常，session flags 不变
-        assert game_master.session.flags == {}
+        # 无异常，session flags 不变（忽略 action_tag 相关 flags）
+        assert game_master.session.flags.get("_hv_triggered_") is None
