@@ -274,15 +274,15 @@ class CGallery {
 
 ## 实现计划
 
-1. **Phase 1: 基础框架**
-   - [ ] 定义 ImageGenerator 抽象基类
-   - [ ] 实现 TongyiWanxiangGenerator（通义万相）
-   - [ ] 添加本地缓存机制
+1. **Phase 1: 基础框架** ✅
+   - [x] 定义 ImageGenerator 抽象基类
+   - [x] 实现 TongyiWanxiangGenerator（通义万相）
+   - [x] 添加本地缓存机制（CGCache）
 
-2. **Phase 2: 场景集成**
-   - [ ] 设计场景CG配置格式
-   - [ ] 在 GameMaster 中集成 CG 触发
-   - [ ] 支持自动/手动触发模式
+2. **Phase 2: 场景集成** ✅
+   - [x] 在 GameMaster 中集成 CG 触发
+   - [x] 场景 .cg.yaml 配置文件读取（context_loader.py 已实现）
+   - [x] 支持自动/手动触发模式（GameMaster + GMS 工具双路径）
 
 3. **Phase 3: 前端展示**
    - [ ] CG 画廊组件

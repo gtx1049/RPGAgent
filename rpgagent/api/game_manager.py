@@ -31,17 +31,21 @@ class GameSession:
     gm: GameMaster
     db: Database
     turn: int = 0
+    autosave_id: str = ""  # 自动存档 ID
 
 
 class GameManager:
     """
     全局游戏会话管理器。
-    负责：创建/查找/销毁游戏会话。
+    负责：创建/查找/销毁游戏会话，支持自动存档。
     """
+
+    AUTOSAVE_TURNS = 5  # 每 AUTOSAVE_TURNS 回合自动存档一次
 
     def __init__(self):
         self._sessions: Dict[str, GameSession] = {}
         self._lock = asyncio.Lock()
+        self._auto_save_task: Optional[asyncio.Task] = None
 
     async def start_game(
         self,
@@ -78,6 +82,13 @@ class GameManager:
         async with self._lock:
             self._sessions[session_id] = game_session
 
+        # 生成 autosave ID 并触发首次存档
+        game_session.autosave_id = f"autosave_{session_id}"
+        self._do_autosave(game_session)
+
+        # 启动后台自动存档任务（如果尚未启动）
+        await self._start_auto_save_task()
+
         return game_session
 
     def get_session(self, session_id: str) -> Optional[GameSession]:
@@ -90,6 +101,32 @@ class GameManager:
                 del self._sessions[session_id]
                 return True
             return False
+
+    async def restart_game(
+        self,
+        session_id: str,
+        preserve: Optional[list[str]] = None,
+    ) -> GameSession:
+        """
+        New Game+：重开游戏，可选择性保留进度。
+        在原有会话上重置，保留 session_id。
+        """
+        session = self.get_session(session_id)
+        if not session:
+            raise ValueError(f"会话不存在: {session_id}")
+
+        scene = session.gm.new_game_plus(preserve=preserve)
+        session.turn = 0
+
+        # 新游戏写事件记录
+        session.db.insert_event(
+            turn=0,
+            scene_id=scene.id if scene else "start",
+            summary=f"New Game+（保留: {', '.join(preserve) if preserve else '无'}）",
+            tags=["new_game_plus"],
+        )
+
+        return session
 
     async def process_action(
         self,
@@ -106,6 +143,11 @@ class GameManager:
 
         narrative, cmd = session.gm.process_input(player_input)
         session.turn += 1
+
+        # 每 AUTOSAVE_TURNS 回合自动存档
+        if session.turn % self.AUTOSAVE_TURNS == 0:
+            self._do_autosave(session)
+
         return narrative, cmd
 
     def list_active_sessions(self) -> list[Dict]:
@@ -118,6 +160,32 @@ class GameManager:
             }
             for s in self._sessions.values()
         ]
+
+    def _do_autosave(self, session: GameSession) -> None:
+        """执行一次自动存档（同步，低频调用）"""
+        try:
+            snapshot = session.gm.session.get_snapshot()
+            session.db.save_snapshot(session.autosave_id, snapshot.__dict__, slot=-1)
+        except Exception as e:
+            import sys
+            print(f"[Autosave] 保存失败 session={session.session_id}: {e}", file=sys.stderr)
+
+    async def _start_auto_save_task(self) -> None:
+        """启动后台定时存档任务（每 AUTOSAVE_INTERVAL 秒对所有活跃会话存档）"""
+        import asyncio
+        AUTOSAVE_INTERVAL = 120  # 每120秒
+
+        if self._auto_save_task is not None and not self._auto_save_task.done():
+            return
+
+        async def _loop():
+            while True:
+                await asyncio.sleep(AUTOSAVE_INTERVAL)
+                async with self._lock:
+                    for session in self._sessions.values():
+                        self._do_autosave(session)
+
+        self._auto_save_task = asyncio.create_task(_loop())
 
 
 # 全局单例

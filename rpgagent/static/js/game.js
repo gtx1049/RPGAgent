@@ -469,6 +469,10 @@ function handleMessage(msg) {
       sceneTitleEl.textContent = msg.content;
       break;
 
+    case "scene_cg":
+      if (msg.content) showCG(msg.content);
+      break;
+
     case "error":
       appendSystem(`错误：${msg.content}`);
       renderActionButtons();
@@ -492,6 +496,25 @@ function setAtmosphere(index) {
   [atmosGlow1, atmosGlow2].forEach(el => {
     el.style.background = cfg.bg;
   });
+}
+
+// ── CG 展示 ─────────────────────────────────────
+
+function showCG(cgPath) {
+  if (!cgPath) return;
+  // cgPath 可能是绝对路径或相对路径
+  // 后端返回的是 /cg_cache/xxx.png 这类相对路径
+  const img = $("cg-image");
+  img.src = cgPath.startsWith("/") ? cgPath : "/" + cgPath;
+  $("cg-panel").style.display = "flex";
+  img.onerror = () => {
+    // 图片加载失败，隐藏面板
+    $("cg-panel").style.display = "none";
+  };
+}
+
+function closeCGPanel() {
+  $("cg-panel").style.display = "none";
 }
 
 // ── 冒险日志 Modal ────────────────────────────────

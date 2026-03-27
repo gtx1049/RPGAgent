@@ -24,6 +24,7 @@
     <h1>⚔ RPGAgent</h1>
     <div class="scene-title" id="scene-title">—</div>
     <div class="ws-status" id="ws-status">未连接</div>
+    <button id="debug-toggle-btn" onclick="toggleDebugMode()" style="margin-left:auto;margin-right:8px;background:#2a2a2a;border:1px solid #444;color:#aaa;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:12px;">🔧 调试</button>
   </div>
 
   <!-- 主布局 -->
@@ -113,8 +114,38 @@
         <button id="log-btn" onclick="openLogModal()">📜 冒险日志</button>
       </div>
 
+      <!-- 属性面板按钮 -->
+      <div class="panel">
+        <button id="attr-btn" onclick="openAttrPanel()">📊 属性面板</button>
+      </div>
+
     </div><!-- /sidebar -->
   </div><!-- /main -->
+
+  <!-- 调试面板 -->
+  <div id="debug-panel" style="display:none;background:#1a1a2e;border-top:2px solid #00ff88;padding:12px 16px;max-height:300px;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <h3 style="margin:0;color:#00ff88;font-size:14px;">🔧 开发者调试模式</h3>
+      <div id="debug-turn" style="color:#888;font-size:12px;">回合 —</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <!-- 隐藏数值 -->
+      <div>
+        <div class="panel-title" style="color:#aaa;font-size:11px;margin-bottom:4px;">隐藏数值</div>
+        <div id="debug-hidden-values" style="font-size:11px;color:#ccc;font-family:monospace;"></div>
+      </div>
+      <!-- 行动点 & 骰点 -->
+      <div>
+        <div class="panel-title" style="color:#aaa;font-size:11px;margin-bottom:4px;">行动点 / 最近骰点</div>
+        <div id="debug-ap-roll" style="font-size:11px;color:#ccc;font-family:monospace;"></div>
+      </div>
+      <!-- 待触发场景 & 标记 -->
+      <div>
+        <div class="panel-title" style="color:#aaa;font-size:11px;margin-bottom:4px;">待触发场景 / 标记</div>
+        <div id="debug-pending-flags" style="font-size:11px;color:#ccc;font-family:monospace;"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- 冒险日志 Modal -->
   <div id="log-modal-overlay">
@@ -128,6 +159,92 @@
         <div id="log-content">
           <div id="log-empty">选择左侧日志查看内容</div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 属性面板 Modal -->
+  <div id="attr-modal-overlay">
+    <div id="attr-modal">
+      <div id="attr-modal-header">
+        <h3>📊 角色属性</h3>
+        <button id="attr-modal-close" onclick="closeAttrPanel()">×</button>
+      </div>
+      <div id="attr-modal-body">
+        <div id="attr-loading">加载中……</div>
+        <div id="attr-content" style="display:none">
+          <!-- 基础信息 -->
+          <div class="attr-section">
+            <div class="attr-section-title">基础信息</div>
+            <div class="attr-row"><span>等级</span><span id="attr-level">—</span></div>
+            <div class="attr-row"><span>经验</span><span id="attr-exp">—</span></div>
+            <div class="attr-row"><span>金币</span><span id="attr-gold">—</span></div>
+            <div class="attr-row"><span>HP</span><span id="attr-hp">—</span></div>
+            <div class="attr-row"><span>体力</span><span id="attr-stamina">—</span></div>
+            <div class="attr-row"><span>行动力</span><span id="attr-ap">—</span></div>
+            <div class="attr-row"><span>技能点</span><span id="attr-skill-points">—</span></div>
+          </div>
+          <!-- 六属性 -->
+          <div class="attr-section">
+            <div class="attr-section-title">六属性</div>
+            <div class="attr-row"><span>力量 STR</span><span id="attr-str">—</span></div>
+            <div class="attr-row"><span>敏捷 DEX</span><span id="attr-dex">—</span></div>
+            <div class="attr-row"><span>体质 CON</span><span id="attr-con">—</span></div>
+            <div class="attr-row"><span>智力 INT</span><span id="attr-int">—</span></div>
+            <div class="attr-row"><span>感知 WIS</span><span id="attr-wis">—</span></div>
+            <div class="attr-row"><span>魅力 CHA</span><span id="attr-cha">—</span></div>
+          </div>
+          <!-- 战斗属性 -->
+          <div class="attr-section">
+            <div class="attr-section-title">战斗属性</div>
+            <div class="attr-row"><span>护甲等级 AC</span><span id="attr-ac">—</span></div>
+            <div class="attr-row"><span>攻击加成</span><span id="attr-atk">—</span></div>
+            <div class="attr-row"><span>伤害加成</span><span id="attr-dmg">—</span></div>
+          </div>
+          <!-- 装备 -->
+          <div class="attr-section">
+            <div class="attr-section-title">装备</div>
+            <div id="attr-equipped"><div class="attr-empty">无装备</div></div>
+          </div>
+          <!-- 技能 -->
+          <div class="attr-section">
+            <div class="attr-section-title">已学技能</div>
+            <div id="attr-skills"><div class="attr-empty">暂无已学技能</div></div>
+          </div>
+          <!-- 背包 -->
+          <div class="attr-section">
+            <div class="attr-section-title">背包</div>
+            <div id="attr-inventory"><div class="attr-empty">背包为空</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CG 配图悬浮层 -->
+  <div id="cg-overlay" class="cg-overlay" style="display:none">
+    <div class="cg-overlay-inner">
+      <div class="cg-scene-label" id="cg-scene-label"></div>
+      <img id="cg-display-img" class="cg-display-img" src="" alt="场景CG" />
+      <div class="cg-overlay-actions">
+        <button class="cg-btn" id="cg-open-gallery-btn">📖 画廊</button>
+        <button class="cg-btn" id="cg-close-btn">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CG 画廊 Modal -->
+  <div id="cg-gallery-overlay" class="cg-overlay" style="display:none">
+    <div class="cg-gallery-modal">
+      <div class="cg-gallery-header">
+        <div class="cg-gallery-title">🎨 CG 画廊</div>
+        <button class="cg-gallery-close" id="cg-gallery-close-btn">✕</button>
+      </div>
+      <div class="cg-gallery-grid" id="cg-gallery-grid">
+        <!-- 动态填充 -->
+      </div>
+      <div class="cg-gallery-empty" id="cg-gallery-empty" style="display:none">
+        暂无 CG 记录
       </div>
     </div>
   </div>

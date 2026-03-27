@@ -461,6 +461,8 @@ function handleMessage(msg) {
         if (e.skills !== undefined) updateSkills(e.skills);
         if (e.equipped !== undefined) updateEquipment(e.equipped);
       }
+      // 调试模式：刷新调试面板
+      if (window._debugMode) fetchDebugInfo();
       break;
 
     case "scene_change":
@@ -510,6 +512,105 @@ function openLogModal() {
 function closeLogModal() {
   const overlay = $("log-modal-overlay");
   if (overlay) overlay.classList.remove("open");
+}
+
+// ── 属性面板 Modal ────────────────────────────────
+
+function openAttrPanel() {
+  const overlay = $("attr-modal-overlay");
+  if (!overlay) return;
+  overlay.classList.add("open");
+  if (!state.sessionId) {
+    $("attr-loading").style.display = "none";
+    $("attr-content").innerHTML = '<div class="attr-empty">无活跃会话</div>';
+    $("attr-content").style.display = "block";
+    return;
+  }
+  fetchAttrPanel();
+}
+
+function closeAttrPanel() {
+  const overlay = $("attr-modal-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+async function fetchAttrPanel() {
+  $("attr-loading").style.display = "block";
+  $("attr-content").style.display = "none";
+  try {
+    const r = await fetch(`/api/games/${state.sessionId}/status`);
+    if (!r.ok) throw new Error();
+    const s = await r.json();
+    renderAttrPanel(s);
+  } catch {
+    $("attr-loading").style.display = "none";
+    $("attr-content").innerHTML = '<div class="attr-empty">加载失败</div>';
+    $("attr-content").style.display = "block";
+  }
+}
+
+function renderAttrPanel(s) {
+  $("attr-loading").style.display = "none";
+  $("attr-content").style.display = "block";
+
+  $("attr-level").textContent = s.level ?? "—";
+  $("attr-exp").textContent = `${s.exp ?? 0} / ${s.exp_to_level ?? "?"}`;
+  $("attr-gold").textContent = s.gold ?? 0;
+  $("attr-hp").textContent = `${s.hp ?? 0} / ${s.max_hp ?? 0}`;
+  $("attr-stamina").textContent = `${s.stamina ?? 0} / ${s.max_stamina ?? 0}`;
+  $("attr-ap").textContent = `${s.action_power ?? 0} / ${s.max_action_power ?? 0}`;
+  $("attr-skill-points").textContent = s.skill_points ?? 0;
+
+  $("attr-str").textContent = `${s.strength ?? 10} (${fmtMod(s.strength)})`;
+  $("attr-dex").textContent = `${s.agility ?? 10} (${fmtMod(s.agility)})`;
+  $("attr-con").textContent = `${s.constitution ?? 10} (${fmtMod(s.constitution)})`;
+  $("attr-int").textContent = `${s.intelligence ?? 10} (${fmtMod(s.intelligence)})`;
+  $("attr-wis").textContent = `${s.wisdom ?? 10} (${fmtMod(s.wisdom)})`;
+  $("attr-cha").textContent = `${s.charisma ?? 10} (${fmtMod(s.charisma)})`;
+
+  $("attr-ac").textContent = s.armor_class ?? 0;
+  $("attr-atk").textContent = (s.attack_bonus ?? 0) >= 0 ? `+${s.attack_bonus}` : s.attack_bonus;
+  $("attr-dmg").textContent = (s.damage_bonus ?? 0) >= 0 ? `+${s.damage_bonus}` : s.damage_bonus;
+
+  // equipped
+  const eq = s.equipped || {};
+  const eqContainer = $("attr-equipped");
+  const eqItems = Object.entries(eq).filter(([, v]) => v);
+  if (!eqItems.length) {
+    eqContainer.innerHTML = '<div class="attr-empty">无装备</div>';
+  } else {
+    const SLOT_NAMES = { weapon: "武器", offhand: "副手", armor: "护甲", accessory_a: "饰品", accessory_b: "饰品" };
+    eqContainer.innerHTML = eqItems.map(([slot, info]) =>
+      `<div class="attr-equip-item"><span class="slot-label">${SLOT_NAMES[slot] || slot}</span><span>${info?.name || slot}</span></div>`
+    ).join("");
+  }
+
+  // skills
+  const skills = s.skills || [];
+  const skContainer = $("attr-skills");
+  if (!skills.length) {
+    skContainer.innerHTML = '<div class="attr-empty">暂无已学技能</div>';
+  } else {
+    skContainer.innerHTML = skills.map(sk =>
+      `<div class="attr-skill-item"><span class="skill-name">${sk.name}</span><span class="skill-rank">Lv${sk.rank}</span></div>`
+    ).join("");
+  }
+
+  // inventory
+  const inv = s.inventory || [];
+  const invContainer = $("attr-inventory");
+  if (!inv.length) {
+    invContainer.innerHTML = '<div class="attr-empty">背包为空</div>';
+  } else {
+    invContainer.innerHTML = inv.map(item =>
+      `<div class="attr-inv-item">${item.name || item.id || "物品"}</div>`
+    ).join("");
+  }
+}
+
+function fmtMod(val) {
+  const mod = Math.floor(((val || 10) - 10) / 2);
+  return mod >= 0 ? `+${mod}` : `${mod}`;
 }
 
 async function loadLogList() {
@@ -573,14 +674,23 @@ $("custom-input")?.addEventListener("keydown", e => {
 
 // 冒险日志：点击背景关闭
 document.addEventListener("DOMContentLoaded", () => {
-  const overlay = $("log-modal-overlay");
-  if (overlay) {
-    overlay.addEventListener("click", e => {
-      if (e.target === overlay) closeLogModal();
+  const logOverlay = $("log-modal-overlay");
+  if (logOverlay) {
+    logOverlay.addEventListener("click", e => {
+      if (e.target === logOverlay) closeLogModal();
+    });
+  }
+  const attrOverlay = $("attr-modal-overlay");
+  if (attrOverlay) {
+    attrOverlay.addEventListener("click", e => {
+      if (e.target === attrOverlay) closeAttrPanel();
     });
   }
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape") closeLogModal();
+    if (e.key === "Escape") {
+      closeLogModal();
+      closeAttrPanel();
+    }
   });
   // 初始渲染行动按钮
   renderActionButtons();
@@ -652,6 +762,101 @@ async function launchGame(gameId, playerName) {
 
   // 连接 WebSocket
   connectWS(data.session_id);
+}
+
+// ── 调试模式 ────────────────────────────────────────
+
+let _debugRefreshTimer = null;
+
+function toggleDebugMode() {
+  window._debugMode = !window._debugMode;
+  const panel = $("debug-panel");
+  const btn = $("debug-toggle-btn");
+  if (panel) panel.style.display = window._debugMode ? "block" : "none";
+  if (btn) {
+    btn.style.background = window._debugMode ? "#1a3a2a" : "#2a2a2a";
+    btn.style.borderColor = window._debugMode ? "#00ff88" : "#444";
+    btn.style.color = window._debugMode ? "#00ff88" : "#aaa";
+  }
+  if (window._debugMode && state.sessionId) {
+    fetchDebugInfo();
+    // 每 10 秒自动刷新调试数据
+    _debugRefreshTimer = setInterval(fetchDebugInfo, 10000);
+  } else {
+    if (_debugRefreshTimer) { clearInterval(_debugRefreshTimer); _debugRefreshTimer = null; }
+  }
+}
+
+async function fetchDebugInfo() {
+  if (!state.sessionId) return;
+  try {
+    const resp = await fetch(`/api/games/${state.sessionId}/debug`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    renderDebugPanel(data);
+  } catch { /* silent */ }
+}
+
+function renderDebugPanel(data) {
+  if (!$("debug-panel")) return;
+
+  // 回合
+  $("debug-turn").textContent = `回合 ${data.turn} | 场景 ${data.scene_id}`;
+
+  // 隐藏数值
+  const hvEl = $("debug-hidden-values");
+  if (hvEl) {
+    if (!data.hidden_values || Object.keys(data.hidden_values).length === 0) {
+      hvEl.innerHTML = '<span style="color:#666">无</span>';
+    } else {
+      hvEl.innerHTML = Object.entries(data.hidden_values).map(([k, v]) => {
+        const triggered = v.trigger_fired ? "🔥" : "—";
+        const scene = v.current_effect?.trigger_scene ? ` → ${v.current_effect.trigger_scene}` : "";
+        const tone = v.current_effect?.narrative_tone || "";
+        return `<div style="margin-bottom:4px;">
+          <span style="color:#00ff88">${v.name}</span>(${k})
+          <div style="color:#888">raw=${v.raw_value} lv=${v.level_idx} ${triggered}${scene}</div>
+          <div style="color:#aaa;font-size:10px">${tone}</div>
+        </div>`;
+      }).join("");
+    }
+  }
+
+  // 行动点 + 最近骰点
+  const apEl = $("debug-ap-roll");
+  if (apEl) {
+    let html = `<div>AP: ${data.action_power}/${data.max_action_power}</div>`;
+    if (data.recent_roll) {
+      const r = data.recent_roll;
+      const icon = r.critical ? "💥" : r.fumble ? "💀" : r.success ? "✅" : "❌";
+      html += `<div style="margin-top:4px;">
+        🎲 ${r.attribute} | ${r.roll} vs ${r.threshold} ${r.modifier >= 0 ? "+" : ""}${r.modifier}
+        <div>${icon} ${r.tier} | ${r.success ? "成功" : "失败"}</div>
+      </div>`;
+    }
+    apEl.innerHTML = html;
+  }
+
+  // 待触发场景 + 标记
+  const pfEl = $("debug-pending-flags");
+  if (pfEl) {
+    let html = "";
+    if (data.pending_triggered_scenes && data.pending_triggered_scenes.length > 0) {
+      html += `<div>待触发: ${data.pending_triggered_scenes.join(", ")}</div>`;
+    } else {
+      html += '<div style="color:#666">无</div>';
+    }
+    // 关键 flags
+    const debugFlags = Object.entries(data.flags || {})
+      .filter(([k]) => k.startsWith("_hv_") || k.startsWith("_pending_"))
+      .slice(0, 10);
+    if (debugFlags.length > 0) {
+      html += "<div style='margin-top:4px;border-top:1px solid #333;padding-top:4px'>";
+      html += debugFlags.map(([k, v]) => `<div style="color:#888">${k}: ${JSON.stringify(v)}</div>`).join("");
+      html += "</div>";
+    }
+    pfEl.innerHTML = html;
+  }
 }
 
 // 启动

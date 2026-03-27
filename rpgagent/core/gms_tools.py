@@ -335,7 +335,89 @@ class GMSTools:
         except Exception as e:
             return ToolResponse(content=[TextBlock(type="text", text=f"判定失败：{e}")])
 
-    # ── 技能列表 ───────────────────────────────────────
+    # ── 场景 CG 生成 ─────────────────────────────────
+
+    _UNSET_STYLE = object()
+
+    def generate_scene_cg(
+        self,
+        style: Any = _UNSET_STYLE,
+        characters: Optional[list[dict]] = None,
+    ) -> ToolResponse:
+        """
+        为当前场景生成 CG 配图。
+
+        Args:
+            style: 美术风格描述，支持关键词如 "watercolor", "ink wash", "fantasy", "realistic" 等。
+                   通义万相会将其融入画面。若不填，则使用 scene .cg.yaml / meta.cg_scenes 中的
+                   配置风格。
+            characters: 当前场景中出现的角色列表，格式：[{"name": "角色名", "appearance": "外貌描述"}]
+        """
+        scene = self.gm.get_current_scene()
+        if not scene:
+            return ToolResponse(content=[TextBlock(type="text", text="⚠️ 当前无场景，无法生成 CG")])
+
+        # 检查 API key
+        import os
+        api_key = os.getenv("TONGYI_API_KEY", "")
+        if not api_key:
+            # CG 未启用，返回提示而非错误，不打断叙事
+            return ToolResponse(content=[TextBlock(type="text", text="")])
+
+        scene_id = self.gm.session.current_scene_id
+        scene_content = scene.content if scene else ""
+
+        # 读取场景 CG 配置（优先级：scene.cg_config > meta.cg_scenes）
+        scene_config: dict = {}
+        if scene.cg_config:
+            scene_config = scene.cg_config
+        else:
+            cg_config = getattr(self.gm.game_loader.meta, "cg_scenes", {}) or {}
+            scene_config = cg_config.get(scene_id) or {}
+
+        # style 优先级：显式传入 > scene.cg_config > meta.cg_scenes > 内联默认值
+        DEFAULT_STYLE = "fantasy illustration, dark atmosphere, high quality"
+        if style is not self._UNSET_STYLE:
+            resolved_style = style
+        else:
+            resolved_style = scene_config.get("style") or DEFAULT_STYLE
+
+        try:
+            from rpgagent.systems.image_generator import make_generator
+            import asyncio
+
+            gen = make_generator(provider="tongyi", api_key=api_key)
+            img_path = asyncio.run(gen.generate(
+                scene_id=scene_id,
+                scene_content=scene_content,
+                characters=characters or [],
+                style=resolved_style,
+            ))
+            asyncio.run(gen.close())
+
+            # 写入 session，供 API 层感知
+            self.gm.session.scene_cg_path = img_path
+            self.gm.session.scene_cg_generated = True
+            # 标记该场景已生成，避免 auto 流程重复触发
+            self.gm._auto_cg_generated_scenes.add(scene_id)
+            # 记录 CG 历史
+            scene_title = self.gm.current_scene.title if self.gm.current_scene else scene_id
+            self.gm.session.cg_history.append({
+                "scene_id": scene_id,
+                "scene_title": scene_title,
+                "cg_path": img_path,
+                "trigger": "dm_request",
+            })
+
+            # 返回相对路径给 LLM（API 层会做 URL 转换）
+            cg_filename = os.path.basename(img_path)
+            return ToolResponse(content=[TextBlock(
+                type="text",
+                text=f"[CG_GENERATED:{cg_filename}]"
+            )])
+        except Exception as e:
+            # 生成失败不影响叙事，吞掉异常
+            return ToolResponse(content=[TextBlock(type="text", text="")])
 
     # ── 队友系统 ───────────────────────────────────────
 
@@ -421,6 +503,40 @@ class GMSTools:
             lines.append(f"  • {skill.name} {status} [{skill.skill_type.value}] {skill.description}")
         return ToolResponse(content=[TextBlock(type="text", text="\n".join(lines))])
 
+    # ── 成就系统 ─────────────────────────────────────
+
+    def list_achievements(self) -> ToolResponse:
+        """列出所有成就（已解锁/未解锁）"""
+        ach_list = self.gm.achievement_sys.list_achievements()
+        if not ach_list:
+            return ToolResponse(content=[TextBlock(type="text", text="目前没有可用成就。")])
+
+        unlocked = [a for a in ach_list if a["unlocked"]]
+        locked = [a for a in ach_list if not a["unlocked"]]
+        lines = [f"【成就列表】（{len(unlocked)}/{len(ach_list)} 已解锁）"]
+        if unlocked:
+            lines.append("── 已解锁 ──")
+            for a in unlocked:
+                lines.append(f"  {a['icon']} 「{a['name']}」：{a['description']}")
+        if locked:
+            lines.append("── 未解锁 ──")
+            for a in locked:
+                lines.append(f"  🔒 「{a['name']}」：{a['description']}")
+        return ToolResponse(content=[TextBlock(type="text", text="\n".join(lines))])
+
+    def check_achievements(self) -> ToolResponse:
+        """触发成就评估，并返回本次新解锁的成就"""
+        self.gm._evaluate_achievements()
+        newly = [
+            a for a in self.gm.achievement_sys.get_unlocked()
+            if self.gm.session.flags.get("_achievement_unlocked")
+            and a.narrative == self.gm.session.flags.get("_achievement_unlocked")
+        ]
+        if not newly:
+            return ToolResponse(content=[TextBlock(type="text", text="本次无新成就解锁。")])
+        lines = [a.narrative for a in newly]
+        return ToolResponse(content=[TextBlock(type="text", text="\n".join(lines))])
+
     # ── 状态同步 ─────────────────────────────────
 
     def _sync_session(self):
@@ -464,4 +580,11 @@ def create_gms_tools(game_master: Any) -> list:
         tools.grant_skill_points,
         tools.list_all_skills,
         tools.roll_check,
+        tools.list_recruitable_teammates,
+        tools.list_active_teammates,
+        tools.recruit_teammate,
+        tools.get_teammate_status,
+        tools.generate_scene_cg,
+        tools.list_achievements,
+        tools.check_achievements,
     ]

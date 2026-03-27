@@ -85,6 +85,14 @@ DIFFICULTY_EASY = 10
 DIFFICULTY_MEDIUM = 15
 DIFFICULTY_HARD = 20
 
+# ─── 文生图 CG 系统 ─────────────────────────────────────────────────
+# 环境变量：TONGYI_API_KEY
+
+IMAGE_GENERATOR_CACHE_DIR = Path.home() / ".cache" / "rpgagent" / "cg"
+IMAGE_GENERATOR_DEFAULT_PROVIDER = "tongyi"
+IMAGE_GENERATOR_DEFAULT_STYLE = "fantasy illustration, dark atmosphere, high quality"
+IMAGE_GENERATOR_ENABLED = os.getenv("TONGYI_API_KEY", "") != ""
+
 
 # ─── 引擎版本兼容性 ───────────────────────────────────────────────
 

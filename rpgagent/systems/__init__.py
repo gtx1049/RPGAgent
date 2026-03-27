@@ -12,6 +12,14 @@ from .moral_debt import MoralDebtSystem
 from .inventory import InventorySystem, Item
 from .dialogue import DialogueSystem, DialogueLine
 from .hidden_value import HiddenValue, HiddenValueSystem, LevelEffect, HiddenValueRecord
+from .image_generator import (
+    ImageGenerator,
+    TongyiWanxiangGenerator,
+    CGCache,
+    CGTriggerConfig,
+    make_generator,
+    generate_scene_cg,
+)
 
 __all__ = [
     # Interfaces
@@ -35,4 +43,11 @@ __all__ = [
     "HiddenValueSystem",
     "LevelEffect",
     "HiddenValueRecord",
+    # Image Generator
+    "ImageGenerator",
+    "TongyiWanxiangGenerator",
+    "CGCache",
+    "CGTriggerConfig",
+    "make_generator",
+    "generate_scene_cg",
 ]

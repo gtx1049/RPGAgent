@@ -31,6 +31,7 @@ class Scene:
     moral_debt_triggers: List[Dict] = field(default_factory=list)
     required_items: List[str] = field(default_factory=list)
     next_scenes: List[str] = field(default_factory=list)
+    cg_config: Optional[Dict] = None  # CG 触发配置（从 .cg.yaml 加载）
 
 
 @dataclass
@@ -45,6 +46,7 @@ class GameMeta:
     hidden_value_actions: Dict[str, Dict[str, int]] = field(default_factory=dict)  # action_map
     first_scene: Optional[str] = None  # 剧本入口场景 ID
     engine_version: Optional[str] = None  # 要求的最低引擎版本（如 "0.2"）
+    cg_scenes: Dict[str, Dict] = field(default_factory=dict)  # CG 生成配置：{scene_id: {trigger, style}}
 
 
 class GameLoader:
@@ -88,6 +90,7 @@ class GameLoader:
                     hidden_value_actions=data.get("hidden_value_actions", {}),
                     first_scene=data.get("first_scene"),
                     engine_version=data.get("engine_version"),
+                    cg_scenes=data.get("cg_scenes", {}),
                 )
         else:
             self.meta = GameMeta(
@@ -160,11 +163,22 @@ class GameLoader:
                             # 降级：没有 [tag] 的简单选项
                             available_actions.append(stripped)
 
+                # 加载场景 CG 配置（可选）
+                cg_config: Optional[Dict] = None
+                cg_yaml_file = scenes_dir / f"{file.stem}.cg.yaml"
+                if cg_yaml_file.exists():
+                    try:
+                        with open(cg_yaml_file, encoding="utf-8") as f:
+                            cg_config = yaml.safe_load(f)
+                    except Exception:
+                        pass
+
                 scene = Scene(
                     id=file.stem,
                     title=title or file.stem,
                     content=content,
                     available_actions=available_actions,
+                    cg_config=cg_config,
                 )
                 self.scenes[scene.id] = scene
 

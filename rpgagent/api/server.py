@@ -7,6 +7,7 @@ RPGAgent API 服务器
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -22,8 +23,8 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 from .game_manager import get_manager
-from .routes import games, logs, teammates, market
-from ..config.settings import HOST, PORT
+from .routes import games, logs, teammates, market, debug as debug_module, debug
+from ..config.settings import HOST, PORT, IMAGE_GENERATOR_CACHE_DIR
 
 _static_dir = _project_root.parent / "static"
 
@@ -58,6 +59,13 @@ app.include_router(games.router, prefix="/api")
 app.include_router(logs.router, prefix="/api")
 app.include_router(teammates.router, prefix="/api")
 app.include_router(market.router, prefix="/api")
+app.include_router(debug_module.router, prefix="/api")
+
+# CG 缓存目录静态文件服务
+from fastapi.staticfiles import StaticFiles
+_cg_cache_dir = IMAGE_GENERATOR_CACHE_DIR
+_cg_cache_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/cg_cache", StaticFiles(directory=str(_cg_cache_dir)), name="cg_cache")
 
 
 # ─── 静态首页 ───────────────────────────────────────
@@ -214,6 +222,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                     await websocket.send_json({
                         "type": "scene_change",
                         "content": scene_change,
+                    })
+
+                # 新 CG 生成时通知前端
+                if session.gm.session.scene_cg_generated and session.gm.session.scene_cg_path:
+                    cg_filename = os.path.basename(session.gm.session.scene_cg_path)
+                    await websocket.send_json({
+                        "type": "scene_cg",
+                        "content": f"/cg_cache/{cg_filename}",
                     })
 
             elif action == "get_status":

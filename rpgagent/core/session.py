@@ -116,6 +116,11 @@ class Session:
         # 历史
         self.history: List[Dict] = []  # {"role": "player"/"gm", "content": str}
 
+        # CG 配图
+        self.scene_cg_path: Optional[str] = None   # 最近生成的 CG 本地路径
+        self.scene_cg_generated: bool = False       # 本回合是否新生成 CG
+        self.cg_history: List[Dict] = []           # 全部已生成 CG [{scene_id, cg_path, timestamp, scene_title}]
+
         # 存档
         self.savefile = SaveFile()
 

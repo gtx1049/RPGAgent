@@ -139,6 +139,15 @@ class GameMaster:
         self.teammate_sys = TeammateSystem()
         self._register_teammates_from_loader()
 
+        # 成就系统
+        from rpgagent.systems.achievement_system import AchievementSystem
+        ach_configs = getattr(meta, "achievements", []) or []
+        self.achievement_sys = AchievementSystem(game_id=self.game_id, achievements=ach_configs)
+        # 从存档恢复成就进度（如有）
+        saved_ach = session.achievements if hasattr(session, "achievements") else None
+        if saved_ach:
+            self.achievement_sys.load_snapshot(saved_ach)
+
         self.model = AnthropicChatModel(
             model_name=model_name,
             api_key=api_key,
@@ -173,6 +182,9 @@ class GameMaster:
 
         # GMS 工具集（AgentScope Toolkit）
         self._toolkit: Optional[Any] = None
+
+        # 文生图CG：每个场景/场景ID只自动生成一次
+        self._auto_cg_generated_scenes: set = set()
 
     def _register_npcs_from_loader(self):
         """从 GameLoader 批量注册 NPC 社会关系网络"""
@@ -261,6 +273,8 @@ class GameMaster:
         # ── 行动力检查 ──────────────────────────────
         # 如果行动力为0，说明上一轮已耗尽，自动刷新
         new_turn = False
+        # 重置 CG 生成标记（新回合/新场景开始）
+        self.session.scene_cg_generated = False
         if self.stats_sys.get("action_power") <= 0:
             self.stats_sys.refresh_ap()
             self.session.add_history("system", "【回合开始】行动力已刷新。")
@@ -360,6 +374,8 @@ class GameMaster:
             self.current_scene = self.game_loader.get_scene(triggered_scene)
             # 将触发场景通知注入叙事上下文（供 DM 感知）
             self.session.flags[f"_triggered_scene"] = triggered_scene
+            # 自动生成新场景 CG（Phase 2 集成）
+            self._auto_generate_scene_cg(trigger_reason="scene_trigger")
 
         # 立即触发器检查（进入场景后立即执行）
         immediate_scenes = self.scene_trigger_engine.check_immediate(self.session.current_scene_id)
@@ -367,6 +383,8 @@ class GameMaster:
             self.session.update_state(scene_id=imm_scene)
             self.current_scene = self.game_loader.get_scene(imm_scene)
             self.session.flags[f"_triggered_scene"] = imm_scene
+            # 自动生成新场景 CG（Phase 2 集成）
+            self._auto_generate_scene_cg(trigger_reason="immediate_trigger")
 
         return narrative, cmd
 
@@ -614,6 +632,50 @@ class GameMaster:
             except ValueError:
                 pass
 
+        # ── 成就系统指令 ─────────────────────────────────────
+        # achievement_unlock: 主动授予成就
+        achievement_id = cmd.get("achievement_unlock", "").strip()
+        if achievement_id:
+            result = self.achievement_sys.unlock(
+                achievement_id=achievement_id,
+                turn=self.session.turn_count,
+                scene_id=self.session.current_scene_id,
+            )
+            if result:
+                self.session.flags["_achievement_unlocked"] = achievement_id
+
+        # 每回合结束后评估一次成就（自动检测）
+        self._evaluate_achievements()
+
+    def _evaluate_achievements(self) -> None:
+        """每回合自动评估成就，解锁后写入 session.flags 供叙事层感知"""
+        visited = list(getattr(self.session, "visited_scenes", set()))
+        visited.append(self.session.current_scene_id)
+
+        combat_count = getattr(self.session, "combat_count", 0)
+        skill_count = len(self.skill_sys.learned) if self.skill_sys else 0
+        relations = {
+            npc_id: info.get("value", 0)
+            for npc_id, info in self.dialogue_sys.get_all_relations().items()
+        }
+        hv_snapshot = (
+            self.hidden_value_sys.get_snapshot() if self.hidden_value_sys else {}
+        )
+
+        result = self.achievement_sys.evaluate(
+            turn_count=self.session.turn_count,
+            scene_id=self.session.current_scene_id,
+            stats=self.stats_sys.get_snapshot() if self.stats_sys else {},
+            hidden_values=hv_snapshot,
+            skill_count=skill_count,
+            combat_count=combat_count,
+            visited_scenes=visited,
+            relations=relations,
+        )
+
+        for ua in result.newly_unlocked:
+            self.session.flags["_achievement_unlocked"] = ua.narrative
+
     def _sync_session(self):
         """同步 session 状态"""
         # 收集隐藏数值快照（用于存档）
@@ -634,6 +696,7 @@ class GameMaster:
             flags={
                 "_npc_memories": self.npc_mem_sys.get_snapshot(),
                 "_teammates": self.teammate_sys.get_snapshot(),
+                "_achievements": self.achievement_sys.get_snapshot(),
             },
         )
         # 同步技能数据
@@ -666,6 +729,10 @@ class GameMaster:
             self.stats_sys.take_damage(result.damage_taken)
         # 同步 stats 到 session
         self._sync_session()
+
+        # 战斗结束后自动生成场景 CG（Phase 2 集成）
+        if killed or result.damage_taken > 0:
+            self._auto_generate_scene_cg(trigger_reason="combat")
 
         # 处理战斗事件对隐藏数值的影响
         combat_result = {}
@@ -723,3 +790,204 @@ class GameMaster:
         """重置 DM Agent（换场/重开时调用）"""
         self._agent = None
         self.scene_trigger_engine.reset()
+
+    # ── 文生图 CG 自动生成（Phase 2）────────────────────────
+
+    def _auto_generate_scene_cg(self, trigger_reason: str = "scene_change") -> None:
+        """
+        在关键叙事节点自动生成场景 CG。
+        每个 scene_id 只自动生成一次（防止重复调用 API 浪费配额）。
+
+        触发时机：
+        - 场景切换后（进入新场景第一回合）
+        - 战斗胜利/失败结算
+        - 重要剧情节点（LLM 通过 gm_command 触发）
+        """
+        import os
+
+        scene = self.get_current_scene()
+        if not scene:
+            return
+
+        scene_id = scene.id
+        # 已生成过则跳过
+        if scene_id in self._auto_cg_generated_scenes:
+            return
+
+        api_key = os.getenv("TONGYI_API_KEY", "")
+        if not api_key:
+            return
+
+        # 提取场景中出现的角色外观描述
+        characters = []
+        for npc_id, char in self.game_loader.characters.items():
+            appearance = getattr(char, "appearance", "") or ""
+            if appearance:
+                characters.append({"name": char.name, "appearance": appearance})
+
+        # 读取 CG 配置（优先级：scene.cg_config > meta.cg_scenes）
+        # context_loader 已将 per-scene .cg.yaml 加载到 scene.cg_config
+        scene_config: dict = {}
+        if scene.cg_config:
+            scene_config = scene.cg_config
+        # 回退到 meta.cg_scenes（兼容旧格式）
+        if not scene_config:
+            cg_config = getattr(self.game_loader.meta, "cg_scenes", {}) or {}
+            scene_config = cg_config.get(scene_id) or {}
+
+        trigger_type = scene_config.get("trigger", "auto")
+        if trigger_type == "manual":
+            # 该场景配置为手动触发，不自动生成
+            return
+
+        style = scene_config.get("style", "fantasy illustration, dark atmosphere, high quality")
+        # 战斗场景用不同风格
+        if "combat" in trigger_reason or "battle" in trigger_reason:
+            style = "epic battle scene, dramatic lighting, high quality"
+
+        try:
+            from rpgagent.systems.image_generator import make_generator
+            import asyncio
+
+            gen = make_generator(provider="tongyi", api_key=api_key)
+            img_path = asyncio.run(gen.generate(
+                scene_id=scene_id,
+                scene_content=scene.content,
+                characters=characters,
+                style=style,
+            ))
+            asyncio.run(gen.close())
+
+            self.session.scene_cg_path = img_path
+            self.session.scene_cg_generated = True
+            self._auto_cg_generated_scenes.add(scene_id)
+            # 记录 CG 历史
+            self.session.cg_history.append({
+                "scene_id": scene_id,
+                "scene_title": scene.title if scene else scene_id,
+                "cg_path": img_path,
+                "trigger": trigger_reason,
+            })
+        except Exception:
+            # CG 生成失败不打断叙事，吞掉异常
+            pass
+
+    def new_game_plus(self, preserve: Optional[list[str]] = None) -> "Scene":
+        """
+        New Game+：以新游戏开局，可选择性保留进度。
+
+        Args:
+            preserve: 要保留的进度列表，可选值：
+                - "skills"       保留已学会的技能和剩余技能点
+                - "inventory"    保留背包物品
+                - "relations"    保留 NPC 关系
+                - "equipment"    保留已装备的物品
+                - "hidden_values" 保留隐藏数值（如道德债务等级）
+
+        Returns:
+            新的初始场景对象
+        """
+        preserve = preserve or []
+        p = set(preserve)
+
+        # ── 1. 提取需要保留的状态 ─────────────────────────
+        preserved_skills = {}
+        preserved_skill_points = 0
+        if "skills" in p:
+            preserved_skills = dict(self.skill_sys.list_learned())
+            preserved_skill_points = self.skill_sys.skill_points
+
+        preserved_inventory = []
+        if "inventory" in p:
+            preserved_inventory = [item.copy() for item in self.inv_sys.get_snapshot().get("items", [])]
+
+        preserved_relations = {}
+        if "relations" in p:
+            preserved_relations = dict(self.dialogue_sys.get_all_relations())
+
+        preserved_equipment = {}
+        if "equipment" in p:
+            preserved_equipment = dict(self.equipment_sys.get_equipped())
+
+        preserved_hidden = {}
+        if "hidden_values" in p and self.hidden_value_sys:
+            preserved_hidden = self.hidden_value_sys.get_snapshot()
+
+        # ── 2. 创建新的 Session ────────────────────────────
+        from .session import Session
+        new_session = Session(
+            game_id=self.game_id,
+            player_name=self.session.player_name,
+            initial_scene_id="start",
+        )
+        self.session = new_session
+
+        # ── 3. 重新初始化所有系统（使用初始化参数）──────────
+        self.stats_sys = StatsSystem()
+        self.moral_sys = MoralDebtSystem()
+        self.inv_sys = InventorySystem()
+        self.dialogue_sys = DialogueSystem()
+        self.skill_sys = SkillSystem()
+        self.equipment_sys = EquipmentSystem()
+
+        # 隐藏数值系统
+        hv_configs = getattr(self.game_loader.meta, "hidden_values", []) or []
+        hv_action_map = getattr(self.game_loader.meta, "hidden_value_actions", {}) or {}
+        self.hidden_value_sys = None
+        if hv_configs:
+            self.hidden_value_sys = HiddenValueSystem(
+                configs=hv_configs,
+                action_map=hv_action_map,
+            )
+
+        # NPC 长记忆
+        self.npc_mem_sys = NpcMemorySystem()
+        self._register_npcs_from_loader()
+        self._register_teammates_from_loader()
+
+        # 骰点系统
+        self.roll_sys = RollSystem(self.stats_sys, self.skill_sys, self.equipment_sys)
+
+        # ── 4. 应用保留的进度 ─────────────────────────────
+        if "skills" in p and preserved_skills:
+            for skill_id, rank in preserved_skills.items():
+                self.skill_sys.learn_skill(skill_id)
+                for _ in range(rank - 1):
+                    try:
+                        self.skill_sys.upgrade_skill(skill_id)
+                    except Exception:
+                        pass
+            self.skill_sys.skill_points = preserved_skill_points
+
+        if "inventory" in p and preserved_inventory:
+            for item in preserved_inventory:
+                self.inv_sys.add_item(item.get("name", "unknown"), item)
+
+        if "relations" in p and preserved_relations:
+            for npc_id, rel_data in preserved_relations.items():
+                self.dialogue_sys.set_relation(
+                    npc_id,
+                    rel_data.get("value", 0),
+                    rel_data.get("level", "陌生"),
+                )
+
+        if "equipment" in p and preserved_equipment:
+            for slot, item in preserved_equipment.items():
+                if item:
+                    self.equipment_sys.equip(item.get("item_id", ""), slot, item)
+
+        if "hidden_values" in p and preserved_hidden:
+            if self.hidden_value_sys:
+                self.hidden_value_sys.load_snapshot(preserved_hidden)
+
+        # ── 5. 重置 DM ────────────────────────────────────
+        self.reset_dm()
+        # 重置 CG 生成记录（新游戏不应复用旧 CG）
+        self._auto_cg_generated_scenes.clear()
+
+        # ── 6. 切换到初始场景 ─────────────────────────────
+        self.current_scene = self.game_loader.get_first_scene()
+        if self.current_scene:
+            self.session.update_state(scene_id=self.current_scene.id)
+
+        return self.current_scene

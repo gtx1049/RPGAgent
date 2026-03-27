@@ -208,7 +208,7 @@ class RollSystem:
             f"   {TIER_NARRATIVE[tier]}"
         )
 
-        return CheckResult(
+        result = CheckResult(
             tier=tier,
             roll=roll,
             threshold=success_threshold,
@@ -218,6 +218,10 @@ class RollSystem:
             fumble=fumble,
             description=description,
         )
+        # 记录最近一次判定结果，供调试模式展示
+        self._last_result = result
+        self._last_result.attribute_key = attribute_key
+        return result
 
     def format_result(self, result: CheckResult, action: str = "") -> str:
         """格式化判定结果为叙事文本（嵌入 GM 叙事用）"""

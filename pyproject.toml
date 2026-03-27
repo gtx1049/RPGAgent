@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rpgagent"
-version = "0.1.0"
+version = "0.2.0"
 description = "LLM-driven RPG game engine with hidden stat system"
 readme = "README.md"
 license = {text = "MIT"}
