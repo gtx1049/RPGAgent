@@ -16,3 +16,15 @@ __pycache__/
 # 虚拟环境
 venv/
 .venv/
+
+# 环境配置（包含 API Key）
+.env
+.env.*
+!.env.example
+
+# 敏感文件
+.git_credentials
+credentials.json
+secrets.json
+*.pem
+*.key
