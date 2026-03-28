@@ -456,6 +456,7 @@ async def get_stats_overview(session_id: str):
     """
     轻量版统计概览：单次请求返回核心指标（用于前端状态栏实时显示）
     """
+    from ...api.game_manager import get_manager
     manager = get_manager()
     session = manager.get_session(session_id)
     if not session:
