@@ -332,3 +332,76 @@
 **对应问题：**
 - `/api/games/{session_id}/debug` 返回 500 → **已修复**
 - 统计面板"加载中……"（调用 `/api/sessions/{session_id}/stats/overview`）→ **已修复**
+
+---
+
+## 测试反馈 2026-03-28 21:12
+
+### 1. HTTP API 测试
+| 端点 | 状态 |
+|------|------|
+| GET /health | ✅ 200 |
+| GET / | ✅ 200 |
+| GET /api/games | ✅ 200 |
+
+### 2. WebSocket 连接测试
+| 测试 | 结果 |
+|------|------|
+| `/ws/test-session` | ✅ accepted |
+| `/ws/1f1119ab3130` (有效session) | ✅ accepted |
+
+**结论**：WebSocket 403 问题已解决，连接正常！
+
+### 3. 游戏流程测试
+- ✅ 启动 example 游戏成功
+- ✅ 获取初始场景内容正常
+- ✅ WebSocket 握手成功
+
+---
+
+**[已修复] WebSocket 403 问题已解决**
+
+## 测试反馈 2026-03-28 21:19 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+
+### 一、首页与静态资源
+
+1. **[已测试] 首页加载正常** - HTTP 200，三个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡）均列在 `/api/games` 中，页面 HTML 结构完整（div/button/span 等元素正常）[优先级：—]
+
+2. **[已测试] 静态资源正常** - `/static/css/game.css` 和 `/static/js/game.js` 均返回 HTTP 200，无 404 [优先级：—]
+
+### 二、REST API 测试
+
+3. **[已测试] GET /api/games 正常** - 返回 3 个剧本的完整信息（id、name、summary、tags），JSON 格式正确 [优先级：—]
+
+4. **[已测试] POST /api/games/{id}/start 正常** - 可以成功创建游戏会话，返回 session_id、scene 内容、初始 turn 数。例如启动"秦末·大泽乡"返回 session_id=1dd413fe4c39，初始场景"大泽乡营地"内容丰富 [优先级：—]
+
+5. **[已测试] GET /api/sessions/{id}/stats/overview 正常** - 返回完整的角色状态（turn、level、hp、action_power、moral_debt_level、gold、day、period、combat_rate、scene）[优先级：—]
+
+6. **[问题] POST /api/games/action 返回 Internal Server Error** - 执行玩家行动（如"站起来"、"与陈胜交谈"）时返回 500 错误。服务器日志显示：`TypeError: Could not resolve authentication method. Expected either api_key or auth_token to be set`。根因：agentscope 使用 Anthropic API 时未配置有效的 API Key（ANTHROPIC_API_KEY 环境变量未设置）[优先级：高]
+
+### 三、WebSocket 连接
+
+7. **[问题] WebSocket 仍返回 403 Forbidden** - 通过 curl 测试 `GET /ws`（带 Upgrade/websocket 头）返回 HTTP 403。debug.md 之前记录"WebSocket 403 问题已解决"，但当前测试（21:26）确认问题仍然存在 [优先级：高]
+
+### 四、游戏内容测试
+
+8. **[已测试] 剧本内容丰富** - 以"秦末·大泽乡"为例，初始场景包含完整的叙事文本（营地描写、人物介绍、陈胜/吴广的动态）、4 个玩家可选行动（与陈胜交谈、与吴广交谈、安抚戍卒、旁观县尉），内容质量较高 [优先级：—]
+
+9. **[问题] 游戏行动无法执行** - 由于 API Key 未配置 + WebSocket 403，玩家无法实际执行任何游戏行动（选单消失/无响应），游戏流程完全卡住 [优先级：高]
+
+### 五、自动化测试受阻
+
+10. **[问题] Chrome headless CDP 连接困难** - 当前环境（无 X11/display）运行 Chrome headless 时，即使加上 `--ozone-platform=headless` 仍偶发 X server 错误。手动用 curl 绕过浏览器进行 API 测试，发现 API 功能正常但整体游戏流程因 WS+Key 问题中断 [优先级：中]
+
+### 六、待解决问题汇总
+
+| # | 问题 | 优先级 | 状态 |
+|---|------|--------|------|
+| 1 | API Key (ANTHROPIC_API_KEY) 未配置 | 高 | 阻塞 |
+| 2 | WebSocket /ws 返回 403 | 高 | 阻塞 |
+| 3 | 游戏行动 API 返回 500 | 高 | 阻塞（由#1引起）|
+| 4 | Chrome CDP 自动化测试受阻 | 中 | 环境问题 |
+
+**注：** 根本原因是 API Key 未配置，强烈建议在服务器环境设置 `ANTHROPIC_API_KEY` 或 `OPENAI_API_KEY` 环境变量后重启服务。
