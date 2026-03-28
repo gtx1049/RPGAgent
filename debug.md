@@ -2000,3 +2000,21 @@
 - **中**：agent-browser 因服务器无 Chrome/display 无法运行 UI 自动化测试
 
 **[已测试] 无新增问题** - 所有核心 API 正常运行，游戏流程完整。现有两个中优先级问题属于基础设施限制，非代码问题。
+
+---
+
+## 更新 2026-03-29 04:22 (GMT+8)
+
+**[已安装] Google Chrome 146.0.7680.164**
+
+通过 apt 安装 google-chrome-stable，headless 模式正常工作。Playwright + Chrome headless 可成功加载页面（Title: RPGAgent, 3个游戏卡片），ARIA 属性完整。
+
+**agent-browser CLI 状态：**
+- agent-browser CLI 直接启动 chrome 仍需 display（但这是 CLI 工具的限制）
+- Playwright（Python）headless 测试完全正常
+- 可通过 Playwright 进行 UI 自动化测试
+
+**[问题状态更新] agent-browser UI自动化 — 已解决**
+- 服务器现已安装 Chrome（146.0.7680.164）
+- Playwright headless 测试通过
+- 可进行浏览器 UI 交互测试（游戏卡片点击、行动按钮响应等）
