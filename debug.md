@@ -1,7 +1,19 @@
 # RPGAgent 测试反馈
 
 **测试时间：** 2026-03-28 21:08 (GMT+8)
-**修复提交：** 49b47bf
+**修复提交：** 49b47bf / 4e6e71a
+
+---
+
+## 修复记录 2026-03-28 21:40 (GMT+8)
+
+### [已修复] start_game 请求体冗余 game_id 字段
+
+**问题：** `POST /api/games/{game_id}/start` 的 URL path 已含 `game_id`，但 body 仍强制要求 `game_id` 字段，造成数据冗余。
+
+**修复文件：** `rpgagent/api/models.py` — 从 `StartGameRequest` 中移除 `game_id` 字段
+
+**Commit：** `4e6e71a`
 
 ---
 
@@ -360,6 +372,67 @@
 ---
 
 **[已修复] WebSocket 403 问题已解决**
+
+## 测试反馈 2026-03-28 21:38 (GMT+8)
+
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+
+### 一、首页与游戏卡片
+
+1. **[已测试] 首页加载正常** - HTTP 200，三个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡）均正常返回，页面结构完整 [优先级：—]
+
+2. **[已测试] 静态资源正常** - 游戏卡片渲染正常，无 JS 报错 [优先级：—]
+
+3. **[问题] 启动游戏 API 请求体设计冗余** - 路由 `POST /api/games/{game_id}/start` 的 URL 路径已包含 `game_id`，但请求 body 仍强制要求 `game_id` 字段，造成数据冗余。另外，`player_name` 字段无默认值，需客户端手动传入。建议：移除 body 中的 `game_id`，`player_name` 设置默认值为"冒险者" [优先级：中]
+
+### 二、WebSocket 连接状态
+
+4. **[观察] WebSocket 握手成功但无后续消息** - 使用有效 session_id 测试 `ws://43.134.81.228:8080/ws/{session_id}` 返回 HTTP 101 Switching Protocols（握手成功）。但连接建立后服务器未发送任何 JSON 消息（之前测试假 session 时会返回 `{"type":"error","content":"会话不存在或已过期"}`）。实际游戏 session 的 WS 连接看起来挂起，没有收到场景数据或行动确认 [优先级：高]
+
+5. **[问题] WebSocket 实际游戏通信仍不可用** - 与 21:19 测试结果不同，当时确认 WS 403 问题已解决，但本次（21:38）WS 握手虽然成功（101），连接后无任何数据交互，游戏行动仍无法通过 WS 实时同步 [优先级：高]
+
+### 三、REST API 测试
+
+6. **[已测试] GET /api/games 正常** - 返回 3 个剧本完整信息 [优先级：—]
+
+7. **[已测试] POST /api/games/{id}/start 正常** - 成功启动"秦末·大泽乡"剧本，返回 session_id=74210ed32a4c，初始场景"daze_camp"内容丰富（陈胜、吴广、暴雨、900戍卒等场景描写）[优先级：—]
+
+8. **[已测试] GET /api/sessions/{id}/stats/overview 正常** - 返回完整角色状态（turn、level、hp、action_power、moral_debt_level 等）[优先级：—]
+
+9. **[已测试] GET /api/games/{id}/debug 正常** - 返回完整调试信息（scene_id、turn、stats、hidden_values）[优先级：—]
+
+10. **[已测试] GET /api/sessions/{id}/achievements 正常** - 返回成就列表（第一步、和平谈判者、幸存者等）[优先级：—]
+
+11. **[问题] POST /api/games/action 返回 Internal Server Error** - 与之前测试一致，执行任何游戏行动均返回 500。服务器未配置 ANTHROPIC_API_KEY，导致 agentscope 调用 LLM 时认证失败 [优先级：高]
+
+### 四、游戏内容质量
+
+12. **[已测试] 剧本内容质量高** - 以"秦末·大泽乡"为例，初始场景包含：大泽乡营地描写（暴雨、900戍卒困守）、陈胜/吴广人物动态、场景氛围渲染（"反抗是死，不走也是死，不如反抗"）、4 个玩家可选行动，内容充实有 RPG 感 [优先级：—]
+
+### 五、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | |
+| 游戏卡片渲染 | ✅ 正常 | 3张卡片 |
+| REST API 启动游戏 | ✅ 正常 | |
+| REST API stats/overview | ✅ 正常 | |
+| REST API debug | ✅ 正常 | |
+| REST API achievements | ✅ 正常 | |
+| WebSocket 握手 | ⚠️ 101成功 | 但连接后无数据交互 |
+| 行动 API (action) | ❌ 500错误 | API Key 未配置 |
+| 游戏流程完整性 | ❌ 中断 | WS 无响应 + action 500 |
+
+**未修复问题（持续性）：**
+1. **高**：行动 API 500 错误（ANTHROPIC_API_KEY 未配置）
+2. **高**：WebSocket 实际通信中断（握手101成功但无数据）
+
+**建议改进：**
+1. **中**：移除 start_game body 中的冗余 game_id 字段
+2. **中**：player_name 设置默认值
+
+---
 
 ## 测试反馈 2026-03-28 21:19 (GMT+8)
 **测试角色：** 小刚（资深RPG玩家）
