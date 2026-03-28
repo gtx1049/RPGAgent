@@ -174,15 +174,15 @@ async def get_game_stats(session_id: str):
         raise HTTPException(status_code=404, detail="会话不存在或已过期")
 
     gm = session.gm
-    history = session.history
+    history = gm.session.history
 
     # ── 概览 ────────────────────────────────
     scene = gm.get_current_scene()
     stats = gm.stats_sys.get_snapshot()
     moral = gm.moral_sys.get_snapshot()
     overview = GameOverview(
-        turn_count=session.turn_count,
-        current_scene=session.current_scene_id,
+        turn_count=gm.session.turn_count,
+        current_scene=gm.session.current_scene_id,
         scene_title=scene.title if scene else "?",
         current_day=gm.day_night_sys.get_day(),
         current_period=gm.day_night_sys.get_current_period().value,
@@ -224,13 +224,13 @@ async def get_game_stats(session_id: str):
     )
 
     # ── 战斗统计（从 flags 累积）────────────────
-    battles_started = session.flags.get("_combat_count", 0)
-    battles_won = session.flags.get("_combat_wins", 0)
-    battles_lost = session.flags.get("_combat_losses", 0)
-    total_damage_dealt = session.flags.get("_total_damage_dealt", 0)
-    total_damage_taken = session.flags.get("_total_damage_taken", 0)
-    kills = session.flags.get("_kills", 0)
-    deaths = session.flags.get("_deaths", 0)
+    battles_started = gm.session.flags.get("_combat_count", 0)
+    battles_won = gm.session.flags.get("_combat_wins", 0)
+    battles_lost = gm.session.flags.get("_combat_losses", 0)
+    total_damage_dealt = gm.session.flags.get("_total_damage_dealt", 0)
+    total_damage_taken = gm.session.flags.get("_total_damage_taken", 0)
+    kills = gm.session.flags.get("_kills", 0)
+    deaths = gm.session.flags.get("_deaths", 0)
     win_rate = (battles_won / battles_started * 100) if battles_started > 0 else 0.0
 
     combat_stats = CombatStats(
@@ -330,8 +330,8 @@ async def get_game_stats(session_id: str):
     )
 
     # ── 场景探索 ───────────────────────────────
-    visited = getattr(session, "visited_scenes", set())
-    visited.add(session.current_scene_id)
+    visited = getattr(gm.session, "visited_scenes", set())
+    visited.add(gm.session.current_scene_id)
     all_scenes = list(gm.game_loader.scenes.keys()) if hasattr(gm.game_loader, "scenes") else []
     visited_list = []
     for sid in visited:
@@ -466,12 +466,12 @@ async def get_stats_overview(session_id: str):
     moral = gm.moral_sys.get_snapshot()
 
     # 从 history 快速统计行动类型
-    total = len([e for e in session.history if e.get("role") == "player"])
-    combat = len([e for e in session.history if e.get("role") == "player" and _classify_action(e.get("content", "")) == "combat"])
+    total = len([e for e in gm.session.history if e.get("role") == "player"])
+    combat = len([e for e in gm.session.history if e.get("role") == "player" and _classify_action(e.get("content", "")) == "combat"])
 
     return {
         "session_id": session_id,
-        "turn": session.turn_count,
+        "turn": gm.session.turn_count,
         "level": stats.get("level", 1),
         "hp": f"{stats.get('hp', 0)}/{stats.get('max_hp', 0)}",
         "action_power": f"{stats.get('action_power', 0)}/{stats.get('max_action_power', 0)}",
