@@ -105,6 +105,12 @@ async def player_action(req: PlayerActionRequest):
     if not session:
         raise HTTPException(status_code=404, detail="会话不存在或已过期")
 
+    if not API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="API 密钥未配置。请设置 OPENAI_API_KEY 或 RPG_API_KEY 环境变量后重启服务器。",
+        )
+
     narrative, cmd = await manager.process_action(req.session_id, req.action)
 
     # 更新DB
