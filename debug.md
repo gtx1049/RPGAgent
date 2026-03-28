@@ -37,7 +37,7 @@
 
 ### 六、debug端点异常发现
 
-11. **[观察] debug端点 scene_id 显示为 "unknown"** - `GET /api/games/{session_id}/debug` 返回的 `scene_id` 字段值为 `"unknown"` 而非预期的 `scene_01` 或当前实际场景。虽然端点返回200，数据结构完整，但 `scene_id` 字段异常，疑似数据映射问题 [优先级：中]
+11. **[已修复] debug端点 scene_id 显示为 "unknown"** - `GET /api/games/{session_id}/debug` 返回的 `scene_id` 字段值为 `"unknown"` 而非预期的 `scene_01`。根因：`get_current_scene()` 使用 `session.current_scene_id`（初始化为"start"）查找场景，但 game_loader 的首场景 ID 是 `scene_01`，导致查找不到返回 None。修复：改为直接返回 `self.current_scene`（GameMaster 初始化时已正确设置）。Commit: 57319db [优先级：中]
 
 ### 七、总结
 
@@ -50,7 +50,7 @@
 | REST API achievements | ✅ 正常 | 3个成就 |
 | POST /api/games/action | ✅ 已恢复 | **01:57的500问题已解决**，本次10.8秒正常返回 |
 | WebSocket | ❌ **404回归** | **01:03确认101成功，现返回404** |
-| debug scene_id | ⚠️ 异常 | scene_id="unknown"，疑似数据问题 |
+| debug scene_id | ✅ 已修复 | scene_id 现在正确返回实际场景ID |
 | 浏览器 UI 测试 | ⚠️ 无法执行 | Chrome无法启动 |
 
 **回归问题（需关注）：**
@@ -62,7 +62,9 @@
 **持续性环境问题：**
 - **中**：action API 响应延迟约10-15秒（建议流式改造）
 - **中**：agent-browser 因 Chrome 无法在 headless 环境运行
-- **中**：debug端点 scene_id="unknown"（需确认是否为已知行为）
+
+**已修复：**
+- **中**：debug端点 scene_id="unknown" — get_current_scene() 改用 self.current_scene 直接返回（commit 57319db）
 
 **建议：**
 - 检查服务器 WebSocket 路由配置（为何从01:03的101变为现在的404）
