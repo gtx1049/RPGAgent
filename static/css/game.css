@@ -1503,6 +1503,56 @@ body {
   padding: 24px 0;
 }
 
+/* ── 游戏统计 Modal ─────────────────────────────────────── */
+#stat-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+#stat-modal-overlay.open { display: flex; }
+
+#stat-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: min(600px, 90vw);
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+#stat-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#stat-modal-header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text);
+}
+#stat-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+#stat-modal-close:hover { color: var(--text); }
+#stat-modal-body {
+  overflow-y: auto;
+  flex: 1;
+}
+
 @media (max-width: 520px) {
   #ach-modal {
     width: 100vw;
@@ -1510,4 +1560,10 @@ body {
     border-radius: 12px 12px 0 0;
   }
   #ach-modal-overlay { align-items: flex-end; }
+  #stat-modal {
+    width: 100vw;
+    max-height: 90vh;
+    border-radius: 12px 12px 0 0;
+  }
+  #stat-modal-overlay { align-items: flex-end; }
 }
