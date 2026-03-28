@@ -69,8 +69,13 @@ app.include_router(replay.router, prefix="/api")
 app.include_router(editor.router, prefix="/api")
 app.include_router(compression.router, prefix="/api")
 
-# CG 缓存目录静态文件服务
+# 静态文件服务
 from fastapi.staticfiles import StaticFiles
+
+# 游戏静态资源（CSS/JS/图片）
+app.mount("/static", StaticFiles(directory=str(_static_dir), html=True), name="static")
+
+# CG 缓存目录静态文件服务
 _cg_cache_dir = IMAGE_GENERATOR_CACHE_DIR
 _cg_cache_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/cg_cache", StaticFiles(directory=str(_cg_cache_dir)), name="cg_cache")
