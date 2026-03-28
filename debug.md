@@ -29,7 +29,7 @@
 
 10. **[已测试] GET /api/games/scenes/{scene_id}/cg 正常** - HTTP 200，CG端点可访问 [优先级：—]
 
-11. **[问题] achievements/logs/stats 等端点返回 404** - 本次测试发现 `/api/games/{session_id}/achievements`、`/api/games/{session_id}/logs`、`/api/games/{session_id}/stats` 均返回 404 Not Found。但 `/api/games/{session_id}/debug` 正常（返回包含stats数据），可能这些端点路径已变更或使用不同前缀 [优先级：中]
+11. **[误报] achievements/logs/stats 等端点返回 404** - 本次测试错误使用了 `/api/games/{session_id}/achievements` 等路径，但正确路径是 `/api/sessions/{session_id}/achievements`、`/api/sessions/{session_id}/stats`、`/api/logs/{session_id}`（已在 00:19 测试中确认均正常）。前端 game.js 调用的正是这些正确路径。此为测试路径笔误，非代码问题 [优先级：—]
 
 ### 三、action API 响应延迟问题（持续）
 
@@ -51,7 +51,7 @@
 | REST API saves | ✅ 正常 | |
 | REST API cg | ✅ 正常 | |
 | POST /api/games/action | ✅ 已恢复 | 但响应延迟约15秒 |
-| achievements/logs/stats | ⚠️ 404 | 端点路径可能已变更 |
+| achievements/logs/stats | ✅ 正常 | 正确路径：/api/sessions/{id}/achievements, /api/sessions/{id}/stats, /api/logs/{id} |
 | 浏览器 UI 测试 | ⚠️ 无法执行 | Chrome无法启动 |
 
 **已解决问题：**
