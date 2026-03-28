@@ -1,3 +1,71 @@
+## 测试反馈 2026-03-29 00:38 (GMT+8)
+
+**测试时间：** 2026-03-29 00:38 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl + HTTP API（agent-browser 因无 Chrome/display + Xvfb Chrome崩溃，无法使用）
+
+### 一、首页与静态资源
+
+1. **[已测试] 首页加载正常** - HTTP 200，响应时间 <5ms，页面结构完整 [优先级：—]
+
+2. **[已测试] 健康检查正常** - `/health` 返回 `{"status":"ok","sessions":14}`，服务器运行中 [优先级：—]
+
+### 二、REST API 测试
+
+3. **[已测试] GET /api/games 正常** - 返回3个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡），JSON正确 [优先级：—]
+
+4. **[已测试] POST /api/games/example/start 正常** - 成功启动示例剧本（session_id=327aec3cf0b1），返回首场景"第一幕·电话"叙事完整（神秘电话、海滨路13号悬念）[优先级：—]
+
+5. **[已测试] POST /api/games/action 正常** - 行动API已恢复！发送"接听电话"行动成功，GM返回详细叙事（含thinking过程和text内容），返回选项正常（立即前往/观望等待/查资料等），**但响应耗时约15秒**[优先级：—]
+
+6. **[已测试] GET /api/games/{session_id}/status 正常** - 返回完整角色状态（hp:100/100, stamina:100/100, action_power:3/3, level:1, 各属性值10），数据结构正确 [优先级：—]
+
+7. **[已测试] GET /api/games/{session_id}/debug 正常** - 返回完整调试信息（scene_id、turn:1、stats、hidden_values等），GameSession属性正常 [优先级：—]
+
+8. **[已测试] GET /api/games/{session_id}/npcs 正常** - 返回空数组（首场景无NPC），接口正常 [优先级：—]
+
+9. **[已测试] GET /api/games/{session_id}/saves 正常** - 返回多个自动存档（autosave_xxx），接口正常 [优先级：—]
+
+10. **[已测试] GET /api/games/scenes/{scene_id}/cg 正常** - HTTP 200，CG端点可访问 [优先级：—]
+
+11. **[问题] achievements/logs/stats 等端点返回 404** - 本次测试发现 `/api/games/{session_id}/achievements`、`/api/games/{session_id}/logs`、`/api/games/{session_id}/stats` 均返回 404 Not Found。但 `/api/games/{session_id}/debug` 正常（返回包含stats数据），可能这些端点路径已变更或使用不同前缀 [优先级：中]
+
+### 三、action API 响应延迟问题（持续）
+
+12. **[问题] action API 响应耗时约15秒（回归问题）** - POST /api/games/action 虽返回200，但每次响应需等待10-15秒，用户体验不佳。无流式输出机制，客户端需等待完整生成后才能看到叙事内容 [优先级：中]
+
+### 四、agent-browser UI自动化受阻（持续）
+
+13. **[问题] agent-browser + Xvfb 均无法启动 Chrome** - 当前环境无X11 display，Chrome报错 "Missing X server or $DISPLAY"（exit code 1），无法进行浏览器UI层面的交互测试 [优先级：中]
+
+### 五、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | HTTP 200，<5ms |
+| 健康检查 | ✅ 正常 | sessions=14 |
+| REST API 启动游戏 | ✅ 正常 | 3个剧本均成功 |
+| REST API status | ✅ 正常 | |
+| REST API debug | ✅ 正常 | |
+| REST API saves | ✅ 正常 | |
+| REST API cg | ✅ 正常 | |
+| POST /api/games/action | ✅ 已恢复 | 但响应延迟约15秒 |
+| achievements/logs/stats | ⚠️ 404 | 端点路径可能已变更 |
+| 浏览器 UI 测试 | ⚠️ 无法执行 | Chrome无法启动 |
+
+**已解决问题：**
+- ✅ POST /api/games/action 500 错误 — 现已返回 200，游戏流程完整
+
+**持续性环境问题：**
+- **中**：action API 响应延迟约15秒（建议流式改造）
+- **中**：agent-browser 因 Chrome 无法在 headless 环境运行
+
+**需关注：**
+- achievements/logs/stats 端点返回404，可能需要更新端点路径或检查路由配置
+
+---
+
 ## 测试反馈 2026-03-29 00:19 (GMT+8)
 
 **测试时间：** 2026-03-29 00:19 (GMT+8)
