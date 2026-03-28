@@ -1,3 +1,123 @@
+## 测试反馈 2026-03-29 03:19 (GMT+8)
+
+**测试时间：** 2026-03-29 03:19 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl + Python WebSocket（agent-browser 因无 Chrome/display 无法使用）
+
+### 一、首页与静态资源
+
+1. **[已测试] 首页加载正常** - HTTP 200，响应时间极快（3.7ms），HTML结构完整，包含游戏选择界面、叙事区、侧边栏等完整UI组件 [优先级：—]
+
+2. **[已测试] 健康检查正常** - `/health` 返回 `{"status":"ok","sessions":N}`，服务器运行中 [优先级：—]
+
+### 二、REST API 测试
+
+3. **[已测试] GET /api/games 正常** - 返回3个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡），JSON正确 [优先级：—]
+
+4. **[已测试] POST /api/games/example/start 正常** - 成功启动示例剧本，返回 session_id、scene_01 第一幕·电话内容完整，叙事含神秘来电悬念 [优先级：—]
+
+5. **[已测试] GET /api/games/{session_id}/status 正常** - 返回完整角色状态（hp:100/100, stamina:100/100, action_power:3/3, turn:0, 各类属性），数据结构正确 [优先级：—]
+
+6. **[建议] POST /api/games/{id}/action 返回 404** - REST 风格的动作 API 不存在（返回 `{"detail":"Not Found"}`），实际游戏通过 WebSocket 发送 `{action:"player_input",content:"..."}` 驱动，REST action API 为遗留或从未实现的端点 [优先级：低]
+
+### 三、WebSocket 连接与游戏交互
+
+7. **[已测试] WebSocket 连接成功** - `ws://43.134.81.228:8080/ws/{session_id}` 握手成功，ping/pong 正常 [优先级：—]
+
+8. **[已测试] 游戏流程正常** - 完整测试：启动游戏 → WebSocket 发送"接听电话" → GM 返回完整叙事（含 thinking 思考过程 + content 叙事内容），场景切换 turn:0→1，action_power 消耗正常 [优先级：—]
+
+### 四、agent-browser UI自动化受阻（持续）
+
+9. **[问题] agent-browser 无法启动** - Chrome 报错 "Missing X server or $DISPLAY"，headless 模式不可用，无法进行浏览器 UI 交互测试 [优先级：中]
+
+### 五、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | HTTP 200，3.7ms |
+| 游戏列表 API | ✅ 正常 | 3个剧本 |
+| 游戏启动 API | ✅ 正常 | session + 首场景 |
+| 状态 API | ✅ 正常 | 完整角色属性 |
+| WebSocket 连接 | ✅ 正常 | 握手101，ping/pong |
+| 游戏交互 | ✅ 正常 | player_input→GM叙事 |
+| REST action API | ⚠️ 404 | 游戏走WS，非REST |
+| 浏览器 UI 测试 | ⚠️ 无法执行 | Chrome缺display |
+
+**已确认正常：**
+- 核心游戏流程完整可用（HTTP API 启动 → WebSocket 交互 → GM 叙事返回）
+- WebSocket 通信稳定，ping/pong 正常
+- 角色状态系统正常（HP、体力、行动力、回合等）
+
+**持续性环境问题：**
+- agent-browser 因服务器无 Chrome/display 无法运行 UI 自动化测试
+
+---
+
+## 测试反馈 2026-03-29 03:02 (GMT+8)
+
+**测试时间：** 2026-03-29 03:02 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl + HTTP API（agent-browser 因无 Chrome/display 无法使用）
+
+### 一、首页与静态资源
+
+1. **[已测试] 首页加载正常** - HTTP 200，响应时间快（3.7ms），页面结构完整 [优先级：—]
+
+2. **[已测试] 健康检查正常** - `/health` 返回 `{"status":"ok","sessions":33}`，服务器运行中，当前33个活跃会话（较02:57的30个增加3个）[优先级：—]
+
+### 二、REST API 测试
+
+3. **[已测试] GET /api/games 正常** - 返回3个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡），JSON正确 [优先级：—]
+
+4. **[已测试] POST /api/games/example/start 正常** - 成功启动示例剧本（session_id=c64491ece967，scene=scene_01第一幕·电话），返回首场景叙事完整（神秘电话、海滨路13号悬念），player_name=小刚正常 [优先级：—]
+
+5. **[已测试] POST /api/games/action 正常** - 行动API正常！发送"接听电话"行动成功，GM返回完整叙事（narrative含thinking+content），**响应耗时约10.8秒**（在10-21秒正常区间内）。session turn从0变为1，action_power消耗正常 [优先级：—]
+
+6. **[已测试] GET /api/sessions/{session_id}/stats/overview 正常** - 返回完整角色状态（turn:1, level:1, hp:100/100, action_power:3/3, moral_debt:洁净），数据结构正确 [优先级：—]
+
+7. **[已测试] GET /api/sessions/{session_id}/achievements 正常** - 返回6个成就，结构正确（first_step、peaceful_negotiator、survivor等）[优先级：—]
+
+### 三、WebSocket 连接状态
+
+8. **[已测试] WebSocket 握手返回 101** - 使用有效 session_id 测试 `ws://43.134.81.228:8080/ws/c64491ece967` 返回 **HTTP 101 Switching Protocols**，WS连接正常 [优先级：—]
+
+### 四、action API 响应延迟问题（持续）
+
+9. **[问题] action API 响应耗时约10.8秒** - 无流式输出，客户端需等待完整生成后才能看到叙事内容（在10-21秒区间内，较上次02:57的21.4秒有所改善）[优先级：中]
+
+### 五、agent-browser UI自动化受阻（持续）
+
+10. **[问题] agent-browser + Chrome headless 均无法启动** - 当前环境无 X11 display，Chrome 报错 "Missing X server or $DISPLAY"（exit code 1），无法进行浏览器 UI 层面的交互测试 [优先级：中]
+
+### 六、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | HTTP 200，3.7ms |
+| 健康检查 | ✅ 正常 | sessions=33 |
+| REST API 启动游戏 | ✅ 正常 | 3个剧本均成功 |
+| REST API stats/overview | ✅ 正常 | turn=1, hp=100/100 |
+| REST API achievements | ✅ 正常 | 6个成就 |
+| POST /api/games/action | ✅ 正常 | **200正常返回，10.8秒，无500回归** |
+| WebSocket | ✅ **101握手成功** | WS连接稳定 |
+| 浏览器 UI 测试 | ⚠️ 无法执行 | Chrome无法启动 |
+
+**已确认正常：**
+- **高**：action API 200正常 — 无500回归，叙事完整，10.8秒
+- **高**：WebSocket 101握手成功 — WS连接稳定
+
+**持续性环境问题：**
+- **中**：action API 响应延迟约10.8秒（建议流式改造）
+- **中**：agent-browser 因 Chrome 无法在 headless 环境运行
+
+**建议：**
+- 所有核心 API 运行稳定，无新问题发现
+- action API 响应延迟建议通过 SSE 流式输出改善
+
+---
+
 ## 测试反馈 2026-03-29 02:57 (GMT+8)
 
 **测试时间：** 2026-03-29 02:57 (GMT+8)
