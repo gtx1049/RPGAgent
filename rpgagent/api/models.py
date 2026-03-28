@@ -6,7 +6,7 @@ from typing import Optional
 # ─── 请求 ────────────────────────────────────────────
 
 class StartGameRequest(BaseModel):
-    game_id: str
+    # game_id 从 URL path 获取，不从 body 读取（避免冗余）
     player_name: str = "玩家"
 
 
