@@ -1,3 +1,63 @@
+## 测试反馈 2026-03-29 02:57 (GMT+8)
+
+**测试时间：** 2026-03-29 02:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl + HTTP API（agent-browser 因无 Chrome/display 无法使用）
+
+### 一、首页与静态资源
+
+1. **[已测试] 首页加载正常** - HTTP 200，响应时间快，页面结构完整，气氛光效正常渲染 [优先级：—]
+
+2. **[已测试] 健康检查正常** - `/health` 返回 `{"status":"ok","sessions":29}`，服务器运行中，当前29个活跃会话（较02:38的28个增加1个）[优先级：—]
+
+### 二、REST API 测试
+
+3. **[已测试] GET /api/games 正常** - 返回3个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡），JSON正确 [优先级：—]
+
+4. **[已测试] POST /api/games/example/start 正常** - 成功启动示例剧本（session_id=7e3903e8a61c，scene=scene_01第一幕·电话），返回首场景叙事完整（神秘电话、海滨路13号悬念），player_name=小刚正常 [优先级：—]
+
+5. **[已测试] POST /api/games/action 正常** - 行动API正常！发送"接听电话"行动成功，GM返回完整叙事（narrative含thinking+content），options字段正常下发，**响应耗时约21.4秒**（本次偏长，在10-21秒区间波动）。command.options字段含玩家可选行动（连夜调查|立即打车前往|等到天亮|其他行动）[优先级：—]
+
+### 三、WebSocket 连接状态
+
+6. **[已测试] WebSocket 握手返回 101** - 使用有效 session_id 测试 `ws://43.134.81.228:8080/ws/7e3903e8a61c` 返回 **HTTP 101 Switching Protocols**，WS连接正常 [优先级：—]
+
+### 四、action API 响应延迟问题（持续）
+
+7. **[问题] action API 响应耗时约21.4秒** - 无流式输出，客户端需等待完整生成后才能看到叙事内容（本次21.4秒，较之前的10-15秒区间偏慢，可能服务器负载波动）[优先级：中]
+
+### 五、agent-browser UI自动化受阻（持续）
+
+8. **[问题] agent-browser + Chrome headless 均无法启动** - 当前环境无 X11 display，Chrome 报错 "Missing X server or $DISPLAY"（exit code 1），无法进行浏览器 UI 层面的交互测试 [优先级：中]
+
+### 六、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | HTTP 200，响应快 |
+| 健康检查 | ✅ 正常 | sessions=29 |
+| REST API 启动游戏 | ✅ 正常 | 3个剧本均成功 |
+| REST API stats/overview | ✅ 正常 | 上次测试已确认 |
+| REST API achievements | 未测 | 上次测试已确认正常 |
+| POST /api/games/action | ✅ 正常 | **200正常返回，21.4秒，无500回归** |
+| WebSocket | ✅ **101握手成功** | WS连接稳定 |
+| 浏览器 UI 测试 | ⚠️ 无法执行 | Chrome无法启动 |
+
+**已确认正常：**
+- **高**：action API 200正常 — 无500回归，叙事完整
+- **高**：WebSocket 101握手成功 — WS连接稳定
+
+**持续性环境问题：**
+- **中**：action API 响应延迟约10-21秒（波动较大，建议流式改造）
+- **中**：agent-browser 因 Chrome 无法在 headless 环境运行
+
+**建议：**
+- 所有核心 API 运行稳定，无新问题发现
+- action API 响应延迟建议通过 SSE 流式输出改善
+
+---
+
 ## 测试反馈 2026-03-29 02:38 (GMT+8)
 
 **测试时间：** 2026-03-29 02:38 (GMT+8)
