@@ -1,5 +1,76 @@
 # RPGAgent 测试反馈
 
+**测试时间：** 2026-03-28 20:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+
+---
+
+## 测试反馈 2026-03-28 20:57 (GMT+8)
+
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+
+### 一、首页加载与游戏卡片
+
+1. **[已测试] 首页加载正常** - 页面标题显示 "RPGAGENT"，三个剧本卡片正常渲染（示例剧本·第一夜、三只小猪、秦末·大泽乡），无 JS 报错 [优先级：—]
+
+2. **[已修复] 游戏卡片无障碍属性已生效** - 游戏卡片 div 元素已包含 `role="button"`、`tabindex="0"`、`aria-label` 属性，accessibility tree 可正确识别为 button。ARIA 修复已生效 [优先级：—]
+
+3. **[问题] CDP 自动化测试持续超时** - 使用 agent-browser 进行自动化测试时，所有鼠标点击操作均失败并返回 "CDP command timed out: Input.dispatchMouseEvent"。这是自上次测试以来的持续性问题，与页面 JS 可能导致的 CDP 连接阻塞有关 [优先级：高]
+
+### 二、WebSocket 连接状态
+
+4. **[问题] WebSocket 连接仍显示"未连接"** - 页面右上角 WS 状态始终显示"未连接"。通过 curl 测试 WebSocket 升级请求返回 404（非 403），可能是 WebSocket 路由配置问题或认证问题未修复 [优先级：高]
+
+### 三、REST API 验证
+
+5. **[已修复] Debug API 已恢复正常** - 服务器重启后，`GET /api/games/{session_id}/debug` 返回完整的调试信息（session_id、scene_id、turn、stats、hidden_values 等），GameSession 属性混淆问题已解决 [优先级：—]
+
+6. **[已修复] 统计概览 API 已恢复** - `GET /api/sessions/{session_id}/stats/overview` 现已正常工作，返回 turn、level、hp、action_power、moral_debt_level 等核心指标。本轮测试中发现 stats.py 中 `get_stats_overview` 函数缺少 `get_manager` 导入，已修复并提交 commit 33a1bc6 [优先级：—]
+
+7. **[问题] 行动 API 返回 Internal Server Error** - `POST /api/games/action` 仍返回 500 错误。服务器日志显示：`TypeError: Could not resolve authentication method. Expected either api_key or auth_token to be set`。这是因为 agentscope 使用 Anthropic API 时未配置有效的 API Key，属于服务器端配置问题 [优先级：高]
+
+### 四、游戏界面状态
+
+8. **[问题] 行动按钮无响应（WebSocket 问题）** - 因 WebSocket 未连接，点击行动按钮（环顾四周、与NPC交谈等）后 `sendPlayerInput` 函数直接返回，无任何响应。这是自上次测试以来的持续性问题 [优先级：高]
+
+9. **[问题] CDP 浏览器自动化测试受阻** - agent-browser 所有交互命令（click、eval、focus、press）在执行后均超时，疑似页面 WebSocket 重连逻辑或大量 console.log 输出导致 CDP 连接阻塞。临时解决：每次测试后关闭浏览器重启，但根本问题未解决 [优先级：高]
+
+### 五、本次修复内容
+
+10. **[修复] stats.py 缺少 get_manager 导入** - `rpgagent/api/routes/stats.py` 第 459 行 `get_stats_overview` 函数使用了 `get_manager()` 但未导入，已添加 `from ...api.game_manager import get_manager`。提交 commit 33a1bc6 [优先级：高]
+
+11. **[修复] 服务器重启生效** - 服务器重启后，debug.py 的 GameSession 属性问题（commit b093702）和 stats.py 的 get_manager 导入问题才真正生效，说明之前的测试失败是因为服务器未加载最新代码 [优先级：—]
+
+### 六、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | |
+| 游戏卡片渲染 | ✅ 正常 | 3张卡片，ARIA 属性已修复 |
+| 游戏卡片可点击性（自动化） | ❌ CDP 超时 | agent-browser 无法点击 |
+| WebSocket 连接 | ❌ 未连接 | 仍显示"未连接" |
+| REST API 启动游戏 | ✅ 正常 | |
+| Debug API | ✅ 已修复 | 服务器重启后生效 |
+| 统计概览 API | ✅ 已修复 | get_manager 导入已添加 |
+| 行动 API | ❌ 500 错误 | Anthropic API Key 未配置 |
+| 行动按钮响应 | ❌ 无响应 | WebSocket 问题导致 |
+| CDP 浏览器自动化 | ❌ 持续超时 | 页面 JS 导致连接阻塞 |
+
+**未修复问题（持续性）：**
+1. **高**：WebSocket 403/404 问题
+2. **高**：CDP 浏览器自动化超时（疑似页面 JS 问题）
+3. **高**：行动 API 500 错误（Anthropic API Key 配置问题）
+
+**本次修复：**
+1. **高**：添加了 stats.py 中 `get_stats_overview` 的 `get_manager` 导入（commit 33a1bc6）
+2. **—**：服务器重启使之前的修复生效
+
+**截图：** http://43.134.81.228:8080/ 页面正常加载，游戏卡片可见
+
+---
+
 **测试时间：** 2026-03-28 18:57 (GMT+8)
 **测试角色：** 小刚（资深RPG玩家）
 **测试地址：** http://43.134.81.228:8080/
