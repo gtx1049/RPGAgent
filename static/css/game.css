@@ -581,10 +581,248 @@ body {
   font-size: 14px;
 }
 
-/* ── 响应式 ─────────────────────────── */
+/* ── 移动端适配 ─────────────────────────── */
 @media (max-width: 700px) {
-  #sidebar { display: none; }
-  body { font-size: 14px; }
+  :root {
+    --sidebar-width: 0px;
+  }
+
+  body {
+    font-size: 15px;
+    --bottom-nav-h: 56px;
+    padding-bottom: var(--bottom-nav-h);
+  }
+
+  #topbar {
+    padding: 6px 12px;
+    gap: 8px;
+  }
+
+  #topbar h1 {
+    font-size: 14px;
+  }
+
+  /* 顶栏：移动端加入侧边栏切换按钮 */
+  #sidebar-toggle-btn {
+    display: flex !important;
+  }
+
+  /* 桌面端隐藏切换按钮 */
+  #sidebar-toggle-btn {
+    display: none;
+  }
+
+  /* 叙事区铺满 */
+  #main {
+    flex-direction: column;
+  }
+
+  #narrative-panel {
+    border-right: none;
+    flex: 1;
+    min-height: 0;
+  }
+
+  #narrative {
+    font-size: 14px;
+    padding: 14px 12px;
+    line-height: 1.8;
+  }
+
+  #options-area {
+    padding: 8px 12px;
+  }
+
+  #action-panel {
+    padding: 8px 12px;
+    position: sticky;
+    bottom: var(--bottom-nav-h);
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    z-index: 10;
+  }
+
+  #action-buttons {
+    gap: 4px;
+  }
+
+  .action-btn {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  #custom-action-box {
+    margin-top: 6px;
+  }
+
+  #custom-input {
+    font-size: 15px; /* 防止 iOS 自动缩放 */
+  }
+
+  /* 桌面端侧边栏 */
+  #sidebar {
+    display: flex !important;
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: min(300px, 85vw);
+    height: 100vh;
+    z-index: 500;
+    transform: translateX(100%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-direction: column;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+  }
+
+  #sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* 遮罩层 */
+  #sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 499;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s;
+  }
+
+  #sidebar-overlay.visible {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* 底部导航栏 */
+  #bottom-nav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--bottom-nav-h);
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+    justify-content: space-around;
+    align-items: stretch;
+    padding: 0;
+  }
+
+  .bnav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 10px;
+    cursor: pointer;
+    padding: 6px 4px;
+    transition: color 0.15s;
+    border-top: 2px solid transparent;
+  }
+
+  .bnav-btn.active {
+    color: var(--accent);
+    border-top-color: var(--accent);
+  }
+
+  .bnav-btn .bnav-icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  /* 面板在移动端的紧凑布局 */
+  .panel {
+    padding: 10px 12px;
+  }
+
+  /* 游戏开始选择页适配 */
+  #game-select {
+    padding: 20px;
+  }
+
+  .game-card {
+    min-width: unset;
+    width: 100%;
+    padding: 16px 20px;
+  }
+
+  /* 模态框全屏 */
+  #attr-modal {
+    width: 100vw;
+    max-height: 90vh;
+    border-radius: 12px 12px 0 0;
+  }
+
+  #attr-modal-overlay {
+    align-items: flex-end;
+  }
+
+  #log-modal {
+    width: 100vw;
+    height: 85vh;
+    max-height: unset;
+    border-radius: 12px 12px 0 0;
+  }
+
+  #log-modal-overlay {
+    align-items: flex-end;
+  }
+
+  .cg-overlay-inner {
+    max-width: 100vw;
+    max-height: 95vh;
+  }
+
+  .cg-display-img {
+    max-width: 96vw;
+    max-height: 70vh;
+  }
+
+  .cg-gallery-modal {
+    width: 100vw;
+    height: 90vh;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .cg-gallery-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+
+  /* 调试面板 */
+  #debug-panel {
+    max-height: 50vh;
+  }
+
+  /* 骰点结果显示 */
+  #narrative .dice-result {
+    font-size: 13px;
+  }
+}
+
+/* 桌面端切换按钮默认隐藏 */
+@media (min-width: 701px) {
+  #sidebar-toggle-btn {
+    display: none !important;
+  }
+  #bottom-nav {
+    display: none !important;
+  }
+  #sidebar-overlay {
+    display: none !important;
+  }
 }
 
 /* ── 行动力点 ─────────────────────────── */
@@ -925,6 +1163,16 @@ body {
   animation: cg-fade-in 0.5s ease;
 }
 
+#cg-gallery-overlay,
+#cg-overlay {
+  display: none;
+}
+
+#cg-gallery-overlay.open,
+#cg-overlay.open {
+  display: flex;
+}
+
 .cg-overlay-inner {
   display: flex;
   flex-direction: column;
@@ -1075,6 +1323,30 @@ body {
   font-size: 14px;
 }
 
+/* ── CG 缩略图（叙事区嵌入）── */
+.cg-thumb-wrapper {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0;
+}
+
+.cg-thumb {
+  max-width: 320px;
+  max-height: 200px;
+  width: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.cg-thumb:hover {
+  transform: scale(1.03);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+}
+
 /* ── CG 按钮（顶部工具栏）── */
 #top-bar {
   /* 假设顶部栏有 flex 布局 */
@@ -1089,4 +1361,143 @@ body {
 @keyframes cg-img-appear {
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
+}
+
+/* ── 成就面板 ──────────────────────────────── */
+#ach-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+#ach-modal-overlay.open { display: flex; }
+
+#ach-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: min(520px, 90vw);
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+#ach-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+#ach-modal-header h3 {
+  font-size: 16px;
+  color: var(--gold);
+  letter-spacing: 1px;
+}
+#ach-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 20px;
+  cursor: pointer;
+}
+#ach-modal-close:hover { color: var(--accent); }
+#ach-modal-body {
+  padding: 14px 18px;
+  overflow-y: auto;
+}
+.ach-overview {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.ach-overview-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ach-overview-stat .ach-overview-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--gold);
+}
+.ach-overview-stat .ach-overview-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ach-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ach-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+}
+.ach-item.locked {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+.ach-item-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+  width: 40px;
+  text-align: center;
+}
+.ach-item-info {
+  flex: 1;
+  min-width: 0;
+}
+.ach-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ach-item-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.ach-item-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--gold);
+  color: #1a1a2e;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.ach-item-badge.locked {
+  background: var(--border);
+  color: var(--text-dim);
+}
+.ach-empty {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 24px 0;
+}
+
+@media (max-width: 520px) {
+  #ach-modal {
+    width: 100vw;
+    max-height: 90vh;
+    border-radius: 12px 12px 0 0;
+  }
+  #ach-modal-overlay { align-items: flex-end; }
 }

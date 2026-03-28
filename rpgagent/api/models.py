@@ -129,6 +129,7 @@ class PlayerStatus(BaseModel):
     damage_bonus: int
     skill_points: int
     hidden_values: dict
+    factions: dict = {}
     inventory: list[dict]
     relations: dict
     equipped: dict = {}

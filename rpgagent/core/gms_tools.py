@@ -537,6 +537,46 @@ class GMSTools:
         lines = [a.narrative for a in newly]
         return ToolResponse(content=[TextBlock(type="text", text="\n".join(lines))])
 
+    # ── 阵营声望 ─────────────────────────────────
+
+    def get_faction_reputations(self) -> ToolResponse:
+        """查询所有已注册阵营的声望状态"""
+        faction_sys = getattr(self.gm, "faction_sys", None)
+        if not faction_sys:
+            return ToolResponse(content=[TextBlock(type="text", text="阵营系统未初始化")])
+        reps = faction_sys.get_all_reputations()
+        if not reps:
+            return ToolResponse(content=[TextBlock(type="text", text="当前无阵营声望记录。")])
+        lines = ["【阵营声望】"]
+        for fid, info in reps.items():
+            joined_tag = " ✓已加入" if info.get("joined") else ""
+            lines.append(
+                f"  {info['faction_name']}：{info['value']}（{info['level']}）{joined_tag}"
+                f"\n    {info['description']}"
+            )
+        return ToolResponse(content=[TextBlock(type="text", text="\n".join(lines))])
+
+    def execute_faction_action(self, action_id: str) -> ToolResponse:
+        """
+        执行阵营行动，根据 meta.json 中的 faction_actions 配置影响各阵营声望。
+        此工具通知系统执行声望变化，不直接输出叙事（由 DM 自行叙事）。
+        """
+        faction_sys = getattr(self.gm, "faction_sys", None)
+        if not faction_sys:
+            return ToolResponse(content=[TextBlock(type="text", text="阵营系统未初始化")])
+        results = faction_sys.execute_faction_action(
+            action_id=action_id,
+            scene_id=self.gm.session.current_scene_id,
+            turn=self.gm.session.turn_count,
+        )
+        if not results:
+            return ToolResponse(content=[TextBlock(type="text", text=f"未找到阵营行动：{action_id}")])
+        lines = [f"执行「{action_id}」，声望变化："]
+        for fid, new_val in results.items():
+            info = faction_sys.get_reputation_level_info(fid)
+            lines.append(f"  {info['faction_name']}：{info['value']}（{info['level']}）")
+        return ToolResponse(content=[TextBlock(type="text", text="\n".join(lines))])
+
     # ── 状态同步 ─────────────────────────────────
 
     def _sync_session(self):
@@ -557,6 +597,8 @@ class GMSTools:
             flags={
                 "_npc_memories": self.gm.npc_mem_sys.get_snapshot(),
                 "_teammates": self.gm.teammate_sys.get_snapshot(),
+                "_achievements": self.gm.achievement_sys.get_snapshot(),
+                "_factions": self.gm.faction_sys.get_snapshot(),
             },
         )
 
@@ -587,4 +629,6 @@ def create_gms_tools(game_master: Any) -> list:
         tools.generate_scene_cg,
         tools.list_achievements,
         tools.check_achievements,
+        tools.get_faction_reputations,
+        tools.execute_faction_action,
     ]

@@ -66,6 +66,11 @@ SYSTEM_PROMPT_TEMPLATE = """你是一名 RPG 游戏的主持人（Game Master）
 
 ## NPC 认知摘要（各 NPC 对玩家的记忆与印象）
 {npc_memory_summaries}
+
+## 阵营声望（各方势力对玩家的态度）
+{faction_section}
+{time_section}
+{world_events_section}
 {mode_extra}
 
 ## 你的职责
@@ -153,6 +158,22 @@ PLAYER_STATUS_TEMPLATE = """
 # Hidden Values 区块
 # ────────────────────────────────────────────────
 
+TIME_SECTION_TEMPLATE = """
+## 游戏时间与氛围
+{time_context}
+
+【叙事提醒】请在叙事中自然体现当前时间段的环境、声音和光线特点。
+例如：
+- 黎明："天色微曦，营火将熄未熄"、"晨雾中传来…"
+- 正午："烈日当空，暑气蒸腾"、"汗珠滴落在干燥的尘土上"
+- 夜晚："篝火跳动，映照着每个人的脸"、"黑暗中有什么在移动"
+- 午夜："万籁俱寂，只有自己的心跳声"
+
+【NPC 可用性】以下 NPC 目前不在：
+{unavailable_npcs}
+"""
+
+
 NARRATIVE_STYLE_GUIDANCE = """
 ### 叙事风格指导（请严格遵守）
 - **normal**：标准叙事。用完整流畅的句子，客观第三人称叙述，情感克制。
@@ -204,6 +225,9 @@ class PromptBuilder:
         npc_mem_sys: Optional[NpcMemorySystem] = None,
         skill_sys: Any = None,
         equipment_sys: Any = None,
+        faction_sys: Any = None,
+        day_night_sys: Any = None,
+        world_event_sys: Any = None,
         # ── db 模式参数 ──
         db: Any = None,
         current_scene_id: str = "",
@@ -220,6 +244,9 @@ class PromptBuilder:
         self.npc_mem_sys = npc_mem_sys
         self.skill_sys = skill_sys
         self.equipment_sys = equipment_sys
+        self.faction_sys = faction_sys
+        self.day_night_sys = day_night_sys
+        self.world_event_sys = world_event_sys
 
         # ── db 模式 ──
         self.db = db
@@ -462,6 +489,32 @@ class PromptBuilder:
                 lines.append(summary)
         return "\n".join(lines) if lines else "（NPC 暂无对你的认知记录）"
 
+    def _build_faction_section(self) -> str:
+        """渲染阵营声望区块（各方势力对玩家的态度）"""
+        if not self.faction_sys:
+            return "（阵营系统未启用）"
+        context = self.faction_sys.get_narrative_context()
+        return context if context else "（当前无阵营声望记录）"
+
+    def _build_time_section(self) -> str:
+        """渲染昼夜循环时间和 NPC 可用性区块"""
+        if not self.day_night_sys:
+            return ""
+        time_context = self.day_night_sys.get_narrative_context()
+        unavailable = self.day_night_sys.get_unavailable_npcs()
+        unavailable_str = "（目前没有作息受限的 NPC）" if not unavailable else "、".join(unavailable)
+        return TIME_SECTION_TEMPLATE.format(
+            time_context=time_context,
+            unavailable_npcs=unavailable_str,
+        ).strip()
+
+    def _build_world_events_section(self) -> str:
+        """渲染当前激活的动态世界事件区块"""
+        if not self.world_event_sys:
+            return ""
+        narrative = self.world_event_sys.get_active_event_narrative()
+        return narrative if narrative else ""
+
     # ────────────────────────────────────────────────
     # 状态渲染（db 模式专属）
     # ────────────────────────────────────────────────
@@ -607,6 +660,9 @@ class PromptBuilder:
             npc_relations=self._build_npc_relations(),
             npc_memory_summaries=self._build_npc_memory_summaries(),
             pending_triggered_scenes_section=self._build_pending_triggered_scenes(),
+            faction_section=self._build_faction_section(),
+            world_events_section=self._build_world_events_section(),
+            time_section=self._build_time_section(),
             mode_extra=f"\n\n{mode_extra}" if mode_extra else "",
         )
 

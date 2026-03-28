@@ -20,7 +20,7 @@ def _cg_to_url(cg_path: str, base_url: str = "") -> str:
     if not cg_path:
         return ""
     filename = os.path.basename(cg_path)
-    return f"{base_url}/cg/{filename}"
+    return f"{base_url}/cg_cache/{filename}"
 
 
 @router.get("/{session_id}/cg")

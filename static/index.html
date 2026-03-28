@@ -24,6 +24,8 @@
     <h1>⚔ RPGAgent</h1>
     <div class="scene-title" id="scene-title">—</div>
     <div class="ws-status" id="ws-status">未连接</div>
+    <!-- 移动端：侧边栏切换按钮 -->
+    <button id="sidebar-toggle-btn" onclick="toggleMobileSidebar()" style="margin-left:auto;margin-right:8px;background:#2a2a2a;border:1px solid #444;color:#aaa;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:12px;">☰ 面板</button>
     <button id="debug-toggle-btn" onclick="toggleDebugMode()" style="margin-left:auto;margin-right:8px;background:#2a2a2a;border:1px solid #444;color:#aaa;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:12px;">🔧 调试</button>
   </div>
 
@@ -106,6 +108,14 @@
         <div class="panel-title">NPC 关系</div>
         <div id="npc-list">
           <div style="font-size:12px;color:var(--text-dim)">暂无关系记录</div>
+        </div>
+      </div>
+
+      <!-- 阵营声望 -->
+      <div class="panel">
+        <div class="panel-title">阵营声望</div>
+        <div id="faction-list">
+          <div style="font-size:12px;color:var(--text-dim)">暂无阵营记录</div>
         </div>
       </div>
 
@@ -226,6 +236,23 @@
     </div>
   </div>
 
+  <!-- 成就面板 Modal -->
+  <div id="ach-modal-overlay">
+    <div id="ach-modal">
+      <div id="ach-modal-header">
+        <h3>🏆 成就</h3>
+        <button id="ach-modal-close" onclick="closeAchPanel()">×</button>
+      </div>
+      <div id="ach-modal-body">
+        <div id="ach-loading">加载中……</div>
+        <div id="ach-content" style="display:none">
+          <div class="ach-overview" id="ach-overview"></div>
+          <div class="ach-list" id="ach-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- CG 配图悬浮层 -->
   <div id="cg-overlay" class="cg-overlay" style="display:none">
     <div class="cg-overlay-inner">
@@ -233,7 +260,7 @@
       <img id="cg-display-img" class="cg-display-img" src="" alt="场景CG" />
       <div class="cg-overlay-actions">
         <button class="cg-btn" id="cg-open-gallery-btn">📖 画廊</button>
-        <button class="cg-btn" id="cg-close-btn">关闭</button>
+        <button class="cg-btn" id="cg-close-btn" onclick="closeCgFull()">关闭</button>
       </div>
     </div>
   </div>
@@ -243,7 +270,7 @@
     <div class="cg-gallery-modal">
       <div class="cg-gallery-header">
         <div class="cg-gallery-title">🎨 CG 画廊</div>
-        <button class="cg-gallery-close" id="cg-gallery-close-btn">✕</button>
+        <button class="cg-gallery-close" id="cg-gallery-close-btn" onclick="closeCgGallery()">✕</button>
       </div>
       <div class="cg-gallery-grid" id="cg-gallery-grid">
         <!-- 动态填充 -->
@@ -253,6 +280,29 @@
       </div>
     </div>
   </div>
+
+  <!-- 移动端：侧边栏遮罩 -->
+  <div id="sidebar-overlay" onclick="closeMobileSidebar()"></div>
+
+  <!-- 移动端：底部导航栏 -->
+  <nav id="bottom-nav">
+    <button class="bnav-btn active" id="bnav-status" onclick="switchBottomTab('status')">
+      <span class="bnav-icon">💪</span>
+      <span>状态</span>
+    </button>
+    <button class="bnav-btn" id="bnav-skills" onclick="switchBottomTab('skills')">
+      <span class="bnav-icon">⚔️</span>
+      <span>技能</span>
+    </button>
+    <button class="bnav-btn" id="bnav-inventory" onclick="switchBottomTab('inventory')">
+      <span class="bnav-icon">🎒</span>
+      <span>背包</span>
+    </button>
+    <button class="bnav-btn" id="bnav-menu" onclick="switchBottomTab('menu')">
+      <span class="bnav-icon">📜</span>
+      <span>日志</span>
+    </button>
+  </nav>
 
   <script src="/static/js/game.js"></script>
 </body>

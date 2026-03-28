@@ -5,6 +5,7 @@
 """
 
 import json
+import re
 import yaml
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -32,6 +33,7 @@ class Scene:
     required_items: List[str] = field(default_factory=list)
     next_scenes: List[str] = field(default_factory=list)
     cg_config: Optional[Dict] = None  # CG 触发配置（从 .cg.yaml 加载）
+    ending_id: Optional[str] = None  # 终局场景标记，对应 ending_system.py 中的结局 ID
 
 
 @dataclass
@@ -173,12 +175,21 @@ class GameLoader:
                     except Exception:
                         pass
 
+                # 解析 [ENDING] 块（终局场景标记）
+                ending_id: Optional[str] = None
+                ending_match = re.search(
+                    r"\[ENDING\]\s*id:\s*(\S+)\s*\[\/END\]", content, re.DOTALL
+                )
+                if ending_match:
+                    ending_id = ending_match.group(1).strip()
+
                 scene = Scene(
                     id=file.stem,
                     title=title or file.stem,
                     content=content,
                     available_actions=available_actions,
                     cg_config=cg_config,
+                    ending_id=ending_id,
                 )
                 self.scenes[scene.id] = scene
 

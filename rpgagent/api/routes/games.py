@@ -294,6 +294,7 @@ async def get_status(session_id: str):
         damage_bonus=bonus.get("damage_bonus", 0),
         skill_points=stats.get("skill_points", 0),
         hidden_values={"moral_debt": moral},
+        factions=session.gm.faction_sys.get_all_reputations(),
         inventory=inv.get("items", []),
         relations=rels,
         equipped=equip.get("equipped", {}),
@@ -343,6 +344,11 @@ async def load_game(session_id: str, save_id: str):
     from rpgagent.core.session import GameState
     state = GameState(**snapshot_data)
     session._apply_state(state)
+
+    # 恢复探索系统状态
+    exploration_snapshot = session.flags.get("_exploration", {})
+    if exploration_snapshot and session.gm.explore_sys:
+        session.gm.explore_sys.load_snapshot(exploration_snapshot)
 
     # 恢复当前场景
     if state.scene_id:
@@ -401,6 +407,11 @@ async def load_autosave(session_id: str):
     from rpgagent.core.session import GameState
     state = GameState(**snapshot_data)
     session._apply_state(state)
+
+    # 恢复探索系统状态
+    exploration_snapshot = session.flags.get("_exploration", {})
+    if exploration_snapshot and session.gm.explore_sys:
+        session.gm.explore_sys.load_snapshot(exploration_snapshot)
 
     if state.scene_id:
         session.gm.current_scene = session.gm.game_loader.get_scene(state.scene_id)

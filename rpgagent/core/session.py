@@ -28,6 +28,8 @@ class GameState:
     history: List[Dict] = field(default_factory=list)  # 对话历史记录
     skill_points: int = 0
     learned_skills: Dict[str, int] = field(default_factory=dict)  # skill_id → rank
+    day: int = 1           # 昼夜循环：第几天
+    period: str = "上午"   # 昼夜循环：当前时间档位
 
     def to_dict(self) -> Dict:
         d = asdict(self)
@@ -116,6 +118,11 @@ class Session:
         # 历史
         self.history: List[Dict] = []  # {"role": "player"/"gm", "content": str}
 
+        # 昼夜循环
+        self.day: int = 1               # 当前第几天
+        self.period: str = "上午"       # 当前时间档位（黎明/上午/正午/下午/傍晚/夜晚/午夜）
+        self.day_night_snapshot: Dict = {}  # DayNightCycle 快照
+
         # CG 配图
         self.scene_cg_path: Optional[str] = None   # 最近生成的 CG 本地路径
         self.scene_cg_generated: bool = False       # 本回合是否新生成 CG
@@ -171,6 +178,8 @@ class Session:
             history=self.history,
             skill_points=self.skill_points,
             learned_skills=self.learned_skills,
+            day=self.day,
+            period=self.period,
         )
 
     def save(self, name: Optional[str] = None) -> Path:
@@ -198,6 +207,9 @@ class Session:
         # 技能系统
         self.skill_points = getattr(state, "skill_points", 0)
         self.learned_skills = getattr(state, "learned_skills", {})
+        # 昼夜循环
+        self.day = getattr(state, "day", 1)
+        self.period = getattr(state, "period", "上午")
 
     def get_history_summary(self, last_n: int = 5) -> str:
         recent = self.history[-last_n:]

@@ -13,6 +13,7 @@ RPGAgent CLI - rpg 命令行工具
     rpg search <关键词>        从剧本市场搜索剧本
     rpg update [--apply]      检查并安装剧本更新
     rpg init <game_id>        创建新剧本项目脚手架
+    rpg generate <game_id>    AI 辅助生成剧本
 """
 
 import argparse
@@ -605,6 +606,117 @@ def cmd_update(args):
     return 0
 
 
+# ── generate ─────────────────────────────────────────
+
+def _read_text_arg(value: str) -> str:
+    """解析文本参数：@file 则读取文件，否则直接返回原文本"""
+    if value.startswith("@"):
+        path = Path(value[1:])
+        if not path.exists():
+            raise FileNotFoundError(f"文件不存在: {path}")
+        return path.read_text(encoding="utf-8")
+    return value
+
+
+def cmd_generate(args):
+    """
+    AI 辅助剧本生成：输入世界观设定和大纲，生成完整剧本目录。
+    """
+    from rpgagent.systems.scenario_generator import ScenarioGenerator, GenerationOptions
+
+    game_id = args.game_id.strip()
+    if not game_id:
+        print("错误: 剧本 ID 不能为空")
+        return 1
+
+    import re
+    if not re.match(r"^[a-zA-Z0-9_-]+$", game_id):
+        print("错误: 剧本 ID 只能包含字母、数字、下划线和连字符")
+        return 1
+
+    # 解析 setting 和 outline（支持 @file.txt 语法）
+    try:
+        setting = _read_text_arg(args.setting)
+        outline = _read_text_arg(args.outline)
+    except FileNotFoundError as e:
+        print(f"错误: {e}")
+        return 1
+
+    if not setting.strip():
+        print("错误: --setting 不能为空")
+        return 1
+    if not outline.strip():
+        print("错误: --outline 不能为空")
+        return 1
+
+    options = GenerationOptions(
+        game_id=game_id,
+        game_name=args.name or game_id,
+        summary=args.summary or "",
+        author=args.author or "AI Generated",
+        tags=[t.strip() for t in (args.tags or args.genre or "fantasy").split(",") if t.strip()],
+        num_chapters=args.chapters,
+        num_main_scenes=args.scenes,
+        num_npcs=args.npcs,
+        genre=args.genre or "fantasy",
+    )
+
+    output_dir = Path(args.output) if args.output else (USER_GAMES_DIR / game_id)
+
+    if output_dir.exists() and any(output_dir.iterdir()):
+        if not args.force:
+            print(f"错误: 输出目录已存在且非空: {output_dir}")
+            print("  使用 --force 覆盖")
+            return 1
+        print(f"⚠ 覆盖已有目录: {output_dir}")
+
+    print(f"\n🎲 RPGAgent AI 剧本生成器")
+    print(f"  剧本ID: {game_id}")
+    print(f"  类型: {options.genre} | 章节: {options.num_chapters} | 场景: {options.num_main_scenes} | NPC: {options.num_npcs}")
+    print(f"  输出: {output_dir}")
+    print(f"\n正在调用 LLM 生成剧本（可能需要 30-60 秒）...\n")
+
+    try:
+        gen = ScenarioGenerator()
+        result = gen.generate_and_save(setting, outline, options, output_dir)
+    except Exception as e:
+        print(f"错误: 生成失败 - {e}")
+        return 1
+
+    # 统计生成的文件
+    files = result.get("files", {})
+    chars = [k for k in files if k.startswith("characters/")]
+    scenes = [k for k in files if k.startswith("scenes/")]
+
+    print(f"✓ 剧本生成完成！")
+    print(f"\n  生成内容：")
+    print(f"    meta.json        ✓")
+    print(f"    setting.md       ✓")
+    print(f"    characters/      ✓ ({len(chars)} 个角色)")
+    print(f"    scenes/          ✓ ({len(scenes)} 个场景)")
+    print(f"    systems.yaml     ✓")
+    print(f"\n  保存至: {output_dir}")
+
+    if args.install:
+        print(f"\n正在安装剧本...")
+        try:
+            mgr = PackageManager(USER_GAMES_DIR)
+            # 重新加载确保可见
+            result_path = mgr.pack(
+                output_dir,
+                output_dir.parent / f"{output_dir.name}.gamepkg",
+                include_checksum=False,
+            )
+            mgr.install(result_path, force=True, skip_integrity=True)
+            print(f"✓ 剧本已安装，可使用 'rpg start {game_id}' 开始游戏")
+        except Exception as e:
+            print(f"⚠ 安装失败（剧本文件已保存，可稍后手动安装）: {e}")
+    else:
+        print(f"\n下一步: 'rpg start {game_id}' 游玩，或 'rpg pack {output_dir}' 打包分发")
+
+    return 0
+
+
 # ── main ─────────────────────────────────────────────
 
 def main():
@@ -690,6 +802,33 @@ def main():
     p_init.add_argument("--output", dest="output", default=None,
                        help="输出目录（默认与 game_id 同名）")
 
+    # rpg generate
+    p_gen = sub.add_parser("generate", help="AI 辅助生成剧本（输入世界观和大纲，AI 生成完整剧本）")
+    p_gen.add_argument("game_id", help="剧本 ID（英文，唯一标识）")
+    p_gen.add_argument("--setting", required=True,
+                       help="世界观设定（支持 @file.txt 语法读取文件）")
+    p_gen.add_argument("--outline", required=True,
+                       help="剧情大纲（支持 @file.txt 语法读取文件）")
+    p_gen.add_argument("--name", dest="name", default=None, help="剧本显示名称")
+    p_gen.add_argument("--author", dest="author", default=None, help="作者名称")
+    p_gen.add_argument("--summary", dest="summary", default=None, help="一句话简介")
+    p_gen.add_argument("--tags", dest="tags", default=None,
+                       help="标签，逗号分隔（如 '历史,奇幻'）")
+    p_gen.add_argument("--genre", default="fantasy",
+                       help="剧本类型：fantasy / sci_fi / historical / horror / romance（默认 fantasy）")
+    p_gen.add_argument("--chapters", type=int, default=3, dest="chapters",
+                       help="章节数（默认 3）")
+    p_gen.add_argument("--scenes", type=int, default=8, dest="scenes",
+                       help="主线场景数（默认 8）")
+    p_gen.add_argument("--npcs", type=int, default=5, dest="npcs",
+                       help="NPC 数量（默认 5）")
+    p_gen.add_argument("--output", dest="output", default=None,
+                       help="输出目录（默认保存到用户剧本目录）")
+    p_gen.add_argument("--install", action="store_true",
+                       help="生成后自动安装到用户剧本目录")
+    p_gen.add_argument("--force", action="store_true",
+                       help="覆盖已有目录")
+
     args = parser.parse_args()
 
     commands = {
@@ -704,6 +843,7 @@ def main():
         "search": cmd_search,
         "update": cmd_update,
         "init": cmd_init,
+        "generate": cmd_generate,
     }
 
     sys.exit(commands[args.command](args))

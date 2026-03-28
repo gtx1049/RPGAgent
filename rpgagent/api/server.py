@@ -23,7 +23,7 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 from .game_manager import get_manager
-from .routes import games, logs, teammates, market, debug as debug_module, achievements, cg
+from .routes import games, logs, teammates, market, debug as debug_module, achievements, cg, stats, endings, events, replay, exploration, editor
 from ..config.settings import HOST, PORT, IMAGE_GENERATOR_CACHE_DIR
 
 _static_dir = _project_root.parent / "static"
@@ -61,6 +61,12 @@ app.include_router(teammates.router, prefix="/api")
 app.include_router(market.router, prefix="/api")
 app.include_router(debug_module.router, prefix="/api")
 app.include_router(achievements.router, prefix="/api")
+app.include_router(cg.router, prefix="/api")
+app.include_router(stats.router, prefix="/api")
+app.include_router(endings.router, prefix="/api")
+app.include_router(events.router, prefix="/api")
+app.include_router(replay.router, prefix="/api")
+app.include_router(editor.router, prefix="/api")
 
 # CG 缓存目录静态文件服务
 from fastapi.staticfiles import StaticFiles
@@ -79,6 +85,11 @@ async def root():
 @app.get("/market")
 async def market_page():
     return FileResponse(str(_static_dir / "market.html"))
+
+
+@app.get("/editor")
+async def editor_page():
+    return FileResponse(str(_static_dir / "editor.html"))
 
 
 @app.get("/health")

@@ -139,6 +139,33 @@ class GameMaster:
         self.teammate_sys = TeammateSystem()
         self._register_teammates_from_loader()
 
+        # 阵营声望系统
+        from rpgagent.systems.faction_system import FactionSystem
+        self.faction_sys = FactionSystem()
+        self.faction_sys.load_from_meta(meta)
+
+        # 多结局系统
+        from rpgagent.systems.ending_system import EndingSystem
+        self.ending_sys = EndingSystem()
+        self.ending_sys.load_from_meta(meta, game_id=game_id)
+        self.ending_sys.bind_game_master(self)
+
+        # 昼夜循环系统
+        from rpgagent.systems.day_night_cycle import DayNightCycle
+        self.day_night_sys = DayNightCycle()
+        # 恢复存档中的时间进度（如有）
+        saved_day = getattr(session, "day", None)
+        saved_period = getattr(session, "period", None)
+        if saved_day and saved_period:
+            self.day_night_sys.set_day(saved_day)
+            from rpgagent.systems.day_night_cycle import TimePeriod
+            try:
+                self.day_night_sys.set_period(TimePeriod(saved_period))
+            except ValueError:
+                pass
+        # 注册 NPC 作息（从角色 JSON 读取 schedule 字段）
+        self._register_npc_schedules_from_loader()
+
         # 成就系统
         from rpgagent.systems.achievement_system import AchievementSystem
         ach_configs = getattr(meta, "achievements", []) or []
@@ -167,7 +194,27 @@ class GameMaster:
             npc_mem_sys=self.npc_mem_sys,
             skill_sys=self.skill_sys,
             equipment_sys=self.equipment_sys,
+            faction_sys=self.faction_sys,
+            day_night_sys=self.day_night_sys,
+            world_event_sys=None,  # 初始化后设置
         )
+
+        # 动态世界事件系统
+        from rpgagent.systems.world_event_system import WorldEventSystem
+        self.world_event_sys = WorldEventSystem()
+        self.world_event_sys.load_from_meta(meta)
+        # 回填到 prompt_builder
+        self.prompt_builder.world_event_sys = self.world_event_sys
+
+        # 剧情回放系统
+        from rpgagent.systems.replay_system import ReplaySystem
+        self.replay_sys = ReplaySystem()
+
+        # 藏宝图/探索系统
+        from rpgagent.systems.exploration_system import ExplorationSystem
+        self.explore_sys = ExplorationSystem()
+        self.explore_sys._register_template_sites()
+        self.explore_sys.load_from_meta(meta)
 
         # 场景触发引擎
         self.scene_trigger_engine = SceneTriggerEngine(self)
@@ -217,6 +264,38 @@ class GameMaster:
             raw_char = self.game_loader._characters_raw.get(npc_id, {})
             npc_data.update(raw_char)
             self.teammate_sys.load_from_npc(npc_id, npc_data)
+
+    def _register_npc_schedules_from_loader(self):
+        """从角色 JSON 的 schedule 字段注册 NPC 作息"""
+        if not self.game_loader:
+            return
+        from rpgagent.systems.day_night_cycle import TimePeriod
+
+        PERIOD_MAP = {
+            "黎明": TimePeriod.DAWN,
+            "上午": TimePeriod.MORNING,
+            "正午": TimePeriod.NOON,
+            "下午": TimePeriod.AFTERNOON,
+            "傍晚": TimePeriod.EVENING,
+            "夜晚": TimePeriod.NIGHT,
+            "午夜": TimePeriod.MIDNIGHT,
+        }
+
+        for npc_id, char in self.game_loader.characters.items():
+            raw_char = self.game_loader._characters_raw.get(npc_id, {})
+            schedule_data = raw_char.get("schedule", [])
+            if not schedule_data:
+                continue
+            periods = []
+            for entry in schedule_data:
+                if isinstance(entry, str) and entry in PERIOD_MAP:
+                    periods.append(PERIOD_MAP[entry])
+                elif isinstance(entry, dict):
+                    for k in entry:
+                        if k in PERIOD_MAP:
+                            periods.append(PERIOD_MAP[k])
+            if periods:
+                self.day_night_sys.register_npc_schedule(npc_id, periods)
 
     @property
     def dm(self) -> agent.ReActAgent:
@@ -364,6 +443,34 @@ class GameMaster:
                 # 可在 session.flags 中记录衰减日志（供叙事参考，但不直接展示给玩家）
                 self.session.flags["_hv_decay"] = decay_results
 
+        # ── 昼夜循环推进 ───────────────────────────────────────
+        # 每个行动后推进一档时间（午夜后跨天）
+        self.day_night_sys.advance()
+
+        # ── 动态世界事件评估 ───────────────────────────────────
+        if self.world_event_sys and self.world_event_sys.is_loaded():
+            fired = self.world_event_sys.evaluate(
+                day=self.day_night_sys.get_day(),
+                period=self.day_night_sys.get_current_period(),
+                turn=self.session.turn_count,
+                scene_id=self.session.current_scene_id,
+                hidden_values=self.hidden_value_sys.get_snapshot() if self.hidden_value_sys else {},
+                factions=self.faction_sys.get_all_reputations() if self.faction_sys else {},
+                flags=self.session.flags,
+            )
+            for ev in fired:
+                self.world_event_sys.fire_event(
+                    event=ev,
+                    turn=self.session.turn_count,
+                    scene_id=self.session.current_scene_id,
+                    day=self.day_night_sys.get_day(),
+                    period=self.day_night_sys.get_current_period().value,
+                )
+                self.session.flags[f"_event_{ev.id}_fired"] = True
+                self.session.flags["_pending_events"] = True
+            # 清理过期事件
+            self.world_event_sys.clean_expired_events(self.session.turn_count)
+
         self._sync_session()
 
         # ── 场景触发器检查 ──────────────────────────────────────
@@ -385,6 +492,55 @@ class GameMaster:
             self.session.flags[f"_triggered_scene"] = imm_scene
             # 自动生成新场景 CG（Phase 2 集成）
             self._auto_generate_scene_cg(trigger_reason="immediate_trigger")
+
+        # ── 剧情回放：记录本回合 ─────────────────────────────────
+        if self.replay_sys and self.replay_sys.is_recording():
+            roll_result_dict = None
+            if cmd and cmd.get("_roll_result"):
+                rr = cmd["_roll_result"]
+                roll_result_dict = {
+                    "action": getattr(rr, "action", "?"),
+                    "roll": getattr(rr, "roll", None),
+                    "modifier": getattr(rr, "modifier", 0),
+                    "total": getattr(rr, "total", None),
+                    "dc": getattr(rr, "dc", None),
+                    "success": getattr(rr, "success", "?"),
+                }
+            stats_snap = self.stats_sys.get_snapshot() if self.stats_sys else {}
+            inv_snap = self.inv_sys.get_snapshot() if self.inv_sys else {}
+            hv_snap = self.hidden_value_sys.get_snapshot() if self.hidden_value_sys else {}
+            equipped = {}
+            if self.equipment_sys:
+                eq = self.equipment_sys.get_equipped()
+                if eq:
+                    equipped = {slot: (it.get("name") or it.get("id", "")) for slot, it in eq.items() if it}
+            # 收集本回合触发的事件 ID
+            fired_events = [
+                k.replace("_event_", "").replace("_fired", "")
+                for k in self.session.flags
+                if k.startswith("_event_") and k.endswith("_fired")
+            ]
+            ending_reached = None
+            if self.ending_sys.is_finished():
+                final = self.ending_sys.get_final_ending()
+                if final:
+                    ending_reached = final.id
+            self.replay_sys.record_turn(
+                turn=self.session.turn_count + 1,  # 回放从 1 开始计数
+                player_action=player_input,
+                gm_narrative=narrative,
+                action_points=stats_snap.get("action_power", 0),
+                hp=stats_snap.get("hp", 0),
+                hp_max=stats_snap.get("hp_max", 0),
+                hidden_values=hv_snap,
+                stats=stats_snap,
+                inventory=inv_snap.get("items", []),
+                equipped=equipped,
+                roll_result=roll_result_dict,
+                scene_id=self.session.current_scene_id or "",
+                triggered_events=fired_events,
+                ending_reached=ending_reached,
+            )
 
         return narrative, cmd
 
@@ -644,6 +800,211 @@ class GameMaster:
             if result:
                 self.session.flags["_achievement_unlocked"] = achievement_id
 
+        # ── 多结局系统指令 ───────────────────────────────────
+        # trigger_ending: 触发终局（指定结局ID）
+        trigger_ending_id = cmd.get("trigger_ending", "").strip()
+        if trigger_ending_id and not self.ending_sys.is_finished():
+            ending = self.ending_sys.trigger_ending(
+                ending_id=trigger_ending_id,
+                turn=self.session.turn_count,
+                scene_id=self.session.current_scene_id,
+            )
+            if ending:
+                self.session.flags["_ending_triggered"] = {
+                    "id": ending.id,
+                    "name": ending.name,
+                    "type": ending.ending_type,
+                }
+            else:
+                self.session.flags["_ending_triggered"] = None
+
+        # trigger_final_ending: 触发终局（自动评估最高优先级结局）
+        if cmd.get("trigger_final_ending", "").strip().lower() in ("1", "true", "yes"):
+            if not self.ending_sys.is_finished():
+                result = self.ending_sys.evaluate(game_master=self)
+                if result:
+                    self.ending_sys.trigger_ending(
+                        ending_id=result.ending_id,
+                        turn=self.session.turn_count,
+                        scene_id=self.session.current_scene_id,
+                    )
+                    self.session.flags["_ending_triggered"] = {
+                        "id": result.ending.id,
+                        "name": result.ending.name,
+                        "type": result.ending.ending_type,
+                    }
+                else:
+                    self.session.flags["_ending_triggered"] = None
+
+        # ── 阵营声望系统指令 ───────────────────────────────────
+        # faction_action: 执行阵营行动（根据 action_tag 映射到各阵营声望变化）
+        faction_action_id = cmd.get("faction_action", "").strip()
+        if faction_action_id:
+            results = self.faction_sys.execute_faction_action(
+                action_id=faction_action_id,
+                scene_id=self.session.current_scene_id,
+                turn=self.session.turn_count,
+            )
+            if results:
+                parts = []
+                for fid, new_val in results.items():
+                    delta = new_val - (self.faction_sys.get_reputation(fid) - (results.get(fid, 0) - (next((d for d in self.faction_sys._history[-10:] if d["faction_id"] == fid), {}) or {}).get("delta", 0)))
+                # 简化为直接展示变化
+                for fid in results:
+                    info = self.faction_sys.get_reputation_level_info(fid)
+                    parts.append(f"「{info['faction_name']}」{info['value']}（{info['level']}）")
+                if parts:
+                    self.session.flags["_faction_changes"] = parts
+
+        # faction_join: 玩家加入阵营
+        join_faction_id = cmd.get("faction_join", "").strip()
+        if join_faction_id:
+            ok = self.faction_sys.join_faction(join_faction_id)
+            if ok:
+                faction = self.faction_sys._factions.get(join_faction_id)
+                self.session.flags["_faction_join"] = f"你正式加入了「{faction.name if faction else join_faction_id}」"
+            else:
+                self.session.flags["_faction_join"] = f"无法加入「{join_faction_id}」（该阵营不可加入或不存在）"
+
+        # faction_leave: 玩家离开/被驱逐阵营
+        leave_faction_id = cmd.get("faction_leave", "").strip()
+        if leave_faction_id:
+            ok = self.faction_sys.leave_faction(leave_faction_id)
+            if ok:
+                faction = self.faction_sys._factions.get(leave_faction_id)
+                self.session.flags["_faction_leave"] = f"你退出了「{faction.name if faction else leave_faction_id}」"
+            else:
+                self.session.flags["_faction_leave"] = f"你并不属于「{leave_faction_id}」"
+
+        # faction_reputation_delta: 直接调整某阵营声望
+        if "faction_reputation_delta" in cmd and "faction_id" in cmd:
+            try:
+                faction_id = cmd.get("faction_id", "").strip()
+                delta = int(cmd.get("faction_reputation_delta", "0"))
+                if faction_id and delta != 0:
+                    new_val = self.faction_sys.modify_reputation(
+                        faction_id=faction_id,
+                        delta=delta,
+                        source="gm_command",
+                        scene_id=self.session.current_scene_id,
+                        turn=self.session.turn_count,
+                    )
+                    info = self.faction_sys.get_reputation_level_info(faction_id)
+                    self.session.flags["_faction_reputation_msg"] = (
+                        f"「{info['faction_name']}」声望变为 {new_val}（{info['level']}）"
+                    )
+            except ValueError:
+                pass
+
+        # ── 昼夜循环系统指令 ───────────────────────────────────
+        # advance_time: 前进一档时间（如等待、观察等不触发完整回合的动作）
+        if cmd.get("advance_time", "").strip().lower() in ("1", "true", "yes"):
+            self.day_night_sys.advance()
+            self.session.add_history(
+                "system",
+                f"【时间流逝】{self.day_night_sys.get_time_string()}"
+            )
+
+        # rest / overnight: 休息/过夜，跳到次日黎明
+        if cmd.get("rest", "").strip().lower() in ("1", "true", "yes", "overnight"):
+            self.day_night_sys.rest()
+            self.stats_sys.refresh_ap()
+            self.session.add_history(
+                "system",
+                f"【过夜休息】第{self.day_night_sys.get_day()}天开始了，行动力已恢复。"
+            )
+
+        # set_period: 手动设置当前时间档位（进入室内切场景等）
+        set_period_val = cmd.get("set_period", "").strip()
+        if set_period_val:
+            from rpgagent.systems.day_night_cycle import TimePeriod
+            try:
+                self.day_night_sys.set_period(TimePeriod(set_period_val))
+                self.session.add_history(
+                    "system",
+                    f"【时间变更】现在是{self.day_night_sys.get_time_string()}"
+                )
+            except ValueError:
+                pass
+
+        # ── 藏宝图/探索系统指令 ─────────────────────────────────
+        # grant_clue: 给予玩家一条藏宝线索
+        grant_clue_id = cmd.get("grant_clue", "").strip()
+        if grant_clue_id:
+            site = self.explore_sys.grant_clue(grant_clue_id)
+            if site:
+                self.session.flags["_clue_granted"] = {
+                    "id": site.id,
+                    "name": site.name,
+                    "clue_text": site.clue_text,
+                    "location_hint": site.location_hint,
+                }
+            else:
+                self.session.flags["_clue_granted"] = None
+
+        # explore: 玩家对指定宝藏进行探索
+        explore_site_id = cmd.get("explore", "").strip()
+        if explore_site_id:
+            result = self.explore_sys.explore(
+                site_id=explore_site_id,
+                stats_sys=self.stats_sys,
+                skill_sys=self.skill_sys,
+                turn=self.session.turn_count,
+            )
+            # 发放奖励
+            if result.success:
+                for reward in result.rewards_given:
+                    if reward.type == "gold":
+                        self.stats_sys.modify("gold", reward.quantity)
+                    elif reward.type == "equipment" and reward.id:
+                        from rpgagent.systems.equipment_system import get_template_equipment
+                        equip = get_template_equipment(reward.id)
+                        if equip:
+                            grant_result = self.acquisition_sys.grant_equipment(equip)
+                            self.session.flags["_loot_item"] = grant_result
+                            self.session.flags["_loot_message"] = (
+                                f"【探索获得】{grant_result['rarity_display']}「{equip.name}」"
+                            )
+                            current_eq = self.equipment_sys.equipped.get(equip.slot)
+                            if current_eq is None:
+                                self.equipment_sys.equip(equip)
+                                self.session.flags["_loot_message"] += f"\n已自动装备「{equip.name}」"
+                    elif reward.type == "intel" and reward.id:
+                        # intel 奖励自动注册为新线索
+                        next_site = self.explore_sys.grant_clue(reward.id)
+                        if next_site:
+                            self.session.flags["_clue_granted"] = {
+                                "id": next_site.id,
+                                "name": next_site.name,
+                                "clue_text": next_site.clue_text,
+                                "location_hint": next_site.location_hint,
+                                "from_intel": True,
+                            }
+
+            # 探索结果写入 flags
+            self.session.flags["_explore_result"] = {
+                "site_id": explore_site_id,
+                "site_name": result.site.name if result.site else explore_site_id,
+                "success": result.success,
+                "roll": result.roll,
+                "modifier": result.modifier,
+                "total": result.total,
+                "dc": result.dc,
+                "rewards": [
+                    {"type": r.type, "name": r.name, "quantity": r.quantity}
+                    for r in result.rewards_given
+                ],
+                "has_new_clue": result.new_clue is not None,
+            }
+
+        # craft_skill_fragment: 消耗碎片兑换技能
+        if cmd.get("craft_skill_fragment", "").strip().lower() in ("1", "true", "yes"):
+            skill_id = self.explore_sys.consume_fragments_for_skill()
+            if skill_id:
+                self.session.flags["_skill_fragment_crafted"] = skill_id
+            else:
+                self.session.flags["_skill_fragment_crafted"] = None
+
         # 每回合结束后评估一次成就（自动检测）
         self._evaluate_achievements()
 
@@ -697,8 +1058,16 @@ class GameMaster:
                 "_npc_memories": self.npc_mem_sys.get_snapshot(),
                 "_teammates": self.teammate_sys.get_snapshot(),
                 "_achievements": self.achievement_sys.get_snapshot(),
+                "_factions": self.faction_sys.get_snapshot(),
+                "_day_night": self.day_night_sys.get_snapshot(),
+                "_endings": self.ending_sys.get_snapshot(),
+                "_world_events": self.world_event_sys.get_snapshot() if self.world_event_sys else {},
+                "_exploration": self.explore_sys.get_snapshot(),
             },
         )
+        # 同步昼夜循环状态到 session
+        self.session.day = self.day_night_sys.get_day()
+        self.session.period = self.day_night_sys.get_current_period().value
         # 同步技能数据
         self.session.skill_points = self.skill_sys.skill_points
         self.session.learned_skills = self.skill_sys.learned.copy()
@@ -729,6 +1098,26 @@ class GameMaster:
             self.stats_sys.take_damage(result.damage_taken)
         # 同步 stats 到 session
         self._sync_session()
+
+        # ── 战斗统计追踪 ───────────────────────────
+        # 标记本回合为战斗回合（用于 stats API 聚合）
+        self.session.flags["_combat_count"] = self.session.flags.get("_combat_count", 0) + 1
+        # 追踪伤害数据
+        dmg_dealt = getattr(result, "damage_dealt", 0)
+        dmg_taken = getattr(result, "damage_taken", 0)
+        self.session.flags["_total_damage_dealt"] = self.session.flags.get("_total_damage_dealt", 0) + dmg_dealt
+        self.session.flags["_total_damage_taken"] = self.session.flags.get("_total_damage_taken", 0) + dmg_taken
+        if killed:
+            self.session.flags["_kills"] = self.session.flags.get("_kills", 0) + 1
+        if result.damage_taken > 0 and self.stats_sys.stats.hp <= 0:
+            self.session.flags["_deaths"] = self.session.flags.get("_deaths", 0) + 1
+        # 胜负判断（击杀敌人 = 胜，受到致命伤害 = 负）
+        if killed and result.damage_taken > 0:
+            self.session.flags["_combat_losses"] = self.session.flags.get("_combat_losses", 0) + 1
+        elif killed:
+            self.session.flags["_combat_wins"] = self.session.flags.get("_combat_wins", 0) + 1
+        elif result.damage_taken > 0 and self.stats_sys.stats.hp <= 0:
+            self.session.flags["_combat_losses"] = self.session.flags.get("_combat_losses", 0) + 1
 
         # 战斗结束后自动生成场景 CG（Phase 2 集成）
         if killed or result.damage_taken > 0:
@@ -929,6 +1318,19 @@ class GameMaster:
         self.dialogue_sys = DialogueSystem()
         self.skill_sys = SkillSystem()
         self.equipment_sys = EquipmentSystem()
+
+        # 昼夜循环重置
+        from rpgagent.systems.day_night_cycle import DayNightCycle
+        self.day_night_sys = DayNightCycle()
+        self._register_npc_schedules_from_loader()
+        # 更新 PromptBuilder 中的引用
+        self.prompt_builder.day_night_sys = self.day_night_sys
+
+        # 多结局系统重置
+        from rpgagent.systems.ending_system import EndingSystem
+        self.ending_sys = EndingSystem()
+        self.ending_sys.load_from_meta(self.game_loader.meta, game_id=self.game_id)
+        self.ending_sys.bind_game_master(self)
 
         # 隐藏数值系统
         hv_configs = getattr(self.game_loader.meta, "hidden_values", []) or []

@@ -33,6 +33,7 @@ const state = {
 
 // ── DOM refs ────────────────────────────────
 const $ = id => document.getElementById(id);
+const escHtml = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const narrativeEl  = $("narrative");
 const hpFill       = $("hp-fill");
 const staminaFill  = $("stamina-fill");
@@ -471,6 +472,15 @@ function handleMessage(msg) {
       sceneTitleEl.textContent = msg.content;
       break;
 
+    case "scene_cg":
+      // 新 CG 生成，追加到叙事区并弹出提示
+      if (msg.content) {
+        appendGM(`<div class="cg-thumb-wrapper"><img src="${msg.content}" class="cg-thumb" onclick="openCgGallery()" alt="场景CG" title="点击打开CG画廊" /></div>`);
+        // 自动弹出画廊提示
+        openCgGallery();
+      }
+      break;
+
     case "error":
       appendSystem(`错误：${msg.content}`);
       renderActionButtons();
@@ -547,6 +557,81 @@ async function fetchAttrPanel() {
     $("attr-content").innerHTML = '<div class="attr-empty">加载失败</div>';
     $("attr-content").style.display = "block";
   }
+}
+
+// ── 成就面板 Modal ────────────────────────────────
+
+function openAchPanel() {
+  const overlay = $("ach-modal-overlay");
+  if (!overlay) return;
+  overlay.classList.add("open");
+  if (!state.sessionId) {
+    $("ach-loading").style.display = "none";
+    $("ach-content").innerHTML = '<div class="ach-empty">无活跃会话</div>';
+    $("ach-content").style.display = "block";
+    return;
+  }
+  fetchAchPanel();
+}
+
+function closeAchPanel() {
+  const overlay = $("ach-modal-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+async function fetchAchPanel() {
+  $("ach-loading").style.display = "block";
+  $("ach-content").style.display = "none";
+  try {
+    const r = await fetch(`/api/sessions/${state.sessionId}/achievements`);
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    renderAchPanel(data);
+  } catch {
+    $("ach-loading").style.display = "none";
+    $("ach-content").innerHTML = '<div class="ach-empty">加载失败</div>';
+    $("ach-content").style.display = "block";
+  }
+}
+
+function renderAchPanel(data) {
+  $("ach-loading").style.display = "none";
+  $("ach-content").style.display = "block";
+
+  const unlocked = data.achievements.filter(a => a.unlocked);
+  const total = data.total_count;
+
+  // Overview bar
+  $("ach-overview").innerHTML = `
+    <div class="ach-overview-stat">
+      <span class="ach-overview-num">${unlocked.length}</span>
+      <span class="ach-overview-label">已解锁</span>
+    </div>
+    <div class="ach-overview-stat">
+      <span class="ach-overview-num">${total}</span>
+      <span class="ach-overview-label">总成就数</span>
+    </div>
+    <div class="ach-overview-stat">
+      <span class="ach-overview-num">${total > 0 ? Math.round(unlocked.length / total * 100) : 0}%</span>
+      <span class="ach-overview-label">完成率</span>
+    </div>
+  `;
+
+  if (unlocked.length === 0) {
+    $("ach-list").innerHTML = '<div class="ach-empty">尚未解锁任何成就，继续探索吧！</div>';
+    return;
+  }
+
+  $("ach-list").innerHTML = unlocked.map(a => `
+    <div class="ach-item">
+      <div class="ach-item-icon">${a.icon || '🏅'}</div>
+      <div class="ach-item-info">
+        <div class="ach-item-name">${escHtml(a.name)}</div>
+        <div class="ach-item-desc">${escHtml(a.description)}</div>
+      </div>
+      <div class="ach-item-badge">已解锁</div>
+    </div>
+  `).join('');
 }
 
 function renderAttrPanel(s) {
@@ -859,5 +944,154 @@ function renderDebugPanel(data) {
   }
 }
 
-// 启动
+// ── CG 画廊 ───────────────────────────────────────
+
+async function openCgGallery() {
+  const overlay = $("cg-gallery-overlay");
+  if (!overlay) return;
+  overlay.classList.add("open");
+  await fetchAndRenderCgGallery();
+}
+
+function closeCgGallery() {
+  const overlay = $("cg-gallery-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+async function fetchAndRenderCgGallery() {
+  const grid = $("cg-gallery-grid");
+  const emptyEl = $("cg-gallery-empty");
+  if (!grid) return;
+
+  if (!state.sessionId) {
+    grid.innerHTML = "";
+    if (emptyEl) emptyEl.style.display = "block";
+    return;
+  }
+
+  try {
+    const r = await fetch(`/api/sessions/${state.sessionId}/cg`);
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    const list = data.cg_list || [];
+
+    if (!list.length) {
+      grid.innerHTML = "";
+      if (emptyEl) emptyEl.style.display = "block";
+      return;
+    }
+
+    if (emptyEl) emptyEl.style.display = "none";
+    grid.innerHTML = list.map(item => `
+      <div class="cg-gallery-item" onclick="showCgFull('${item.cg_url}')">
+        <img src="${item.cg_url}" alt="${item.scene_title}" />
+        <div class="cg-gallery-item-info">
+          <div class="cg-gallery-item-title">${item.scene_title || item.scene_id}</div>
+        </div>
+      </div>
+    `).join("");
+  } catch {
+    grid.innerHTML = '<div style="color:#888;font-size:12px;padding:8px">加载CG历史失败</div>';
+    if (emptyEl) emptyEl.style.display = "none";
+  }
+}
+
+function showCgFull(url) {
+  const overlay = $("cg-overlay");
+  const img = $("cg-display-img");
+  if (!overlay || !img) return;
+  img.src = url;
+  overlay.classList.add("open");
+  const label = $("cg-scene-label");
+  if (label) {
+    // 尝试从 grid 找标题
+    const items = document.querySelectorAll(".cg-gallery-item");
+    items.forEach(el => {
+      const titleEl = el.querySelector(".cg-gallery-item-title");
+      if (titleEl && el.querySelector("img").src === url) {
+        label.textContent = titleEl.textContent;
+      }
+    });
+  }
+}
+
+function closeCgFull() {
+  const overlay = $("cg-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+// ── 移动端侧边栏抽屉 ─────────────────────────────
+
+function toggleMobileSidebar() {
+  const sidebar = $("sidebar");
+  const overlay = $("sidebar-overlay");
+  if (!sidebar) return;
+  const isOpen = sidebar.classList.contains("open");
+  if (isOpen) {
+    sidebar.classList.remove("open");
+    if (overlay) overlay.classList.remove("visible");
+  } else {
+    sidebar.classList.add("open");
+    if (overlay) overlay.classList.add("visible");
+  }
+}
+
+function closeMobileSidebar() {
+  const sidebar = $("sidebar");
+  const overlay = $("sidebar-overlay");
+  if (sidebar) sidebar.classList.remove("open");
+  if (overlay) overlay.classList.remove("visible");
+}
+
+// ── 移动端底部标签页切换 ─────────────────────────
+
+function switchBottomTab(tab) {
+  // 更新标签激活状态
+  document.querySelectorAll(".bnav-btn").forEach(btn => btn.classList.remove("active"));
+  const btn = $(`bnav-${tab}`);
+  if (btn) btn.classList.add("active");
+
+  // 侧边栏：滚动到对应板块并打开
+  const sidebar = $("sidebar");
+  if (sidebar) {
+    sidebar.classList.add("open");
+    const overlay = $("sidebar-overlay");
+    if (overlay) overlay.classList.add("visible");
+    // 滚动到对应面板
+    setTimeout(() => {
+      const PANEL_IDS = {
+        status: sidebar.querySelector(".panel") ? sidebar.querySelector(".panel").parentElement.id : null,
+        skills: "skills-list",
+        inventory: "equip-list",
+        menu: "log-btn",
+      };
+    }, 50);
+  }
+
+  // 直接触发对应功能
+  switch (tab) {
+    case "status":
+      // 状态默认在顶部，无需额外操作
+      break;
+    case "skills":
+      // 技能在侧边栏，弹出属性面板更清晰
+      openAttrPanel();
+      break;
+    case "inventory":
+      openAttrPanel();
+      break;
+    case "menu":
+      openLogModal();
+      break;
+  }
+}
+
+// ── Escape 键关闭抽屉 ────────────────────────────
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    closeMobileSidebar();
+  }
+});
+
+// ── 启动
 initSelectScreen();
