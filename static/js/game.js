@@ -698,6 +698,162 @@ function fmtMod(val) {
   return mod >= 0 ? `+${mod}` : `${mod}`;
 }
 
+// ── 游戏统计 Modal ────────────────────────────────
+
+function openStatPanel() {
+  const overlay = $("stat-modal-overlay");
+  if (!overlay) return;
+  overlay.classList.add("open");
+  if (!state.sessionId) {
+    $("stat-loading").style.display = "none";
+    $("stat-content").innerHTML = '<div class="ach-empty">无活跃会话</div>';
+    $("stat-content").style.display = "block";
+    return;
+  }
+  fetchStatPanel();
+}
+
+function closeStatPanel() {
+  const overlay = $("stat-modal-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+async function fetchStatPanel() {
+  $("stat-loading").style.display = "block";
+  $("stat-content").style.display = "none";
+  try {
+    const r = await fetch(`/api/sessions/${state.sessionId}/stats`);
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    renderStatPanel(data);
+  } catch {
+    $("stat-loading").style.display = "none";
+    $("stat-content").innerHTML = '<div class="ach-empty">加载失败</div>';
+    $("stat-content").style.display = "block";
+  }
+}
+
+function renderStatPanel(data) {
+  $("stat-loading").style.display = "none";
+  $("stat-content").style.display = "block";
+
+  const ov = data.overview || {};
+  const cb = data.combat || {};
+  const dl = data.dialogue || {};
+  const md = data.moral_debt || {};
+  const fac = data.factions || {};
+  const npr = data.npc_relations || {};
+  const exp = data.exploration || {};
+  const sk = data.skills || {};
+  const ach = data.achievements || {};
+
+  // Overview cards
+  $("stat-overview").innerHTML = `
+    <div class="stat-card-row">
+      <div class="stat-card"><div class="stat-card-num">${ov.turn_count || 0}</div><div class="stat-card-label">回合</div></div>
+      <div class="stat-card"><div class="stat-card-num">${ov.current_day || 1}</div><div class="stat-card-label">游戏天数</div></div>
+      <div class="stat-card"><div class="stat-card-num">Lv${ov.level || 1}</div><div class="stat-card-label">等级</div></div>
+      <div class="stat-card"><div class="stat-card-num">${ov.gold || 0}</div><div class="stat-card-label">金币</div></div>
+    </div>
+  `;
+
+  // Sections
+  const sections = [];
+
+  // Combat
+  sections.push(`<div class="stat-section">
+    <div class="stat-section-title">⚔️ 战斗统计</div>
+    <div class="stat-card-row">
+      <div class="stat-card"><div class="stat-card-num">${cb.battles_started || 0}</div><div class="stat-card-label">战斗次数</div></div>
+      <div class="stat-card"><div class="stat-card-num">${cb.battles_won || 0}</div><div class="stat-card-label">胜</div></div>
+      <div class="stat-card"><div class="stat-card-num">${cb.battles_lost || 0}</div><div class="stat-card-label">负</div></div>
+      <div class="stat-card"><div class="stat-card-num">${cb.win_rate || 0}%</div><div class="stat-card-label">胜率</div></div>
+    </div>
+    <div class="stat-card-row" style="margin-top:8px">
+      <div class="stat-card"><div class="stat-card-num">${cb.total_damage_dealt || 0}</div><div class="stat-card-label">造成伤害</div></div>
+      <div class="stat-card"><div class="stat-card-num">${cb.total_damage_taken || 0}</div><div class="stat-card-label">受到伤害</div></div>
+      <div class="stat-card"><div class="stat-card-num">${cb.kills || 0}</div><div class="stat-card-label">击杀</div></div>
+      <div class="stat-card"><div class="stat-card-num">${cb.deaths || 0}</div><div class="stat-card-label">死亡</div></div>
+    </div>
+  </div>`);
+
+  // Dialogue distribution
+  const totalActions = dl.total || 0;
+  sections.push(`<div class="stat-section">
+    <div class="stat-section-title">💬 行动分布</div>
+    <div class="stat-bar-row">
+      <div class="stat-bar-item" style="flex:${dl.combat_actions||0};background:#c0392b">${dl.combat_actions||0} 战</div>
+      <div class="stat-bar-item" style="flex:${dl.diplomatic_actions||0};background:#27ae60">${dl.diplomatic_actions||0} 外交</div>
+      <div class="stat-bar-item" style="flex:${dl.exploration_actions||0};background:#2980b9">${dl.exploration_actions||0} 探索</div>
+      <div class="stat-bar-item" style="flex:${dl.other_actions||0};background:#7f8c8d">${dl.other_actions||0} 其他</div>
+    </div>
+    <div class="stat-detail-row">总行动次数：${totalActions} &nbsp;|&nbsp; 战斗 ${dl.combat_actions||0} &nbsp;外交 ${dl.diplomatic_actions||0} &nbsp;探索 ${dl.exploration_actions||0} &nbsp;其他 ${dl.other_actions||0}</div>
+  </div>`);
+
+  // Moral debt
+  sections.push(`<div class="stat-section">
+    <div class="stat-section-title">⚖️ 道德债务</div>
+    <div class="stat-card-row">
+      <div class="stat-card"><div class="stat-card-num">${md.current || 0}</div><div class="stat-card-label">当前债务</div></div>
+      <div class="stat-card"><div class="stat-card-num">${md.current_level || "无债"}</div><div class="stat-card-label">状态</div></div>
+      <div class="stat-card"><div class="stat-card-num">${md.peak || 0}</div><div class="stat-card-label">历史峰值</div></div>
+    </div>
+  </div>`);
+
+  // Faction reputation
+  if (fac.factions && fac.factions.length) {
+    sections.push(`<div class="stat-section">
+      <div class="stat-section-title">🏛️ 阵营声望</div>
+      ${fac.factions.map(f => `<div class="stat-faction-row">
+        <span class="stat-faction-name">${escHtml(f.name || f.faction_id)}</span>
+        <span class="stat-faction-val">${f.value || 0}</span>
+        <span class="stat-faction-label">${f.level || "中立"}</span>
+      </div>`).join("")}
+    </div>`);
+  }
+
+  // NPC relations
+  sections.push(`<div class="stat-section">
+    <div class="stat-section-title">👥 NPC 关系</div>
+    <div class="stat-card-row">
+      <div class="stat-card"><div class="stat-card-num" style="color:#27ae60">${npr.allies || 0}</div><div class="stat-card-label">友好</div></div>
+      <div class="stat-card"><div class="stat-card-num" style="color:#7f8c8d">${npr.neutral || 0}</div><div class="stat-card-label">中立</div></div>
+      <div class="stat-card"><div class="stat-card-num" style="color:#c0392b">${npr.hostile || 0}</div><div class="stat-card-label">敌对</div></div>
+    </div>
+  </div>`);
+
+  // Exploration
+  sections.push(`<div class="stat-section">
+    <div class="stat-section-title">🗺️ 场景探索</div>
+    <div class="stat-card-row">
+      <div class="stat-card"><div class="stat-card-num">${exp.visited_scenes || 0}</div><div class="stat-card-label">已访</div></div>
+      <div class="stat-card"><div class="stat-card-num">${exp.total_scenes || 0}</div><div class="stat-card-label">总数</div></div>
+      <div class="stat-card"><div class="stat-card-num">${exp.visit_rate || 0}%</div><div class="stat-card-label">探索率</div></div>
+    </div>
+  </div>`);
+
+  // Skills
+  sections.push(`<div class="stat-section">
+    <div class="stat-section-title">📖 技能</div>
+    <div class="stat-card-row">
+      <div class="stat-card"><div class="stat-card-num">${sk.total_skills || 0}</div><div class="stat-card-label">已学技能</div></div>
+      <div class="stat-card"><div class="stat-card-num">${sk.total_skill_points_spent || 0}</div><div class="stat-card-label">消耗点数</div></div>
+    </div>
+  </div>`);
+
+  // Achievements
+  sections.push(`<div class="stat-section">
+    <div class="stat-section-title">🏆 成就</div>
+    <div class="stat-card-row">
+      <div class="stat-card"><div class="stat-card-num">${ach.unlocked || 0}</div><div class="stat-card-label">已解锁</div></div>
+      <div class="stat-card"><div class="stat-card-num">${ach.total || 0}</div><div class="stat-card-label">总成就</div></div>
+      <div class="stat-card"><div class="stat-card-num">${ach.unlock_rate || 0}%</div><div class="stat-card-label">完成率</div></div>
+    </div>
+  </div>`);
+
+  $("stat-sections").innerHTML = sections.join("");
+}
+
 async function loadLogList() {
   const listEl = $("log-list");
   listEl.innerHTML = '<div class="log-list-item"><div class="log-list-title" style="color:var(--text-dim)">加载中…</div></div>';
