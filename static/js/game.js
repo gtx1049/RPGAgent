@@ -33,6 +33,7 @@ const state = {
 
 // ── DOM refs ────────────────────────────────
 const $ = id => document.getElementById(id);
+const escHtml = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const narrativeEl  = $("narrative");
 const hpFill       = $("hp-fill");
 const staminaFill  = $("stamina-fill");
@@ -461,6 +462,8 @@ function handleMessage(msg) {
         if (e.skills !== undefined) updateSkills(e.skills);
         if (e.equipped !== undefined) updateEquipment(e.equipped);
       }
+      // 调试模式：刷新调试面板
+      if (window._debugMode) fetchDebugInfo();
       break;
 
     case "scene_change":
@@ -470,7 +473,12 @@ function handleMessage(msg) {
       break;
 
     case "scene_cg":
-      if (msg.content) showCG(msg.content);
+      // 新 CG 生成，追加到叙事区并弹出提示
+      if (msg.content) {
+        appendGM(`<div class="cg-thumb-wrapper"><img src="${msg.content}" class="cg-thumb" onclick="openCgGallery()" alt="场景CG" title="点击打开CG画廊" /></div>`);
+        // 自动弹出画廊提示
+        openCgGallery();
+      }
       break;
 
     case "error":
@@ -498,25 +506,6 @@ function setAtmosphere(index) {
   });
 }
 
-// ── CG 展示 ─────────────────────────────────────
-
-function showCG(cgPath) {
-  if (!cgPath) return;
-  // cgPath 可能是绝对路径或相对路径
-  // 后端返回的是 /cg_cache/xxx.png 这类相对路径
-  const img = $("cg-image");
-  img.src = cgPath.startsWith("/") ? cgPath : "/" + cgPath;
-  $("cg-panel").style.display = "flex";
-  img.onerror = () => {
-    // 图片加载失败，隐藏面板
-    $("cg-panel").style.display = "none";
-  };
-}
-
-function closeCGPanel() {
-  $("cg-panel").style.display = "none";
-}
-
 // ── 冒险日志 Modal ────────────────────────────────
 
 function openLogModal() {
@@ -533,6 +522,336 @@ function openLogModal() {
 function closeLogModal() {
   const overlay = $("log-modal-overlay");
   if (overlay) overlay.classList.remove("open");
+}
+
+// ── 属性面板 Modal ────────────────────────────────
+
+function openAttrPanel() {
+  const overlay = $("attr-modal-overlay");
+  if (!overlay) return;
+  overlay.classList.add("open");
+  if (!state.sessionId) {
+    $("attr-loading").style.display = "none";
+    $("attr-content").innerHTML = '<div class="attr-empty">无活跃会话</div>';
+    $("attr-content").style.display = "block";
+    return;
+  }
+  fetchAttrPanel();
+}
+
+function closeAttrPanel() {
+  const overlay = $("attr-modal-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+async function fetchAttrPanel() {
+  $("attr-loading").style.display = "block";
+  $("attr-content").style.display = "none";
+  try {
+    const r = await fetch(`/api/games/${state.sessionId}/status`);
+    if (!r.ok) throw new Error();
+    const s = await r.json();
+    renderAttrPanel(s);
+  } catch {
+    $("attr-loading").style.display = "none";
+    $("attr-content").innerHTML = '<div class="attr-empty">加载失败</div>';
+    $("attr-content").style.display = "block";
+  }
+}
+
+// ── 成就面板 Modal ────────────────────────────────
+
+function openAchPanel() {
+  const overlay = $("ach-modal-overlay");
+  if (!overlay) return;
+  overlay.classList.add("open");
+  if (!state.sessionId) {
+    $("ach-loading").style.display = "none";
+    $("ach-content").innerHTML = '<div class="ach-empty">无活跃会话</div>';
+    $("ach-content").style.display = "block";
+    return;
+  }
+  fetchAchPanel();
+}
+
+function closeAchPanel() {
+  const overlay = $("ach-modal-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+async function fetchAchPanel() {
+  $("ach-loading").style.display = "block";
+  $("ach-content").style.display = "none";
+  try {
+    const r = await fetch(`/api/sessions/${state.sessionId}/achievements`);
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    renderAchPanel(data);
+  } catch {
+    $("ach-loading").style.display = "none";
+    $("ach-content").innerHTML = '<div class="ach-empty">加载失败</div>';
+    $("ach-content").style.display = "block";
+  }
+}
+
+function renderAchPanel(data) {
+  $("ach-loading").style.display = "none";
+  $("ach-content").style.display = "block";
+
+  const unlocked = data.achievements.filter(a => a.unlocked);
+  const total = data.total_count;
+
+  // Overview bar
+  $("ach-overview").innerHTML = `
+    <div class="ach-overview-stat">
+      <span class="ach-overview-num">${unlocked.length}</span>
+      <span class="ach-overview-label">已解锁</span>
+    </div>
+    <div class="ach-overview-stat">
+      <span class="ach-overview-num">${total}</span>
+      <span class="ach-overview-label">总成就数</span>
+    </div>
+    <div class="ach-overview-stat">
+      <span class="ach-overview-num">${total > 0 ? Math.round(unlocked.length / total * 100) : 0}%</span>
+      <span class="ach-overview-label">完成率</span>
+    </div>
+  `;
+
+  if (unlocked.length === 0) {
+    $("ach-list").innerHTML = '<div class="ach-empty">尚未解锁任何成就，继续探索吧！</div>';
+    return;
+  }
+
+  $("ach-list").innerHTML = unlocked.map(a => `
+    <div class="ach-item">
+      <div class="ach-item-icon">${a.icon || '🏅'}</div>
+      <div class="ach-item-info">
+        <div class="ach-item-name">${escHtml(a.name)}</div>
+        <div class="ach-item-desc">${escHtml(a.description)}</div>
+      </div>
+      <div class="ach-item-badge">已解锁</div>
+    </div>
+  `).join('');
+}
+
+function renderAttrPanel(s) {
+  $("attr-loading").style.display = "none";
+  $("attr-content").style.display = "block";
+
+  $("attr-level").textContent = s.level ?? "—";
+  $("attr-exp").textContent = `${s.exp ?? 0} / ${s.exp_to_level ?? "?"}`;
+  $("attr-gold").textContent = s.gold ?? 0;
+  $("attr-hp").textContent = `${s.hp ?? 0} / ${s.max_hp ?? 0}`;
+  $("attr-stamina").textContent = `${s.stamina ?? 0} / ${s.max_stamina ?? 0}`;
+  $("attr-ap").textContent = `${s.action_power ?? 0} / ${s.max_action_power ?? 0}`;
+  $("attr-skill-points").textContent = s.skill_points ?? 0;
+
+  $("attr-str").textContent = `${s.strength ?? 10} (${fmtMod(s.strength)})`;
+  $("attr-dex").textContent = `${s.agility ?? 10} (${fmtMod(s.agility)})`;
+  $("attr-con").textContent = `${s.constitution ?? 10} (${fmtMod(s.constitution)})`;
+  $("attr-int").textContent = `${s.intelligence ?? 10} (${fmtMod(s.intelligence)})`;
+  $("attr-wis").textContent = `${s.wisdom ?? 10} (${fmtMod(s.wisdom)})`;
+  $("attr-cha").textContent = `${s.charisma ?? 10} (${fmtMod(s.charisma)})`;
+
+  $("attr-ac").textContent = s.armor_class ?? 0;
+  $("attr-atk").textContent = (s.attack_bonus ?? 0) >= 0 ? `+${s.attack_bonus}` : s.attack_bonus;
+  $("attr-dmg").textContent = (s.damage_bonus ?? 0) >= 0 ? `+${s.damage_bonus}` : s.damage_bonus;
+
+  // equipped
+  const eq = s.equipped || {};
+  const eqContainer = $("attr-equipped");
+  const eqItems = Object.entries(eq).filter(([, v]) => v);
+  if (!eqItems.length) {
+    eqContainer.innerHTML = '<div class="attr-empty">无装备</div>';
+  } else {
+    const SLOT_NAMES = { weapon: "武器", offhand: "副手", armor: "护甲", accessory_a: "饰品", accessory_b: "饰品" };
+    eqContainer.innerHTML = eqItems.map(([slot, info]) =>
+      `<div class="attr-equip-item"><span class="slot-label">${SLOT_NAMES[slot] || slot}</span><span>${info?.name || slot}</span></div>`
+    ).join("");
+  }
+
+  // skills
+  const skills = s.skills || [];
+  const skContainer = $("attr-skills");
+  if (!skills.length) {
+    skContainer.innerHTML = '<div class="attr-empty">暂无已学技能</div>';
+  } else {
+    skContainer.innerHTML = skills.map(sk =>
+      `<div class="attr-skill-item"><span class="skill-name">${sk.name}</span><span class="skill-rank">Lv${sk.rank}</span></div>`
+    ).join("");
+  }
+
+  // inventory
+  const inv = s.inventory || [];
+  const invContainer = $("attr-inventory");
+  if (!inv.length) {
+    invContainer.innerHTML = '<div class="attr-empty">背包为空</div>';
+  } else {
+    invContainer.innerHTML = inv.map(item =>
+      `<div class="attr-inv-item">${item.name || item.id || "物品"}</div>`
+    ).join("");
+  }
+}
+
+function fmtMod(val) {
+  const mod = Math.floor(((val || 10) - 10) / 2);
+  return mod >= 0 ? `+${mod}` : `${mod}`;
+}
+
+// ── 游戏统计 Modal ────────────────────────────────
+
+function openStatPanel() {
+  const overlay = $("stat-modal-overlay");
+  if (!overlay) return;
+  overlay.classList.add("open");
+  if (!state.sessionId) {
+    $("stat-loading").style.display = "none";
+    $("stat-content").innerHTML = '<div class="ach-empty">无活跃会话</div>';
+    $("stat-content").style.display = "block";
+    return;
+  }
+  fetchStatPanel();
+}
+
+function closeStatPanel() {
+  const overlay = $("stat-modal-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+async function fetchStatPanel() {
+  $("stat-loading").style.display = "block";
+  $("stat-content").style.display = "none";
+  try {
+    const r = await fetch(`/api/sessions/${state.sessionId}/stats`);
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    renderStatPanel(data);
+  } catch {
+    $("stat-loading").style.display = "none";
+    $("stat-content").innerHTML = '<div class="ach-empty">加载失败</div>';
+    $("stat-content").style.display = "block";
+  }
+}
+
+function renderStatPanel(data) {
+  $("stat-loading").style.display = "none";
+  $("stat-content").style.display = "block";
+
+  const ov = data.overview || {};
+  const cb = data.combat || {};
+  const dl = data.dialogue || {};
+  const md = data.moral_debt || {};
+  const fac = data.factions || {};
+  const npr = data.npc_relations || {};
+  const exp = data.exploration || {};
+  const sk = data.skills || {};
+  const ach = data.achievements || {};
+
+  // Overview cards
+  $("stat-overview").innerHTML = `
+    <div class="stat-card-row">
+      <div class="stat-card"><div class="stat-card-num">${ov.turn_count || 0}</div><div class="stat-card-label">回合</div></div>
+      <div class="stat-card"><div class="stat-card-num">${ov.current_day || 1}</div><div class="stat-card-label">游戏天数</div></div>
+      <div class="stat-card"><div class="stat-card-num">Lv${ov.level || 1}</div><div class="stat-card-label">等级</div></div>
+      <div class="stat-card"><div class="stat-card-num">${ov.gold || 0}</div><div class="stat-card-label">金币</div></div>
+    </div>
+  `;
+
+  // Sections
+  const sections = [];
+
+  // Combat
+  sections.push(`<div class="stat-section">
+    <div class="stat-section-title">⚔️ 战斗统计</div>
+    <div class="stat-card-row">
+      <div class="stat-card"><div class="stat-card-num">${cb.battles_started || 0}</div><div class="stat-card-label">战斗次数</div></div>
+      <div class="stat-card"><div class="stat-card-num">${cb.battles_won || 0}</div><div class="stat-card-label">胜</div></div>
+      <div class="stat-card"><div class="stat-card-num">${cb.battles_lost || 0}</div><div class="stat-card-label">负</div></div>
+      <div class="stat-card"><div class="stat-card-num">${cb.win_rate || 0}%</div><div class="stat-card-label">胜率</div></div>
+    </div>
+    <div class="stat-card-row" style="margin-top:8px">
+      <div class="stat-card"><div class="stat-card-num">${cb.total_damage_dealt || 0}</div><div class="stat-card-label">造成伤害</div></div>
+      <div class="stat-card"><div class="stat-card-num">${cb.total_damage_taken || 0}</div><div class="stat-card-label">受到伤害</div></div>
+      <div class="stat-card"><div class="stat-card-num">${cb.kills || 0}</div><div class="stat-card-label">击杀</div></div>
+      <div class="stat-card"><div class="stat-card-num">${cb.deaths || 0}</div><div class="stat-card-label">死亡</div></div>
+    </div>
+  </div>`);
+
+  // Dialogue distribution
+  const totalActions = dl.total || 0;
+  sections.push(`<div class="stat-section">
+    <div class="stat-section-title">💬 行动分布</div>
+    <div class="stat-bar-row">
+      <div class="stat-bar-item" style="flex:${dl.combat_actions||0};background:#c0392b">${dl.combat_actions||0} 战</div>
+      <div class="stat-bar-item" style="flex:${dl.diplomatic_actions||0};background:#27ae60">${dl.diplomatic_actions||0} 外交</div>
+      <div class="stat-bar-item" style="flex:${dl.exploration_actions||0};background:#2980b9">${dl.exploration_actions||0} 探索</div>
+      <div class="stat-bar-item" style="flex:${dl.other_actions||0};background:#7f8c8d">${dl.other_actions||0} 其他</div>
+    </div>
+    <div class="stat-detail-row">总行动次数：${totalActions} &nbsp;|&nbsp; 战斗 ${dl.combat_actions||0} &nbsp;外交 ${dl.diplomatic_actions||0} &nbsp;探索 ${dl.exploration_actions||0} &nbsp;其他 ${dl.other_actions||0}</div>
+  </div>`);
+
+  // Moral debt
+  sections.push(`<div class="stat-section">
+    <div class="stat-section-title">⚖️ 道德债务</div>
+    <div class="stat-card-row">
+      <div class="stat-card"><div class="stat-card-num">${md.current || 0}</div><div class="stat-card-label">当前债务</div></div>
+      <div class="stat-card"><div class="stat-card-num">${md.current_level || "无债"}</div><div class="stat-card-label">状态</div></div>
+      <div class="stat-card"><div class="stat-card-num">${md.peak || 0}</div><div class="stat-card-label">历史峰值</div></div>
+    </div>
+  </div>`);
+
+  // Faction reputation
+  if (fac.factions && fac.factions.length) {
+    sections.push(`<div class="stat-section">
+      <div class="stat-section-title">🏛️ 阵营声望</div>
+      ${fac.factions.map(f => `<div class="stat-faction-row">
+        <span class="stat-faction-name">${escHtml(f.name || f.faction_id)}</span>
+        <span class="stat-faction-val">${f.value || 0}</span>
+        <span class="stat-faction-label">${f.level || "中立"}</span>
+      </div>`).join("")}
+    </div>`);
+  }
+
+  // NPC relations
+  sections.push(`<div class="stat-section">
+    <div class="stat-section-title">👥 NPC 关系</div>
+    <div class="stat-card-row">
+      <div class="stat-card"><div class="stat-card-num" style="color:#27ae60">${npr.allies || 0}</div><div class="stat-card-label">友好</div></div>
+      <div class="stat-card"><div class="stat-card-num" style="color:#7f8c8d">${npr.neutral || 0}</div><div class="stat-card-label">中立</div></div>
+      <div class="stat-card"><div class="stat-card-num" style="color:#c0392b">${npr.hostile || 0}</div><div class="stat-card-label">敌对</div></div>
+    </div>
+  </div>`);
+
+  // Exploration
+  sections.push(`<div class="stat-section">
+    <div class="stat-section-title">🗺️ 场景探索</div>
+    <div class="stat-card-row">
+      <div class="stat-card"><div class="stat-card-num">${exp.visited_scenes || 0}</div><div class="stat-card-label">已访</div></div>
+      <div class="stat-card"><div class="stat-card-num">${exp.total_scenes || 0}</div><div class="stat-card-label">总数</div></div>
+      <div class="stat-card"><div class="stat-card-num">${exp.visit_rate || 0}%</div><div class="stat-card-label">探索率</div></div>
+    </div>
+  </div>`);
+
+  // Skills
+  sections.push(`<div class="stat-section">
+    <div class="stat-section-title">📖 技能</div>
+    <div class="stat-card-row">
+      <div class="stat-card"><div class="stat-card-num">${sk.total_skills || 0}</div><div class="stat-card-label">已学技能</div></div>
+      <div class="stat-card"><div class="stat-card-num">${sk.total_skill_points_spent || 0}</div><div class="stat-card-label">消耗点数</div></div>
+    </div>
+  </div>`);
+
+  // Achievements
+  sections.push(`<div class="stat-section">
+    <div class="stat-section-title">🏆 成就</div>
+    <div class="stat-card-row">
+      <div class="stat-card"><div class="stat-card-num">${ach.unlocked || 0}</div><div class="stat-card-label">已解锁</div></div>
+      <div class="stat-card"><div class="stat-card-num">${ach.total || 0}</div><div class="stat-card-label">总成就</div></div>
+      <div class="stat-card"><div class="stat-card-num">${ach.unlock_rate || 0}%</div><div class="stat-card-label">完成率</div></div>
+    </div>
+  </div>`);
+
+  $("stat-sections").innerHTML = sections.join("");
 }
 
 async function loadLogList() {
@@ -584,217 +903,6 @@ async function loadLogContent(filename, itemEl) {
   }
 }
 
-// ── 游戏统计 Modal ────────────────────────────────
-
-function openStatsModal() {
-  const overlay = $("stats-modal-overlay");
-  if (!overlay) return;
-  overlay.classList.add("active");
-  $("stats-loading").style.display = "block";
-  $("stats-content").style.display = "none";
-  loadStatsData();
-}
-
-function closeStatsModal() {
-  const overlay = $("stats-modal-overlay");
-  if (overlay) overlay.classList.remove("active");
-}
-
-async function loadStatsData() {
-  if (!state.sessionId) {
-    $("stats-loading").textContent = "无会话";
-    return;
-  }
-  try {
-    const r = await fetch(`/api/sessions/${state.sessionId}/stats`);
-    if (!r.ok) throw new Error();
-    const data = await r.json();
-    renderStatsContent(data);
-    $("stats-loading").style.display = "none";
-    $("stats-content").style.display = "block";
-  } catch {
-    $("stats-loading").textContent = "加载失败";
-  }
-}
-
-function renderStatsContent(data) {
-  const el = $("stats-content");
-  const ov = data.overview || {};
-  const cb = data.combat || {};
-  const dl = data.dialogue || {};
-  const md = data.moral_debt || {};
-  const fc = data.factions || {};
-  const npc = data.npc_relations || {};
-  const exp = data.exploration || {};
-  const hv = data.hidden_values || [];
-  const tm = data.teammates || {};
-  const sk = data.skills || {};
-  const eq = data.equipment || {};
-  const ach = data.achievements || {};
-
-  // 计算行动分布颜色宽度百分比
-  const total = dl.total || 1;
-  const cPct = Math.round((dl.combat_actions / total) * 100);
-  const dPct = Math.round((dl.diplomatic_actions / total) * 100);
-  const ePct = Math.round((dl.exploration_actions / total) * 100);
-  const oPct = Math.round((dl.other_actions / total) * 100);
-
-  // 阵营着色
-  const factionColor = (v) => v > 0 ? "var(--stamina-color)" : v < 0 ? "var(--hp-color)" : "var(--text-dim)";
-
-  // NPC关系条颜色
-  const relColor = (v) => v >= 0 ? "var(--stamina-color)" : "var(--hp-color)";
-  const relPct = (v) => Math.min(Math.abs(v) / 100 * 100, 100);
-
-  // 稀有度中文
-  const rarityLabel = { common: "普通", uncommon: "优秀", rare: "稀有", epic: "史诗", legendary: "传说" };
-  const rarityClass = (r) => `rarity-${r}`;
-
-  // 道德债务等级颜色
-  const moralLevelClass = (lvl) => {
-    if (!lvl) return "";
-    if (lvl.includes("极债")) return "difficulty-extreme";
-    if (lvl.includes("重债")) return "difficulty-hard";
-    if (lvl.includes("微债")) return "difficulty-moderate";
-    return "difficulty-trivial";
-  };
-
-  el.innerHTML = `
-    <div class="stats-section">
-      <div class="stats-section-title">概览</div>
-      <div class="stats-grid">
-        <div class="stats-item"><span class="stats-label">当前场景</span><span class="stats-value">${ov.current_scene || "—"}</span></div>
-        <div class="stats-item"><span class="stats-label">回合数</span><span class="stats-value">${ov.turn_count || 0}</span></div>
-        <div class="stats-item"><span class="stats-label">游戏天数</span><span class="stats-value">第${ov.current_day || 1}天 · ${ov.current_period || "?"}</span></div>
-        <div class="stats-item"><span class="stats-label">等级 / 金币</span><span class="stats-value">Lv.${ov.level || 1} / ${ov.gold || 0}g</span></div>
-      </div>
-    </div>
-
-    <div class="stats-section">
-      <div class="stats-section-title">行动分布</div>
-      <div class="action-bar">
-        <div class="bar-combat" style="width:${cPct}%"></div>
-        <div class="bar-diplomatic" style="width:${dPct}%"></div>
-        <div class="bar-exploration" style="width:${ePct}%"></div>
-        <div class="bar-other" style="width:${oPct}%"></div>
-      </div>
-      <div class="action-legend">
-        <span><strong style="color:var(--hp-color)">■</strong> 战斗 ${dl.combat_actions || 0}</span>
-        <span><strong style="color:var(--accent2)">■</strong> 外交 ${dl.diplomatic_actions || 0}</span>
-        <span><strong style="color:var(--stamina-color)">■</strong> 探索 ${dl.exploration_actions || 0}</span>
-        <span><strong style="color:var(--text-dim)">■</strong> 其他 ${dl.other_actions || 0}</span>
-        <span style="margin-left:auto">总计 ${total} 次行动</span>
-      </div>
-    </div>
-
-    <div class="stats-section">
-      <div class="stats-section-title">战斗统计</div>
-      <div class="stats-grid">
-        <div class="stats-item"><span class="stats-label">战斗次数</span><span class="stats-value">${cb.battles_started || 0}</span></div>
-        <div class="stats-item"><span class="stats-label">胜 / 负</span><span class="stats-value">${cb.battles_won || 0} / ${cb.battles_lost || 0}</span></div>
-        <div class="stats-item"><span class="stats-label">胜率</span><span class="stats-value ${cb.win_rate >= 70 ? "difficulty-trivial" : cb.win_rate >= 40 ? "difficulty-moderate" : cb.win_rate > 0 ? "difficulty-hard" : ""}">${cb.win_rate || 0}%</span></div>
-        <div class="stats-item"><span class="stats-label">击杀 / 死亡</span><span class="stats-value">${cb.kills || 0} / ${cb.deaths || 0}</span></div>
-        <div class="stats-item"><span class="stats-label">造成伤害</span><span class="stats-value">${cb.total_damage_dealt || 0}</span></div>
-        <div class="stats-item"><span class="stats-label">承受伤害</span><span class="stats-value">${cb.total_damage_taken || 0}</span></div>
-      </div>
-    </div>
-
-    <div class="stats-section">
-      <div class="stats-section-title">道德债务</div>
-      <div class="stats-grid">
-        <div class="stats-item"><span class="stats-label">当前债务</span><span class="stats-value ${moralLevelClass(md.current_level)}">${md.current || 0}（${md.current_level || "无债"}）</span></div>
-        <div class="stats-item"><span class="stats-label">历史峰值</span><span class="stats-value">${md.peak || 0}</span></div>
-      </div>
-      ${(md.events && md.events.length > 0) ? `
-      <div class="stats-simple-list" style="margin-top:6px">
-        ${md.events.slice(-5).map(ev => `<div class="item"><span class="item-name">第${ev.turn}回合 ${ev.source}</span><span class="item-meta">${ev.amount > 0 ? "+" : ""}${ev.amount}</span></div>`).join("")}
-      </div>` : ""}
-    </div>
-
-    <div class="stats-section">
-      <div class="stats-section-title">阵营声望</div>
-      ${(fc.factions && fc.factions.length > 0) ? `
-      <div class="stats-simple-list">
-        ${fc.factions.map(f => `
-          <div class="stats-item">
-            <span class="stats-label">${f.name || f.id}</span>
-            <span class="stats-value" style="color:${factionColor(f.value)}">${f.value > 0 ? "+" : ""}${f.value}（${f.level || "中立"}）</span>
-          </div>`).join("")}
-      </div>` : `<div style="font-size:12px;color:var(--text-dim)">暂无阵营记录</div>`}
-    </div>
-
-    <div class="stats-section">
-      <div class="stats-section-title">NPC关系（${npc.total_npcs || 0}人 | 友${npc.allies || 0} 中${npc.neutral || 0} 敌${npc.hostile || 0}）</div>
-      ${(fc.factions && fc.factions.length > 0) ? `
-      <div class="stats-simple-list">
-        ${npc.best_relation ? `<div class="item"><span class="item-name">最佳：${npc.best_relation.name}</span><span class="item-meta" style="color:var(--stamina-color)">${npc.best_relation.value}（${npc.best_relation.level}）</span></div>` : ""}
-        ${npc.worst_relation ? `<div class="item"><span class="item-name">最差：${npc.worst_relation.name}</span><span class="item-meta" style="color:var(--hp-color)">${npc.worst_relation.value}（${npc.worst_relation.level}）</span></div>` : ""}
-      </div>` : `<div style="font-size:12px;color:var(--text-dim)">暂无关系记录</div>`}
-    </div>
-
-    <div class="stats-section">
-      <div class="stats-section-title">场景探索</div>
-      <div class="stats-grid">
-        <div class="stats-item"><span class="stats-label">已访问 / 总数</span><span class="stats-value">${exp.visited_scenes || 0} / ${exp.total_scenes || 0}</span></div>
-        <div class="stats-item"><span class="stats-label">探索率</span><span class="stats-value">${exp.visit_rate || 0}%</span></div>
-      </div>
-    </div>
-
-    ${hv && hv.length > 0 ? `
-    <div class="stats-section">
-      <div class="stats-section-title">隐藏数值轨迹</div>
-      ${hv.map(h => `
-        <div class="traj-item">
-          <div class="traj-header">
-            <span style="font-size:12px;color:var(--text)">${h.name || h.id}</span>
-            <span class="stats-value" style="font-size:11px">${h.current || 0}（峰值${h.peak || 0} / 谷值${h.trough || 0}）</span>
-          </div>
-          <div class="traj-bar-wrap">
-            <div class="traj-bar">
-              <div class="traj-current" style="width:${Math.min((Math.abs(h.current || 0) / Math.max(h.peak || 1, 1)) * 100, 100)}%;background:var(--accent2)"></div>
-              ${h.peak > 0 ? `<div class="traj-peak" style="left:${Math.min((h.peak / Math.max(h.peak || 1, 1)) * 100, 100)}%"></div>` : ""}
-            </div>
-          </div>
-        </div>`).join("")}
-    </div>` : ""}
-
-    <div class="stats-section">
-      <div class="stats-section-title">队友（${tm.current_count || 0}/${tm.recruited_count || 0}）</div>
-      ${(tm.members && tm.members.length > 0) ? `
-      <div class="stats-simple-list">
-        ${tm.members.map(m => `<div class="item"><span class="item-name">${m.name || m.id}</span><span class="item-meta">${m.loyalty !== undefined ? "忠诚 " + m.loyalty : ""}</span></div>`).join("")}
-      </div>` : `<div style="font-size:12px;color:var(--text-dim)">暂无队友</div>`}
-    </div>
-
-    <div class="stats-section">
-      <div class="stats-section-title">技能（${sk.total_skills || 0}个，已用${sk.total_skill_points_spent || 0}点）</div>
-      ${(sk.skills && sk.skills.length > 0) ? `
-      <div class="stats-simple-list">
-        ${sk.skills.map(s => `<div class="item"><span class="item-name">${s.name || s.id}</span><span class="item-meta">Rank ${s.rank}/${s.max_rank || 5}</span></div>`).join("")}
-      </div>` : `<div style="font-size:12px;color:var(--text-dim)">暂无已学技能</div>`}
-    </div>
-
-    <div class="stats-section">
-      <div class="stats-section-title">当前装备（${eq.total_equipped || 0}件）</div>
-      ${(eq.current_equipped && eq.current_equipped.length > 0) ? `
-      <div class="stats-simple-list">
-        ${eq.current_equipped.map(e => `<div class="item"><span class="item-name">${e.name || e.slot}</span><span class="item-meta ${rarityClass(e.rarity || "common")}">${rarityLabel[e.rarity] || "普通"}</span></div>`).join("")}
-      </div>` : `<div style="font-size:12px;color:var(--text-dim)">无装备</div>`}
-    </div>
-
-    <div class="stats-section">
-      <div class="stats-section-title">成就（${ach.unlocked || 0}/${ach.total || 0}，解锁率${ach.unlock_rate || 0}%）</div>
-      <div class="stats-bar-wrap" style="margin-bottom:6px">
-        <div class="stats-bar"><div class="stats-bar-fill" style="width:${ach.unlock_rate || 0}%;background:var(--gold)"></div></div>
-      </div>
-      ${(ach.recently_unlocked && ach.recently_unlocked.length > 0) ? `
-      <div class="stats-simple-list">
-        ${ach.recently_unlocked.map(a => `<div class="item"><span class="item-name">🏅 ${a.id}</span><span class="item-meta">第${a.unlocked_at_turn || 0}回合</span></div>`).join("")}
-      </div>` : `<div style="font-size:12px;color:var(--text-dim)">暂无已解锁成就</div>`}
-    </div>
-  `;
-}
-
 // ── 事件绑定 ────────────────────────────────
 
 // 自定义输入：Enter 提交
@@ -813,16 +921,16 @@ document.addEventListener("DOMContentLoaded", () => {
       if (e.target === logOverlay) closeLogModal();
     });
   }
-  const statsOverlay = $("stats-modal-overlay");
-  if (statsOverlay) {
-    statsOverlay.addEventListener("click", e => {
-      if (e.target === statsOverlay) closeStatsModal();
+  const attrOverlay = $("attr-modal-overlay");
+  if (attrOverlay) {
+    attrOverlay.addEventListener("click", e => {
+      if (e.target === attrOverlay) closeAttrPanel();
     });
   }
   document.addEventListener("keydown", e => {
     if (e.key === "Escape") {
       closeLogModal();
-      closeStatsModal();
+      closeAttrPanel();
     }
   });
   // 初始渲染行动按钮
@@ -907,5 +1015,249 @@ async function launchGame(gameId, playerName) {
   connectWS(data.session_id);
 }
 
-// 启动
+// ── 调试模式 ────────────────────────────────────────
+
+let _debugRefreshTimer = null;
+
+function toggleDebugMode() {
+  window._debugMode = !window._debugMode;
+  const panel = $("debug-panel");
+  const btn = $("debug-toggle-btn");
+  if (panel) panel.style.display = window._debugMode ? "block" : "none";
+  if (btn) {
+    btn.style.background = window._debugMode ? "#1a3a2a" : "#2a2a2a";
+    btn.style.borderColor = window._debugMode ? "#00ff88" : "#444";
+    btn.style.color = window._debugMode ? "#00ff88" : "#aaa";
+  }
+  if (window._debugMode && state.sessionId) {
+    fetchDebugInfo();
+    // 每 10 秒自动刷新调试数据
+    _debugRefreshTimer = setInterval(fetchDebugInfo, 10000);
+  } else {
+    if (_debugRefreshTimer) { clearInterval(_debugRefreshTimer); _debugRefreshTimer = null; }
+  }
+}
+
+async function fetchDebugInfo() {
+  if (!state.sessionId) return;
+  try {
+    const resp = await fetch(`/api/games/${state.sessionId}/debug`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    renderDebugPanel(data);
+  } catch { /* silent */ }
+}
+
+function renderDebugPanel(data) {
+  if (!$("debug-panel")) return;
+
+  // 回合
+  $("debug-turn").textContent = `回合 ${data.turn} | 场景 ${data.scene_id}`;
+
+  // 隐藏数值
+  const hvEl = $("debug-hidden-values");
+  if (hvEl) {
+    if (!data.hidden_values || Object.keys(data.hidden_values).length === 0) {
+      hvEl.innerHTML = '<span style="color:#666">无</span>';
+    } else {
+      hvEl.innerHTML = Object.entries(data.hidden_values).map(([k, v]) => {
+        const triggered = v.trigger_fired ? "🔥" : "—";
+        const scene = v.current_effect?.trigger_scene ? ` → ${v.current_effect.trigger_scene}` : "";
+        const tone = v.current_effect?.narrative_tone || "";
+        return `<div style="margin-bottom:4px;">
+          <span style="color:#00ff88">${v.name}</span>(${k})
+          <div style="color:#888">raw=${v.raw_value} lv=${v.level_idx} ${triggered}${scene}</div>
+          <div style="color:#aaa;font-size:10px">${tone}</div>
+        </div>`;
+      }).join("");
+    }
+  }
+
+  // 行动点 + 最近骰点
+  const apEl = $("debug-ap-roll");
+  if (apEl) {
+    let html = `<div>AP: ${data.action_power}/${data.max_action_power}</div>`;
+    if (data.recent_roll) {
+      const r = data.recent_roll;
+      const icon = r.critical ? "💥" : r.fumble ? "💀" : r.success ? "✅" : "❌";
+      html += `<div style="margin-top:4px;">
+        🎲 ${r.attribute} | ${r.roll} vs ${r.threshold} ${r.modifier >= 0 ? "+" : ""}${r.modifier}
+        <div>${icon} ${r.tier} | ${r.success ? "成功" : "失败"}</div>
+      </div>`;
+    }
+    apEl.innerHTML = html;
+  }
+
+  // 待触发场景 + 标记
+  const pfEl = $("debug-pending-flags");
+  if (pfEl) {
+    let html = "";
+    if (data.pending_triggered_scenes && data.pending_triggered_scenes.length > 0) {
+      html += `<div>待触发: ${data.pending_triggered_scenes.join(", ")}</div>`;
+    } else {
+      html += '<div style="color:#666">无</div>';
+    }
+    // 关键 flags
+    const debugFlags = Object.entries(data.flags || {})
+      .filter(([k]) => k.startsWith("_hv_") || k.startsWith("_pending_"))
+      .slice(0, 10);
+    if (debugFlags.length > 0) {
+      html += "<div style='margin-top:4px;border-top:1px solid #333;padding-top:4px'>";
+      html += debugFlags.map(([k, v]) => `<div style="color:#888">${k}: ${JSON.stringify(v)}</div>`).join("");
+      html += "</div>";
+    }
+    pfEl.innerHTML = html;
+  }
+}
+
+// ── CG 画廊 ───────────────────────────────────────
+
+async function openCgGallery() {
+  const overlay = $("cg-gallery-overlay");
+  if (!overlay) return;
+  overlay.classList.add("open");
+  await fetchAndRenderCgGallery();
+}
+
+function closeCgGallery() {
+  const overlay = $("cg-gallery-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+async function fetchAndRenderCgGallery() {
+  const grid = $("cg-gallery-grid");
+  const emptyEl = $("cg-gallery-empty");
+  if (!grid) return;
+
+  if (!state.sessionId) {
+    grid.innerHTML = "";
+    if (emptyEl) emptyEl.style.display = "block";
+    return;
+  }
+
+  try {
+    const r = await fetch(`/api/sessions/${state.sessionId}/cg`);
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    const list = data.cg_list || [];
+
+    if (!list.length) {
+      grid.innerHTML = "";
+      if (emptyEl) emptyEl.style.display = "block";
+      return;
+    }
+
+    if (emptyEl) emptyEl.style.display = "none";
+    grid.innerHTML = list.map(item => `
+      <div class="cg-gallery-item" onclick="showCgFull('${item.cg_url}')">
+        <img src="${item.cg_url}" alt="${item.scene_title}" />
+        <div class="cg-gallery-item-info">
+          <div class="cg-gallery-item-title">${item.scene_title || item.scene_id}</div>
+        </div>
+      </div>
+    `).join("");
+  } catch {
+    grid.innerHTML = '<div style="color:#888;font-size:12px;padding:8px">加载CG历史失败</div>';
+    if (emptyEl) emptyEl.style.display = "none";
+  }
+}
+
+function showCgFull(url) {
+  const overlay = $("cg-overlay");
+  const img = $("cg-display-img");
+  if (!overlay || !img) return;
+  img.src = url;
+  overlay.classList.add("open");
+  const label = $("cg-scene-label");
+  if (label) {
+    // 尝试从 grid 找标题
+    const items = document.querySelectorAll(".cg-gallery-item");
+    items.forEach(el => {
+      const titleEl = el.querySelector(".cg-gallery-item-title");
+      if (titleEl && el.querySelector("img").src === url) {
+        label.textContent = titleEl.textContent;
+      }
+    });
+  }
+}
+
+function closeCgFull() {
+  const overlay = $("cg-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+// ── 移动端侧边栏抽屉 ─────────────────────────────
+
+function toggleMobileSidebar() {
+  const sidebar = $("sidebar");
+  const overlay = $("sidebar-overlay");
+  if (!sidebar) return;
+  const isOpen = sidebar.classList.contains("open");
+  if (isOpen) {
+    sidebar.classList.remove("open");
+    if (overlay) overlay.classList.remove("visible");
+  } else {
+    sidebar.classList.add("open");
+    if (overlay) overlay.classList.add("visible");
+  }
+}
+
+function closeMobileSidebar() {
+  const sidebar = $("sidebar");
+  const overlay = $("sidebar-overlay");
+  if (sidebar) sidebar.classList.remove("open");
+  if (overlay) overlay.classList.remove("visible");
+}
+
+// ── 移动端底部标签页切换 ─────────────────────────
+
+function switchBottomTab(tab) {
+  // 更新标签激活状态
+  document.querySelectorAll(".bnav-btn").forEach(btn => btn.classList.remove("active"));
+  const btn = $(`bnav-${tab}`);
+  if (btn) btn.classList.add("active");
+
+  // 侧边栏：滚动到对应板块并打开
+  const sidebar = $("sidebar");
+  if (sidebar) {
+    sidebar.classList.add("open");
+    const overlay = $("sidebar-overlay");
+    if (overlay) overlay.classList.add("visible");
+    // 滚动到对应面板
+    setTimeout(() => {
+      const PANEL_IDS = {
+        status: sidebar.querySelector(".panel") ? sidebar.querySelector(".panel").parentElement.id : null,
+        skills: "skills-list",
+        inventory: "equip-list",
+        menu: "log-btn",
+      };
+    }, 50);
+  }
+
+  // 直接触发对应功能
+  switch (tab) {
+    case "status":
+      // 状态默认在顶部，无需额外操作
+      break;
+    case "skills":
+      // 技能在侧边栏，弹出属性面板更清晰
+      openAttrPanel();
+      break;
+    case "inventory":
+      openAttrPanel();
+      break;
+    case "menu":
+      openLogModal();
+      break;
+  }
+}
+
+// ── Escape 键关闭抽屉 ────────────────────────────
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    closeMobileSidebar();
+  }
+});
+
+// ── 启动
 initSelectScreen();
