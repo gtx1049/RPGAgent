@@ -333,7 +333,7 @@ class GameMaster:
         return self._agent
 
     def get_current_scene(self) -> Optional[Scene]:
-        return self.game_loader.get_scene(self.session.current_scene_id)
+        return self.current_scene
 
     async def process_input(self, player_input: str) -> Tuple[str, Optional[Dict]]:
         """
