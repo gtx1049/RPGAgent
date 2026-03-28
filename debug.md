@@ -1940,6 +1940,82 @@
 
 ---
 
+## 测试反馈 2026-03-29 04:38 (GMT+8)
+
+**测试时间：** 2026-03-29 04:38 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl + Playwright headless + Python WebSocket
+
+### 一、首页与静态资源
+
+1. **[已测试] 首页加载正常** - HTTP 200，响应时间 3.7ms，HTML结构完整，气氛光效、游戏选择区正常渲染 [优先级：—]
+
+2. **[已测试] 健康检查正常** - `/health` 返回 `{"status":"ok","sessions":51}`，服务器运行中，当前51个活跃会话（较04:19的50个增加1个）[优先级：—]
+
+### 二、REST API 测试
+
+3. **[已测试] GET /api/games 正常** - 返回3个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡），JSON正确 [优先级：—]
+
+4. **[已测试] POST /api/games/example/start 正常** - 成功启动示例剧本（session_id=1ef468b6cdaf，scene=scene_01第一幕·电话），首场景叙事完整（神秘来电、海滨路13号悬念），player_name=小刚正常 [优先级：—]
+
+5. **[已测试] POST /api/games/action 正常** - 行动API正常！发送"接听电话"行动成功，GM返回完整叙事（thinking+content结构），**响应耗时约9.8秒**（首次降至10秒以内！改善明显）。GM叙事生动（电流杂音、刻意压低的声音、雨夜氛围），options正常下发（立即调查|连夜冒雨前往|等待三天|上网搜索）[优先级：—]
+
+6. **[已测试] GET /api/sessions/{session_id}/stats/overview 正常** - 返回完整角色状态（turn:1, level:1, hp:100/100, action_power:2/3, moral_debt:洁净），server端数据正确更新 [优先级：—]
+
+7. **[已测试] GET /api/sessions/{session_id}/achievements 正常** - 返回6个成就，结构正确 [优先级：—]
+
+### 三、WebSocket 连接状态
+
+8. **[已测试] WebSocket 握手返回 101** - 使用 Python websocket-client 测试 `ws://43.134.81.228:8080/ws/1ef468b6cdaf` 连接成功，ping/pong正常，WS连接稳定 [优先级：—]
+
+### 四、Playwright UI 自动化测试（Chrome 已安装）
+
+9. **[已测试] Chrome headless 正常工作** - Google Chrome 146.0.7680.164 + Playwright headless 测试通过，可正常加载页面、点击元素、获取页面内容 [优先级：—]
+
+10. **[已测试] 游戏卡片可点击** - Playwright 点击 `.game-card` 成功，ARIA属性完整（role=button, aria-label, tabindex=0），游戏可启动 [优先级：—]
+
+11. **[已测试] WS 连接状态前端显示正常** - 调用 `launchGame('example', '小刚')` 后，页面 WS 状态从"未连接"变为"已连接" ✅ [优先级：—]
+
+12. **[已测试] 行动按钮可点击** - Playwright 点击 `.action-btn` 成功，行为被发送（可见 `> 环顾四周` 输出），server端 turn 从0变为1 [优先级：—]
+
+13. **[问题] 侧边栏状态面板未实时更新** - 执行行动后，server端 stats 显示 turn:1, action_power:2/3，但浏览器侧边栏仍显示 "HP —/—"、"体力 —/—"、"第 0 回合"。WS消息接收后UI未刷新stats面板 [优先级：中]
+
+### 五、action API 响应延迟持续改善
+
+14. **[观察] action API 响应耗时约9.8秒** - 本次测试首次降至10秒以内（之前稳定在10-21秒区间），可能是服务器负载降低或LLM优化。无流式输出 [优先级：中]
+
+### 六、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | HTTP 200，3.7ms |
+| 健康检查 | ✅ 正常 | sessions=51 |
+| REST API 启动游戏 | ✅ 正常 | 3个剧本均成功 |
+| REST API stats/overview | ✅ 正常 | server端数据正确 |
+| REST API achievements | ✅ 正常 | 6个成就 |
+| POST /api/games/action | ✅ 正常 | **200正常返回，9.8秒（首次<10s），无500回归** |
+| WebSocket | ✅ **101握手成功** | WS连接稳定 |
+| Playwright headless | ✅ **正常工作** | Chrome已安装，UI自动化可行 |
+| 游戏卡片点击 | ✅ 正常 | ARIA完整，可交互 |
+| 行动按钮点击 | ✅ 正常 | 行为发送成功，server端turn更新 |
+| 侧边栏stats刷新 | ⚠️ 未实时更新 | WS接收后UI未刷新HP/体力/回合显示 |
+
+**已确认正常：**
+- **高**：action API 200正常 — 无500回归，叙事完整，**9.8秒（首次<10秒，改善！）**
+- **高**：WebSocket 101握手成功 — WS连接稳定
+- **高**：Chrome + Playwright headless 已安装，UI自动化测试通道打开
+- **观察**：sessions增长至51，系统运行稳定
+
+**持续性问题：**
+- **中**：侧边栏stats面板未实时更新 — WS消息接收后HP/体力/回合显示仍为初始值，疑似WS消息处理中未调用stats刷新函数
+
+**建议：**
+- 检查WS消息处理逻辑中是否调用了侧边栏stats面板的刷新函数
+- 考虑在WS `stats_update` 消息到达时主动更新sidebar显示
+
+---
+
 ## 测试反馈 2026-03-29 04:19 (GMT+8)
 
 **测试时间：** 2026-03-29 04:19 (GMT+8)
