@@ -170,6 +170,10 @@ class GameMaster:
         from rpgagent.systems.achievement_system import AchievementSystem
         ach_configs = getattr(meta, "achievements", []) or []
         self.achievement_sys = AchievementSystem(game_id=self.game_id, achievements=ach_configs)
+
+        # 上下文压缩系统
+        from rpgagent.systems.context_compressor import ContextCompressor
+        self.compressor = ContextCompressor()
         # 从存档恢复成就进度（如有）
         saved_ach = session.achievements if hasattr(session, "achievements") else None
         if saved_ach:

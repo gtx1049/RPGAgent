@@ -339,6 +339,16 @@ body {
   justify-content: center;
   gap: 20px;
   z-index: 100;
+  padding: 40px 20px;
+}
+
+#game-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: center;
+  max-width: 900px;
+  width: 100%;
 }
 
 #game-select h2 {

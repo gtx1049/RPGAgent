@@ -138,7 +138,7 @@ async def get_debug_info(session_id: str):
     return DebugResponse(
         session_id=session_id,
         scene_id=scene.id if scene else "unknown",
-        turn=session.turn,
+        turn=session.turn_count,
         stats=stats,
         hidden_values=hidden_values,
         action_power=stats.get("action_power", 0),
