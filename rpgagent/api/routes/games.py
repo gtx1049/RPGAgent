@@ -9,7 +9,7 @@ from ..models import (
 from ..game_manager import get_manager
 from ...core.context_loader import ContextLoader
 from ...data.database import Database
-from ...config.settings import GAMES_DIR, USER_GAMES_DIR
+from ...config.settings import GAMES_DIR, USER_GAMES_DIR, API_KEY
 
 router = APIRouter(prefix="/games", tags=["games"])
 
@@ -52,6 +52,11 @@ async def list_games():
 @router.post("/{game_id}/start", response_model=dict)
 async def start_game(game_id: str, req: StartGameRequest):
     """创建新游戏会话，返回 session_id"""
+    if not API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="API 密钥未配置。请设置 OPENAI_API_KEY 或 RPG_API_KEY 环境变量后重启服务器。",
+        )
     loader = _build_loader()
     game_loader = loader.get_loader(game_id)
     if not game_loader:
