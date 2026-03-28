@@ -1002,6 +1002,7 @@ async function launchGame(gameId, playerName) {
     return;
   }
   state.gameId = gameId;
+  state.sessionId = data.session_id;
   sceneTitleEl.textContent = data.scene?.title || gameId;
 
   if (data.scene?.content) {
@@ -1010,6 +1011,21 @@ async function launchGame(gameId, playerName) {
 
   // 渲染初始行动按钮
   renderActionButtons();
+
+  // 获取初始状态（解决HP/体力显示"——"问题）
+  try {
+    const resp = await fetch(`/api/games/${data.session_id}/debug`);
+    if (resp.ok) {
+      const debug = await resp.json();
+      const s = debug.stats || {};
+      if (s.hp !== undefined && s.max_hp !== undefined) {
+        updateHP(s.hp, s.max_hp);
+      }
+      if (s.stamina !== undefined && s.max_stamina !== undefined) {
+        updateStamina(s.stamina, s.max_stamina);
+      }
+    }
+  } catch (_) { /* 非阻塞，后续WS消息会更新 */ }
 
   // 连接 WebSocket
   connectWS(data.session_id);
