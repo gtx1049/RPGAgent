@@ -863,13 +863,23 @@ async function initSelectScreen() {
   games.forEach(g => {
     const card = document.createElement("div");
     card.className = "game-card";
+    card.setAttribute("role", "button");
+    card.setAttribute("tabindex", "0");
+    card.setAttribute("aria-label", `剧本：${g.name}，${g.summary || g.id}`);
     card.innerHTML = `
       <div class="game-name">${g.name}</div>
       <div class="game-summary">${g.summary || g.id}</div>`;
-    card.addEventListener("click", () => {
+    const handleSelect = () => {
       const name = prompt("你的名字：", "无名旅人");
       if (!name) return;
       launchGame(g.id, name);
+    };
+    card.addEventListener("click", handleSelect);
+    card.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleSelect();
+      }
     });
     container.appendChild(card);
   });
