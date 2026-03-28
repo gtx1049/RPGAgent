@@ -5,3 +5,14 @@ __pycache__/
 *.egg-info/
 .eggs/
 *.so
+
+# 日志和截图
+*.log
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# 虚拟环境
+venv/
+.venv/
