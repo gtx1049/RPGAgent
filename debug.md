@@ -1,12 +1,30 @@
 # RPGAgent 测试反馈
 
-**测试时间：** 2026-03-28 20:57 (GMT+8)
-**测试角色：** 小刚（资深RPG玩家）
-**测试地址：** http://43.134.81.228:8080/
+**测试时间：** 2026-03-28 21:08 (GMT+8)
+**修复提交：** 49b47bf
+
+---
+
+## 修复记录 2026-03-28 21:08 (GMT+8)
+
+### 修复：API密钥未配置时返回清晰错误
+
+**问题：** `POST /api/games/action` 返回 500 错误，服务器日志显示 `TypeError: Could not resolve authentication method. Expected either api_key or auth_token to be set`。原因是 `OPENAI_API_KEY` / `RPG_API_KEY` 环境变量未设置，但错误在行动时才触发，不够友好。
+
+**修复方案：** 在 `rpgagent/api/routes/games.py` 的 `start_game` 端点添加 API 密钥检查，若密钥未配置则返回 503 错误并附清晰提示（"请设置 OPENAI_API_KEY 或 RPG_API_KEY 环境变量后重启服务器"）。
+
+**修复文件：**
+- `rpgagent/api/routes/games.py`：`start_game` 函数添加 `if not API_KEY` 检查
+
+**Commit：** `49b47bf`
+
+**注：** 这是代码层面的改进（更清晰的错误提示）。根本解决需要在服务器环境设置 `OPENAI_API_KEY` 或 `RPG_API_KEY` 环境变量。
 
 ---
 
 ## 测试反馈 2026-03-28 20:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
 
 **测试角色：** 小刚（资深RPG玩家）
 **测试地址：** http://43.134.81.228:8080/
