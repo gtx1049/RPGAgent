@@ -290,9 +290,9 @@ def gm(context_loader, game_session, hidden_value_configs, roll_sys):
 
 # ─── 辅助函数 ────────────────────────────────────────────────────────────────
 
-def advance(gm: GameMaster, player_input: str) -> str:
+async def advance(gm: GameMaster, player_input: str) -> str:
     """发送玩家输入，返回 GM 叙事"""
-    narrative, _ = gm.process_input(player_input)
+    narrative, _ = await gm.process_input(player_input)
     return narrative
 
 
@@ -403,7 +403,8 @@ class TestDazexiangHiddenValues:
 class TestDazexiangEndToEnd:
     """端到端战役测试：完整遍历第一章场景图"""
 
-    def test_full_chapter_path_with_gm(self, gm):
+    @pytest.mark.asyncio
+    async def test_full_chapter_path_with_gm(self, gm):
         """
         走完第一章主路径：daze_camp → dawn_rally → fox_cry_fire → kill_officer → deliberation → spirit_awakened → ending
 
@@ -414,38 +415,38 @@ class TestDazexiangEndToEnd:
         assert hv is not None
 
         # ── 回合 1：daze_camp → dawn_rally ──────────────────
-        n1 = advance(gm, "靠近陈胜交谈")
+        n1 = await advance(gm, "靠近陈胜交谈")
         assert session.current_scene_id == "dawn_rally", \
             f"期望 dawn_rally，实际 {session.current_scene_id}"
         moral = hv.values["moral_debt"]._compute_raw_value()
         assert moral > 0  # watch_soldiers_abused: +5 moral_debt
 
         # ── 回合 2：dawn_rally → fox_cry_fire ───────────────
-        n2 = advance(gm, "接受铜印，主动参与义军组建")
+        n2 = await advance(gm, "接受铜印，主动参与义军组建")
         assert session.current_scene_id == "fox_cry_fire", \
             f"期望 fox_cry_fire，实际 {session.current_scene_id}"
         spirit = hv.values["revolutionary_spirit"]._compute_raw_value()
         assert spirit >= 0  # recruit_companions: +8 revolutionary_spirit
 
         # ── 回合 3：fox_cry_fire → kill_officer ─────────────
-        n3 = advance(gm, "跟随陈胜行动")
+        n3 = await advance(gm, "跟随陈胜行动")
         assert session.current_scene_id == "kill_officer", \
             f"期望 kill_officer，实际 {session.current_scene_id}"
 
         # ── 回合 4：kill_officer → deliberation ─────────────
-        n4 = advance(gm, "亲手杀死县尉")
+        n4 = await advance(gm, "亲手杀死县尉")
         assert session.current_scene_id == "deliberation", \
             f"期望 deliberation，实际 {session.current_scene_id}"
         moral_kill = hv.values["moral_debt"]._compute_raw_value()
         assert moral_kill >= 10  # kill_officer: +15 moral_debt
 
         # ── 回合 5：deliberation → spirit_awakened ──────────
-        n5 = advance(gm, "参与决策，计划下一步行动")
+        n5 = await advance(gm, "参与决策，计划下一步行动")
         assert session.current_scene_id == "spirit_awakened", \
             f"期望 spirit_awakened，实际 {session.current_scene_id}"
 
         # ── 回合 6：spirit_awakened → ending ─────────────────
-        n6 = advance(gm, "第一个站出来，呼应陈胜的号召")
+        n6 = await advance(gm, "第一个站出来，呼应陈胜的号召")
         assert session.current_scene_id == "ending", \
             f"期望 ending，实际 {session.current_scene_id}"
 
@@ -457,9 +458,10 @@ class TestDazexiangEndToEnd:
         assert "行动力" in status or "AP" in status or "action" in status.lower()
         assert "场景" in status or "scene" in status.lower()
 
-    def test_gm_hidden_value_snapshot_in_session(self, gm, game_session):
+    @pytest.mark.asyncio
+    async def test_gm_hidden_value_snapshot_in_session(self, gm, game_session):
         """HiddenValue 快照正确写入 session"""
-        advance(gm, "靠近陈胜交谈")
+        await advance(gm, "靠近陈胜交谈")
         game_session.hidden_values = gm.hidden_value_sys.get_snapshot()
         assert "moral_debt" in game_session.hidden_values
         assert "revolutionary_spirit" in game_session.hidden_values
@@ -472,17 +474,19 @@ class TestDazexiangEndToEnd:
         # 陈胜、吴广等应存在
         assert any("chen" in nid.lower() or "sheng" in nid.lower() for nid in npc_ids) or len(npc_ids) >= 2
 
-    def test_turn_count_increments(self, gm, game_session):
+    @pytest.mark.asyncio
+    async def test_turn_count_increments(self, gm, game_session):
         """每处理一次输入，回合数 +1"""
         initial_turn = game_session.turn_count
-        advance(gm, "安静观察，不行动")
+        await advance(gm, "安静观察，不行动")
         assert game_session.turn_count == initial_turn + 1
 
-    def test_session_save_and_load_preserves_hidden_values(self, gm, tmp_path):
+    @pytest.mark.asyncio
+    async def test_session_save_and_load_preserves_hidden_values(self, gm, tmp_path):
         """存档/读档后 HiddenValue 完整恢复"""
         # 执行若干回合
-        advance(gm, "靠近陈胜交谈")
-        advance(gm, "接受铜印")
+        await advance(gm, "靠近陈胜交谈")
+        await advance(gm, "接受铜印")
 
         hv_snapshot = gm.hidden_value_sys.get_snapshot()
         spirit_before = hv_snapshot["revolutionary_spirit"]["level_idx"]

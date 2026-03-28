@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # main.py - RPGAgent 命令行入口
 
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -112,7 +113,7 @@ def main():
 
         # 正常输入
         gm.session.add_history("player", user_input)
-        narrative, _ = gm.process_input(user_input)
+        narrative, _ = asyncio.run(gm.process_input(user_input))
         print("\n" + narrative)
 
         # 检查存活

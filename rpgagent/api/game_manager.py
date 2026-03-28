@@ -141,7 +141,7 @@ class GameManager:
         if not session:
             return "[错误] 会话不存在或已过期。", None
 
-        narrative, cmd = session.gm.process_input(player_input)
+        narrative, cmd = await session.gm.process_input(player_input)
         session.turn += 1
 
         # 每 AUTOSAVE_TURNS 回合自动存档

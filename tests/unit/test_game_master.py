@@ -15,7 +15,8 @@ GameMaster 单元测试。
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
+import pytest_asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 
 from rpgagent.core.game_master import GameMaster, GMCommandParser
@@ -462,54 +463,58 @@ class TestGameMasterSyncSession:
 class TestGameMasterProcessInput:
     """process_input 完整流程（不含真实 LLM 调用）"""
 
+    @pytest.mark.asyncio
     @patch("rpgagent.core.game_master.GameMaster.dm", new_callable=lambda: MagicMock())
-    def test_process_input_returns_narrative(self, mock_dm, hv_game_master):
+    async def test_process_input_returns_narrative(self, mock_dm, hv_game_master):
         """process_input 从 LLM 输出中提取纯叙事内容"""
-        mock_dm.reply.return_value = "你走进村庄，看到村口站着一个老人。"
+        mock_dm.reply = AsyncMock(return_value="你走进村庄，看到村口站着一个老人。")
 
-        narrative, cmd = hv_game_master.process_input("我走进村庄")
+        narrative, cmd = await hv_game_master.process_input("我走进村庄")
         assert "村庄" in narrative
         assert "[GM_COMMAND]" not in narrative
 
+    @pytest.mark.asyncio
     @patch("rpgagent.core.game_master.GameMaster.dm", new_callable=lambda: MagicMock())
-    def test_process_input_parses_and_executes_command(self, mock_dm, hv_game_master):
+    async def test_process_input_parses_and_executes_command(self, mock_dm, hv_game_master):
         """process_input 解析并执行 GM_COMMAND"""
-        mock_dm.reply.return_value = (
+        mock_dm.reply = AsyncMock(return_value=(
             "你选择袖手旁观，内心掠过一丝不安。\n\n"
             "[GM_COMMAND]\n"
             "action: narrative\n"
             "action_tag: silent_witness\n"
             "player_input: 袖手旁观\n"
             "[/GM_COMMAND]"
-        )
+        ))
 
-        narrative, cmd = hv_game_master.process_input("袖手旁观")
+        narrative, cmd = await hv_game_master.process_input("袖手旁观")
 
         assert cmd["action"] == "narrative"
         assert cmd["action_tag"] == "silent_witness"
         # HiddenValue 已更新
         assert hv_game_master.hidden_value_sys.values["moral_debt"]._compute_raw_value() == 5
 
+    @pytest.mark.asyncio
     @patch("rpgagent.core.game_master.GameMaster.dm", new_callable=lambda: MagicMock())
-    def test_process_input_narrative_only_no_command(self, mock_dm, hv_game_master):
+    async def test_process_input_narrative_only_no_command(self, mock_dm, hv_game_master):
         """纯叙事（无 GM_COMMAND）时 cmd=None"""
-        mock_dm.reply.return_value = "你站在原地，没有做任何事。"
+        mock_dm.reply = AsyncMock(return_value="你站在原地，没有做任何事。")
 
-        narrative, cmd = hv_game_master.process_input("站着不动")
+        narrative, cmd = await hv_game_master.process_input("站着不动")
         assert cmd is None
 
+    @pytest.mark.asyncio
     @patch("rpgagent.core.game_master.GameMaster.dm", new_callable=lambda: MagicMock())
-    def test_process_input_unknown_scene_no_crash(self, mock_dm, hv_game_master):
+    async def test_process_input_unknown_scene_no_crash(self, mock_dm, hv_game_master):
         """process_input 处理 next_scene 指向不存在场景时不抛异常"""
-        mock_dm.reply.return_value = (
+        mock_dm.reply = AsyncMock(return_value=(
             "你决定去后山看看。\n\n"
             "[GM_COMMAND]\n"
             "action: transition\n"
             "next_scene: nonexistent_scene\n"
             "[/GM_COMMAND]"
-        )
+        ))
 
-        narrative, cmd = hv_game_master.process_input("去后山")
+        narrative, cmd = await hv_game_master.process_input("去后山")
         assert cmd["action"] == "transition"
         assert hv_game_master.session.current_scene_id == "nonexistent_scene"
 
