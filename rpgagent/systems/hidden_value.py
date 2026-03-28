@@ -346,6 +346,21 @@ class HiddenValue:
         return str(self.level_idx)
 
     def get_snapshot(self) -> Dict[str, Any]:
+        # 从 records 计算 peak（历史最大值）和 trough（历史最小值）
+        if self.records:
+            running = 0
+            peak = -999999
+            trough = 999999
+            for r in self.records:
+                running += r.delta
+                if running > peak:
+                    peak = running
+                if running < trough:
+                    trough = running
+        else:
+            peak = 0
+            trough = 0
+
         return {
             "id": self.id,
             "name": self.name,
@@ -353,6 +368,9 @@ class HiddenValue:
             "direction": self.direction,
             "current_threshold": self.current_threshold,
             "level_idx": self.level_idx,
+            "current": self._compute_raw_value(),
+            "peak": peak,
+            "trough": trough,
             "effect": {
                 "locked_options": self.get_locked_options(),  # 累积所有档位的锁定选项
                 "unlock_options": self.get_unlocked_options(),

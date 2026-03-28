@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RPGAgent 剧本编辑器</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1a1a2e;--surface:#16213e;--surface2:#0f3460;
+  --accent:#e94560;--accent2:#533483;
+  --text:#e0e0e0;--text2:#a0a0a0;
+  --border:#2a2a4a;--success:#4ecca3;
+}
+body{font-family:'Segoe UI',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden}
+#topbar{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:12px}
+#topbar h1{font-size:16px;color:var(--accent);font-weight:600;white-space:nowrap}
+#game-select{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:13px;min-width:160px}
+#tabs{display:flex;gap:4px;margin-left:16px}
+.tab{padding:6px 16px;background:transparent;border:1px solid transparent;color:var(--text2);border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;transition:.15s}
+.tab:hover{color:var(--text);background:var(--surface2)}
+.tab.active{background:var(--surface2);color:var(--accent);border-color:var(--border);border-bottom-color:var(--surface2)}
+#layout{display:flex;height:calc(100vh - 52px)}
+#left{width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+#left-header{padding:10px 12px;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+#left-header span{flex:1}
+#item-list{flex:1;overflow-y:auto;padding:6px}
+.item{cursor:pointer;padding:7px 10px;border-radius:6px;font-size:13px;display:flex;align-items:center;gap:6px;transition:.1s;margin-bottom:2px}
+.item:hover{background:var(--surface2)}
+.item.active{background:var(--accent2);color:#fff}
+.item .icon{font-size:11px;width:16px;text-align:center;opacity:.7}
+.item .label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .del-btn{opacity:0;background:none;border:none;color:var(--text2);cursor:pointer;font-size:12px;padding:0 2px;transition:.1s}
+.item:hover .del-btn{opacity:1}
+.item:hover .del-btn:hover{color:var(--accent)}
+#center{flex:1;display:flex;flex-direction:column;min-width:0}
+#editor-toolbar{padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center}
+#editor-toolbar .tool{padding:5px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:5px;cursor:pointer;font-size:12px;transition:.15s}
+#editor-toolbar .tool:hover{background:var(--accent2);border-color:var(--accent2)}
+#scene-title-input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:5px;font-size:13px;flex:1;max-width:300px}
+#scene-title-input:focus{outline:none;border-color:var(--accent)}
+#save-status{font-size:12px;color:var(--text2);margin-left:auto}
+#save-status.saved{color:var(--success)}
+#split{padding:0;display:flex;flex:1;min-height:0}
+#editor-pane{flex:1;display:flex;flex-direction:column;min-width:0}
+textarea#content-editor{flex:1;background:var(--bg);border:none;color:var(--text);padding:16px;font-family:'Cascadia Code','Fira Code',monospace;font-size:14px;line-height:1.7;resize:none;width:100%}
+textarea#content-editor:focus{outline:none}
+#preview-pane{flex:1;background:var(--bg);border-left:1px solid var(--border);padding:16px;overflow-y:auto;font-size:14px;line-height:1.8;display:none}
+#preview-pane h1,#preview-pane h2,#preview-pane h3{color:var(--accent);margin:.8em 0 .3em}
+#preview-pane p{margin:.4em 0}
+#preview-pane code{background:var(--surface);padding:2px 5px;border-radius:3px;font-size:.9em}
+#preview-pane pre{background:var(--surface);padding:12px;border-radius:6px;overflow-x:auto;margin:.8em 0}
+#preview-pane blockquote{border-left:3px solid var(--accent);padding-left:12px;color:var(--text2);margin:.6em 0}
+#preview-pane .gm-command{background:var(--surface2);border:1px solid var(--accent2);padding:8px 12px;border-radius:6px;font-family:monospace;font-size:.9em;margin:.6em 0;white-space:pre-wrap}
+#preview-pane table{border-collapse:collapse;width:100%;margin:.6em 0}
+#preview-pane td,#preview-pane th{border:1px solid var(--border);padding:6px 10px}
+#right{width:280px;background:var(--surface);border-left:1px solid var(--border);display:none;flex-direction:column;overflow:hidden}
+#right.active{display:flex}
+#right-header{padding:10px 14px;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);font-weight:600}
+#char-form{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group label{font-size:12px;color:var(--text2)}
+.form-group input,.form-group select,.form-group textarea{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:5px;font-size:13px}
+.form-group textarea{resize:vertical;min-height:60px;font-family:inherit}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--accent)}
+#char-save-btn{background:var(--accent);border:none;color:#fff;padding:9px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:.15s}
+#char-save-btn:hover{filter:brightness(1.1)}
+#right-meta{display:none;flex-direction:column;padding:14px;gap:10px;flex:1;overflow-y:auto}
+#right-meta.active{display:flex}
+#empty-hint{flex:1;display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:13px;text-align:center;padding:20px}
+#add-btn{background:var(--accent);border:none;color:#fff;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px;transition:.15s}
+#add-btn:hover{filter:brightness(1.1)}
+#new-item-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:100}
+#new-item-modal.show{display:flex}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px;width:360px}
+.modal-box h3{font-size:15px;margin-bottom:16px;color:var(--accent)}
+.modal-box input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:13px;margin-bottom:10px}
+.modal-box input:focus{outline:none;border-color:var(--accent)}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.modal-actions button{padding:7px 16px;border-radius:6px;cursor:pointer;font-size:13px;border:none;transition:.15s}
+.modal-actions .cancel{background:var(--surface2);color:var(--text)}
+.modal-actions .confirm{background:var(--accent);color:#fff}
+#status-bar{height:28px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 14px;font-size:11px;color:var(--text2);gap:16px}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>🎲 RPGAgent 剧本编辑器</h1>
+  <select id="game-select"><option value="">— 选择剧本 —</option></select>
+  <div id="tabs">
+    <button class="tab active" data-tab="scenes">场景</button>
+    <button class="tab" data-tab="characters">角色</button>
+    <button class="tab" data-tab="meta">剧本信息</button>
+  </div>
+</div>
+
+<div id="layout">
+  <!-- 左侧列表 -->
+  <div id="left">
+    <div id="left-header">
+      <span id="left-title">场景</span>
+      <button id="add-btn" title="新建">+</button>
+    </div>
+    <div id="item-list"></div>
+  </div>
+
+  <!-- 中间编辑器 -->
+  <div id="center">
+    <div id="editor-toolbar">
+      <input id="scene-title-input" placeholder="场景标题（仅显示用）" value="">
+      <button class="tool" id="preview-toggle">👁 预览</button>
+      <button class="tool" id="save-btn">💾 保存</button>
+      <span id="save-status">未保存</span>
+    </div>
+    <div id="split">
+      <div id="editor-pane">
+        <textarea id="content-editor" placeholder="场景内容（Markdown）……&#10;&#10;使用 --- 分隔 YAML frontmatter&#10;&#10;GM_COMMAND 示例：&#10;```yaml&#10;gm_command:&#10;  triggers: [{type: enter, condition: ...}]&#10;```"></textarea>
+      </div>
+      <div id="preview-pane"></div>
+    </div>
+  </div>
+
+  <!-- 右侧详情 -->
+  <div id="right">
+    <div id="right-header">角色详情</div>
+    <div id="char-form">
+      <div class="form-group"><label>ID（英文，唯一）</label><input id="f-id" placeholder="npc_001"></div>
+      <div class="form-group"><label>名称</label><input id="f-name" placeholder="张三"></div>
+      <div class="form-group"><label>类型</label>
+        <select id="f-role">
+          <option value="npc">NPC</option>
+          <option value="enemy">敌人</option>
+          <option value="teammate">队友</option>
+        </select>
+      </div>
+      <div class="form-group"><label>简介</label><textarea id="f-desc" placeholder="简短描述……"></textarea></div>
+      <div class="form-group"><label>性格/行为</label><textarea id="f-personality" placeholder="性格特点、说话风格……"></textarea></div>
+      <button id="char-save-btn">保存角色</button>
+    </div>
+    <div id="right-meta">
+      <div class="form-group"><label>剧本 ID</label><input id="m-id" readonly style="opacity:.5"></div>
+      <div class="form-group"><label>显示名称</label><input id="m-name" placeholder="大泽乡"></div>
+      <div class="form-group"><label>作者</label><input id="m-author" placeholder="匿名"></div>
+      <div class="form-group"><label>简介</label><textarea id="m-summary" placeholder="一句话简介……"></textarea></div>
+      <div class="form-group"><label>标签（逗号分隔）</label><input id="m-tags" placeholder="历史, 战争"></div>
+      <div class="form-group"><label>版本</label><input id="m-version" placeholder="1.0.0"></div>
+      <div class="form-group"><label>起始场景 ID</label><input id="m-first-scene" placeholder="act_01"></div>
+      <button id="meta-save-btn" style="background:var(--accent);border:none;color:#fff;padding:9px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-top:4px">保存剧本信息</button>
+    </div>
+  </div>
+</div>
+
+<div id="status-bar">
+  <span id="sb-game">未选择剧本</span>
+  <span id="sb-item">-</span>
+  <span id="sb-words">0 字</span>
+</div>
+
+<!-- 新建弹窗 -->
+<div id="new-item-modal">
+  <div class="modal-box">
+    <h3 id="modal-title">新建场景</h3>
+    <input id="new-id-input" placeholder="ID（如 act_01）">
+    <div class="modal-actions">
+      <button class="cancel" onclick="closeModal()">取消</button>
+      <button class="confirm" onclick="confirmNew()">创建</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api/editor';
+let currentGame = '';
+let currentTab = 'scenes';
+let currentItem = null;
+let isPreview = false;
+let metaData = {};
+let saveTimer = null;
+
+// ── 初始化 ─────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadGameList();
+  setupTabs();
+  setupEditor();
+  setupShortcuts();
+});
+
+// ── 剧本列表 ───────────────────────────────────────
+
+async function loadGameList() {
+  const sel = document.getElementById('game-select');
+  try {
+    const res = await fetch(`${API}/games`);
+    const games = await res.json();
+    sel.innerHTML = '<option value="">— 选择剧本 —</option>';
+    games.forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent = `${g.name} (${g.id})`;
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    sel.innerHTML = '<option value="">加载失败</option>';
+  }
+  sel.onchange = () => { if (sel.value) loadGame(sel.value); };
+}
+
+// ── 加载剧本 ───────────────────────────────────────
+
+async function loadGame(gameId) {
+  currentGame = gameId;
+  document.getElementById('sb-game').textContent = `剧本: ${gameId}`;
+  try {
+    const res = await fetch(`${API}/games/${gameId}`);
+    const data = await res.json();
+    metaData = data.meta || {};
+    renderItemList();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// ── 标签页 ─────────────────────────────────────────
+
+function setupTabs() {
+  document.querySelectorAll('.tab').forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      currentTab = t.dataset.tab;
+      currentItem = null;
+      renderItemList();
+      syncRight();
+    };
+  });
+}
+
+function renderItemList() {
+  const list = document.getElementById('item-list');
+  const title = document.getElementById('left-title');
+  const addBtn = document.getElementById('add-btn');
+  const right = document.getElementById('right');
+  const rightHeader = document.getElementById('right-header');
+
+  if (!currentGame) {
+    list.innerHTML = '<div style="padding:16px;color:var(--text2);font-size:13px">请先选择剧本</div>';
+    title.textContent = '-';
+    return;
+  }
+
+  right.classList.remove('active');
+  document.getElementById('right-meta').classList.remove('active');
+
+  if (currentTab === 'scenes') {
+    title.textContent = '场景';
+    addBtn.onclick = () => openModal('scene', '新建场景', 'act_xx');
+    loadSceneList(list);
+  } else if (currentTab === 'characters') {
+    title.textContent = '角色';
+    addBtn.onclick = () => openModal('char', '新建角色', 'npc_xxx');
+    loadCharList(list);
+  } else if (currentTab === 'meta') {
+    title.textContent = '剧本信息';
+    addBtn.style.display = 'none';
+    showMetaEditor();
+  }
+}
+
+async function loadSceneList(list) {
+  try {
+    const res = await fetch(`${API}/games/${currentGame}/scenes`);
+    const scenes = await res.json();
+    if (!scenes.length) {
+      list.innerHTML = '<div style="padding:16px;color:var(--text2);font-size:13px">暂无场景<br><small>点击 + 新建</small></div>';
+      document.getElementById('content-editor').value = '';
+      document.getElementById('scene-title-input').value = '';
+      return;
+    }
+    list.innerHTML = '';
+    scenes.forEach(s => {
+      const div = document.createElement('div');
+      div.className = 'item' + (currentItem === s.id ? ' active' : '');
+      div.innerHTML = `<span class="icon">📄</span><span class="label">${s.title || s.id}</span><span class="del-btn" title="删除" onclick="event.stopPropagation();deleteScene('${s.id}')">×</span>`;
+      div.onclick = () => selectScene(s.id);
+      list.appendChild(div);
+    });
+    if (currentItem && scenes.find(s => s.id === currentItem)) {
+      selectScene(currentItem);
+    } else if (scenes.length) {
+      selectScene(scenes[0].id);
+    }
+  } catch (e) { list.innerHTML = '<div style="padding:16px;color:var(--accent)">加载失败</div>'; }
+}
+
+async function loadCharList(list) {
+  try {
+    const res = await fetch(`${API}/games/${currentGame}/characters`);
+    const chars = await res.json();
+    if (!chars.length) {
+      list.innerHTML = '<div style="padding:16px;color:var(--text2);font-size:13px">暂无角色<br><small>点击 + 新建</small></div>';
+      syncRight();
+      return;
+    }
+    list.innerHTML = '';
+    chars.forEach(c => {
+      const div = document.createElement('div');
+      div.className = 'item' + (currentItem === c.id ? ' active' : '');
+      const icon = c.role === 'enemy' ? '⚔' : c.role === 'teammate' ? '🤝' : '👤';
+      div.innerHTML = `<span class="icon">${icon}</span><span class="label">${c.name}</span><span class="del-btn" title="删除" onclick="event.stopPropagation();deleteChar('${c.id}')">×</span>`;
+      div.onclick = () => selectChar(c.id);
+      list.appendChild(div);
+    });
+    if (currentItem && chars.find(c => c.id === currentItem)) {
+      selectChar(currentItem);
+    } else if (chars.length) {
+      selectChar(chars[0].id);
+    }
+  } catch (e) { list.innerHTML = '<div style="padding:16px;color:var(--accent)">加载失败</div>'; }
+}
+
+// ── 选中场景 ───────────────────────────────────────
+
+async function selectScene(id) {
+  currentItem = id;
+  document.querySelectorAll('.item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.item').forEach(el => {
+    if (el.querySelector('.label').textContent === id ||
+        el.onclick.toString().includes(id)) {
+      // find by matching
+    }
+  });
+  // Highlight active
+  Array.from(document.getElementById('item-list').children).forEach(el => {
+    el.classList.toggle('active', el.querySelector('.del-btn') &&
+      el.querySelector('.del-btn').onclick.toString().includes(id));
+  });
+
+  try {
+    const res = await fetch(`${API}/games/${currentGame}/scenes/${id}`);
+    const data = await res.json();
+    document.getElementById('content-editor').value = data.content;
+    // Extract title from content
+    const title = extractTitle(data.content) || id;
+    document.getElementById('scene-title-input').value = title;
+    updatePreview();
+    markUnsaved();
+  } catch (e) { console.error(e); }
+  document.getElementById('sb-item').textContent = `场景: ${id}`;
+  document.getElementById('right').classList.remove('active');
+  document.getElementById('right-meta').classList.remove('active');
+  document.getElementById('editor-pane').style.display = '';
+}
+
+// ── 选中角色 ───────────────────────────────────────
+
+async function selectChar(id) {
+  currentItem = id;
+  Array.from(document.getElementById('item-list').children).forEach(el => {
+    el.classList.toggle('active', el.querySelector('.del-btn') &&
+      el.querySelector('.del-btn').onclick.toString().includes(id));
+  });
+  try {
+    const res = await fetch(`${API}/games/${currentGame}/characters/${id}`);
+    const data = await res.json();
+    document.getElementById('f-id').value = data.id || '';
+    document.getElementById('f-name').value = data.name || '';
+    document.getElementById('f-role').value = data.role || 'npc';
+    document.getElementById('f-desc').value = data.description || '';
+    document.getElementById('f-personality').value = data.personality || '';
+  } catch (e) { console.error(e); }
+  document.getElementById('right').classList.add('active');
+  document.getElementById('right-meta').classList.remove('active');
+  document.getElementById('editor-pane').style.display = 'none';
+  document.getElementById('sb-item').textContent = `角色: ${id}`;
+}
+
+// ── 元信息编辑器 ────────────────────────────────────
+
+function showMetaEditor() {
+  document.getElementById('editor-pane').style.display = 'none';
+  document.getElementById('right').classList.remove('active');
+  document.getElementById('right-meta').classList.add('active');
+  const m = metaData;
+  document.getElementById('m-id').value = m.id || currentGame;
+  document.getElementById('m-name').value = m.name || '';
+  document.getElementById('m-author').value = m.author || '';
+  document.getElementById('m-summary').value = m.summary || '';
+  document.getElementById('m-tags').value = (m.tags || []).join(', ');
+  document.getElementById('m-version').value = m.version || '1.0.0';
+  document.getElementById('m-first-scene').value = m.first_scene || 'act_01';
+  document.getElementById('sb-item').textContent = '剧本配置';
+}
+
+// ── 保存 ───────────────────────────────────────────
+
+async function saveCurrent() {
+  if (!currentGame) return;
+  if (currentTab === 'scenes' && currentItem) {
+    const content = document.getElementById('content-editor').value;
+    await fetch(`${API}/games/${currentGame}/scenes/${currentItem}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({content}),
+    });
+    markSaved();
+  } else if (currentTab === 'characters' && currentItem) {
+    const data = {
+      id: document.getElementById('f-id').value,
+      name: document.getElementById('f-name').value,
+      role: document.getElementById('f-role').value,
+      description: document.getElementById('f-desc').value,
+      personality: document.getElementById('f-personality').value,
+      visible: true,
+      extra: {},
+    };
+    await fetch(`${API}/games/${currentGame}/characters/${currentItem}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    });
+    markSaved();
+  } else if (currentTab === 'meta') {
+    const data = {
+      ...metaData,
+      id: document.getElementById('m-id').value,
+      name: document.getElementById('m-name').value,
+      author: document.getElementById('m-author').value,
+      summary: document.getElementById('m-summary').value,
+      tags: document.getElementById('m-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+      version: document.getElementById('m-version').value,
+      first_scene: document.getElementById('m-first-scene').value,
+    };
+    await fetch(`${API}/games/${currentGame}/meta`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    });
+    metaData = data;
+    markSaved();
+  }
+}
+
+document.getElementById('save-btn').onclick = saveCurrent;
+document.getElementById('char-save-btn').onclick = saveCurrent;
+document.getElementById('meta-save-btn').onclick = saveCurrent;
+
+function markSaved() {
+  const s = document.getElementById('save-status');
+  s.textContent = '已保存 ✓';
+  s.className = 'saved';
+}
+function markUnsaved() {
+  const s = document.getElementById('save-status');
+  s.textContent = '● 未保存';
+  s.className = '';
+}
+
+// ── 自动保存 ───────────────────────────────────────
+
+function setupEditor() {
+  const ta = document.getElementById('content-editor');
+  ta.addEventListener('input', () => {
+    markUnsaved();
+    updatePreview();
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveCurrent, 3000);
+    document.getElementById('sb-words').textContent = ta.value.length + ' 字';
+  });
+}
+
+// ── 预览 ───────────────────────────────────────────
+
+document.getElementById('preview-toggle').onclick = () => {
+  isPreview = !isPreview;
+  const preview = document.getElementById('preview-pane');
+  preview.style.display = isPreview ? '' : 'none';
+  if (isPreview) updatePreview();
+};
+
+function updatePreview() {
+  const md = document.getElementById('content-editor').value;
+  document.getElementById('preview-pane').innerHTML = renderMarkdown(md);
+}
+
+function renderMarkdown(text) {
+  if (!text) return '';
+  // Very simple markdown renderer (no external deps)
+  let html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    // Code blocks
+    .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    // GM commands (```yaml or plain gm_command)
+    .replace(/gm_command:\s*\n([\s\S]*?)(?=\n[^#]|$)/gi, '<div class="gm-command">GM_COMMAND:<br>$1</div>')
+    // Headers
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    // Blockquote
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    // Bold
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    // Italic
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // HR
+    .replace(/^---$/gm, '<hr>')
+    // Lists
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    // Paragraphs
+    .replace(/\n\n+/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+  // Wrap li in ul
+  html = '<p>' + html + '</p>';
+  html = html.replace(/<p><li>/g, '<ul><li>');
+  html = html.replace(/<\/li>(?!\n<li>)/g, '</li></ul><p>');
+  return html;
+}
+
+// ── 新建 ───────────────────────────────────────────
+
+let modalMode = '';
+function openModal(mode, title, placeholder) {
+  modalMode = mode;
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('new-id-input').value = '';
+  document.getElementById('new-id-input').placeholder = placeholder;
+  document.getElementById('new-item-modal').classList.add('show');
+  document.getElementById('new-id-input').focus();
+}
+function closeModal() {
+  document.getElementById('new-item-modal').classList.remove('show');
+}
+async function confirmNew() {
+  const id = document.getElementById('new-id-input').value.trim();
+  if (!id) return;
+  closeModal();
+  if (modalMode === 'scene') {
+    const res = await fetch(`${API}/games/${currentGame}/scenes`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id}),
+    });
+    if (res.ok) {
+      await loadGame(currentGame);
+      selectScene(id);
+    }
+  } else if (modalMode === 'char') {
+    const res = await fetch(`${API}/games/${currentGame}/characters`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id, name: id}),
+    });
+    if (res.ok) {
+      await loadGame(currentGame);
+      selectChar(id);
+    }
+  }
+}
+
+// ── 删除 ───────────────────────────────────────────
+
+async function deleteScene(id) {
+  if (!confirm(`删除场景 "${id}"？`)) return;
+  await fetch(`${API}/games/${currentGame}/scenes/${id}`, {method: 'DELETE'});
+  if (currentItem === id) currentItem = null;
+  await loadGame(currentGame);
+}
+async function deleteChar(id) {
+  if (!confirm(`删除角色 "${id}"？`)) return;
+  await fetch(`${API}/games/${currentGame}/characters/${id}`, {method: 'DELETE'});
+  if (currentItem === id) currentItem = null;
+  await loadGame(currentGame);
+}
+
+// ── 工具 ───────────────────────────────────────────
+
+function extractTitle(content) {
+  // Try frontmatter title first
+  const fmTitle = content.match(/^title:\s*["\']?(.+?)["\']?\s*$/m);
+  if (fmTitle) return fmTitle[1];
+  const h1 = content.match(/^# (.+)$/m);
+  if (h1) return h1[1];
+  return '';
+}
+
+function syncRight() {
+  document.getElementById('right').classList.remove('active');
+  document.getElementById('right-meta').classList.remove('active');
+  document.getElementById('editor-pane').style.display = '';
+  document.getElementById('content-editor').value = '';
+  document.getElementById('scene-title-input').value = '';
+  document.getElementById('sb-item').textContent = '-';
+}
+
+// ── 快捷键 ─────────────────────────────────────────
+
+function setupShortcuts() {
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      saveCurrent();
+    }
+  });
+}
+</script>
+</body>
+</html>

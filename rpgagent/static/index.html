@@ -65,6 +65,10 @@
     <div class="panel">
       <button id="cg-gallery-btn" onclick="openCGGalleryModal()">🎨 CG图鉴</button>
     </div>
+    <!-- 成就按钮 -->
+    <div class="panel">
+      <button id="ach-btn" onclick="openAchModal()">🏅 成就</button>
+    </div>
 
     <!-- 状态 -->
     <div class="panel">
@@ -180,6 +184,21 @@
     <div id="stats-modal-body">
       <div id="stats-loading">加载中…</div>
       <div id="stats-content" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 成就 Modal -->
+<div id="ach-modal-overlay">
+  <div id="ach-modal">
+    <div id="ach-modal-header">
+      <h3>🏅 成就</h3>
+      <button id="ach-modal-close" onclick="closeAchModal()">×</button>
+    </div>
+    <div id="ach-modal-body">
+      <div id="ach-overview"></div>
+      <div id="ach-loading">加载中…</div>
+      <div id="ach-content" style="display:none"></div>
     </div>
   </div>
 </div>

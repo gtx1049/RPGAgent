@@ -359,10 +359,10 @@ async def get_game_stats(session_id: str):
                 hv_trajectories.append(HiddenValueTrajectory(
                     id=hv_id,
                     name=hv_data.get("name", hv_id),
-                    current=hv_data.get("level", 0),
+                    current=hv_data.get("current", hv_data.get("level_idx", 0)),
                     peak=hv_data.get("peak", 0),
                     trough=hv_data.get("trough", 0),
-                    history=hv_data.get("history", [])[-20:],
+                    history=hv_data.get("recent_records", [])[-20:],
                 ))
 
     # ── 队友统计 ───────────────────────────────

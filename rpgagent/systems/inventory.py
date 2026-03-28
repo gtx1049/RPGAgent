@@ -78,6 +78,22 @@ class InventorySystem(IInventorySystem):
             for i in self.items
         ]
 
+    def add_item(self, name_or_id: str, item_data: Dict) -> bool:
+        """
+        便捷方法：从存档 dict 恢复物品。
+        item_data 应包含 id/name/description/quantity/usable 等字段。
+        """
+        item = Item(
+            id=item_data.get("id", name_or_id),
+            name=item_data.get("name", name_or_id),
+            description=item_data.get("description", ""),
+            quantity=item_data.get("quantity", 1),
+            usable=item_data.get("usable", False),
+            effect=item_data.get("effect", {}),
+            tradable=item_data.get("tradable", True),
+        )
+        return self.add(item)
+
     def get_snapshot(self) -> Dict:
         return {
             "capacity": self.capacity,

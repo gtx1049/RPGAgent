@@ -134,6 +134,11 @@
         <button id="attr-btn" onclick="openAttrPanel()">📊 属性面板</button>
       </div>
 
+      <!-- 游戏统计按钮 -->
+      <div class="panel">
+        <button id="stat-btn" onclick="openStatPanel()">📈 统计</button>
+      </div>
+
     </div><!-- /sidebar -->
   </div><!-- /main -->
 
@@ -248,6 +253,23 @@
         <div id="ach-content" style="display:none">
           <div class="ach-overview" id="ach-overview"></div>
           <div class="ach-list" id="ach-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 游戏统计 Modal -->
+  <div id="stat-modal-overlay">
+    <div id="stat-modal">
+      <div id="stat-modal-header">
+        <h3>📈 游戏统计</h3>
+        <button id="stat-modal-close" onclick="closeStatPanel()">×</button>
+      </div>
+      <div id="stat-modal-body">
+        <div id="stat-loading">加载中……</div>
+        <div id="stat-content" style="display:none">
+          <div class="stat-overview" id="stat-overview"></div>
+          <div class="stat-sections" id="stat-sections"></div>
         </div>
       </div>
     </div>
