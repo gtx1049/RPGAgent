@@ -31,7 +31,7 @@
 
 ### 三、游戏核心流程
 
-11. **[问题] POST /api/games/action 返回 500 Internal Server Error（回归问题）** - 执行玩家行动（如"接听电话"、"look around"）均返回500错误。这是回归问题——在2026-03-28 15:23和22:57测试中action API已恢复正常，但本次测试（00:19 GMT+8）确认action API重新返回500。可能原因：服务器重启后API Key配置丢失、或代码回滚 [优先级：高]
+11. **[已修复] POST /api/games/action 返回 500 Internal Server Error（回归问题）** - 执行玩家行动（如"接听电话"、"look around"）均返回500错误。这是回归问题——在2026-03-28 15:23和22:57测试中action API已恢复正常，但本次测试（00:19 GMT+8）确认action API重新返回500。修复：commit f05cbc0 为 player_action 端点添加 API_KEY 检查（与 start_game 相同），未配置时返回 503 而非 500。**根本解决需在服务器配置 OPENAI_API_KEY 或 RPG_API_KEY 环境变量** [优先级：高]
 
 ### 四、agent-browser 自动化测试受阻
 
