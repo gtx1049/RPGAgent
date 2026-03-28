@@ -1,3 +1,71 @@
+## 测试反馈 2026-03-29 00:19 (GMT+8)
+
+**测试时间：** 2026-03-29 00:19 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl + HTTP API（agent-browser 因无 Chrome/display + Xvfb Chrome崩溃，无法使用）
+
+### 一、首页与静态资源
+
+1. **[已测试] 首页加载正常** - HTTP 200，页面标题 "RPGAGENT"，游戏选择区正常渲染，3个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡）均列在 `/api/games` [优先级：—]
+
+2. **[已测试] 健康检查正常** - `/health` 返回 `{"status":"ok","sessions":14}`，服务器运行中，当前14个活跃会话 [优先级：—]
+
+3. **[已测试] 静态资源正常** - `/static/css/game.css` 等资源路径正确，页面元素结构完整 [优先级：—]
+
+### 二、REST API 测试
+
+4. **[已测试] GET /api/games 正常** - 返回3个剧本完整信息（id、name、summary、tags），JSON格式正确 [优先级：—]
+
+5. **[已测试] POST /api/games/{id}/start 正常** - 成功启动示例剧本（session_id=6db719b6cd14，scene_01第一幕·电话），首场景叙事完整（神秘电话、海滨路13号悬念）[优先级：—]
+
+6. **[已测试] GET /api/sessions/{id}/stats/overview 正常** - 返回完整角色状态（turn:0, level:1, hp:100/100, action_power:3/3, moral_debt_level:洁净, day:1, period:上午），数据结构正确 [优先级：—]
+
+7. **[已测试] GET /api/games/{id}/debug 正常** - 返回完整调试信息（scene_id、turn、stats、hidden_values、ability、equipped、flags等），GameSession属性正常 [优先级：—]
+
+8. **[已测试] GET /api/sessions/{id}/achievements 正常** - 返回6个成就（第一步、和平谈判者、幸存者、腰缠万贯、技能大师、问心无愧），结构正确 [优先级：—]
+
+9. **[已测试] GET /api/logs/{session_id} 正常** - 返回空数组（新建session无历史日志），接口正常 [优先级：—]
+
+10. **[已测试] GET /api/sessions/{session_id}/cg 正常** - 返回空CG列表，接口正常 [优先级：—]
+
+### 三、游戏核心流程
+
+11. **[问题] POST /api/games/action 返回 500 Internal Server Error（回归问题）** - 执行玩家行动（如"接听电话"、"look around"）均返回500错误。这是回归问题——在2026-03-28 15:23和22:57测试中action API已恢复正常，但本次测试（00:19 GMT+8）确认action API重新返回500。可能原因：服务器重启后API Key配置丢失、或代码回滚 [优先级：高]
+
+### 四、agent-browser 自动化测试受阻
+
+12. **[问题] agent-browser + Xvfb 均无法启动 Chrome** - 当前环境无X11 display，使用xvfb-run辅助时Chrome仍报错 "Missing X server or $DISPLAY"（exit code 1）。即使添加 `--ozone-platform=headless --no-sandbox` 参数仍失败，Chrome binary不支持headless模式。无法进行浏览器UI层面的交互测试 [优先级：中]
+
+### 五、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | HTTP 200 |
+| 健康检查 | ✅ 正常 | sessions=14 |
+| REST API 启动游戏 | ✅ 正常 | 3个剧本均成功 |
+| REST API stats/overview | ✅ 正常 | |
+| REST API debug | ✅ 正常 | |
+| REST API achievements | ✅ 正常 | |
+| REST API logs | ✅ 正常 | |
+| REST API cg | ✅ 正常 | |
+| **POST /api/games/action** | ❌ **500回归** | **之前已修复，现重新报错** |
+| WebSocket | 未直接测试 | 上次记录101成功 |
+| 浏览器 UI 测试 | ⚠️ 无法执行 | Chrome+Xvfb均不可用 |
+
+**回归问题（需关注）：**
+1. **高**：POST /api/games/action 500错误 — 之前（22:57 UTC）已修复，现重新出现，疑似服务器API Key配置丢失
+
+**持续性环境问题：**
+- **中**：agent-browser 因 Chrome 无法在 headless 环境运行而无法执行 UI 自动化测试
+
+**建议：**
+- 检查服务器 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` 环境变量是否仍配置（action API依赖LLM调用）
+- 考虑添加 API 响应超时配置（当前无超时限制，curl需手动设置 --max-time）
+- 建议建立服务器配置检查机制，防止类似回归问题被忽视
+
+---
+
 ## 测试反馈 2026-03-29 00:00 (GMT+8)
 
 **测试时间：** 2026-03-29 00:00 (GMT+8)
