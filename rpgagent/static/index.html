@@ -57,6 +57,14 @@
     <div class="panel">
       <button id="log-btn" onclick="openLogModal()">📜 冒险日志</button>
     </div>
+    <!-- 游戏统计按钮 -->
+    <div class="panel">
+      <button id="stats-btn" onclick="openStatsModal()">📊 游戏统计</button>
+    </div>
+    <!-- CG图鉴按钮 -->
+    <div class="panel">
+      <button id="cg-gallery-btn" onclick="openCGGalleryModal()">🎨 CG图鉴</button>
+    </div>
 
     <!-- 状态 -->
     <div class="panel">
@@ -158,6 +166,35 @@
       <div id="log-content">
         <div id="log-empty">选择一个日志查看</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 游戏统计 Modal -->
+<div id="stats-modal-overlay">
+  <div id="stats-modal">
+    <div id="stats-modal-header">
+      <h3>📊 游戏统计</h3>
+      <button id="stats-modal-close" onclick="closeStatsModal()">×</button>
+    </div>
+    <div id="stats-modal-body">
+      <div id="stats-loading">加载中…</div>
+      <div id="stats-content" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CG图鉴 Modal -->
+<div id="cg-gallery-overlay">
+  <div id="cg-gallery-modal">
+    <div id="cg-gallery-header">
+      <h3>🎨 CG图鉴</h3>
+      <button id="cg-gallery-close" onclick="closeCGGalleryModal()">×</button>
+    </div>
+    <div id="cg-gallery-body">
+      <div id="cg-gallery-loading">加载中…</div>
+      <div id="cg-gallery-empty" style="display:none;font-size:13px;color:var(--text-dim);padding:20px;text-align:center">暂无CG记录</div>
+      <div id="cg-gallery-grid" style="display:none"></div>
     </div>
   </div>
 </div>

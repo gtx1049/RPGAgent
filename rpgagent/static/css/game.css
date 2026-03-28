@@ -846,3 +846,253 @@ body {
 .gm-option-btn:active {
   transform: scale(0.98);
 }
+
+/* ── 游戏统计 Modal ───────────────────── */
+#stats-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 200;
+  justify-content: center;
+  align-items: center;
+}
+
+#stats-modal-overlay.active {
+  display: flex;
+}
+
+#stats-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: 90vw;
+  max-width: 700px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#stats-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+#stats-modal-header h3 {
+  color: var(--gold);
+  font-size: 15px;
+}
+
+#stats-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+#stats-modal-close:hover { color: var(--text); }
+
+#stats-modal-body {
+  padding: 12px 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+#stats-loading {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 30px;
+}
+
+/* 统计各区块 */
+.stats-section {
+  margin-bottom: 16px;
+}
+
+.stats-section-title {
+  color: var(--gold);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+}
+
+.stats-grid.triple {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.stats-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.stats-item .stats-label { color: var(--text-dim); }
+.stats-item .stats-value { color: var(--text); font-weight: bold; }
+
+.stats-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.stats-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.stats-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+/* 行动分布 */
+.action-bar {
+  display: flex;
+  height: 18px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.action-bar .bar-combat  { background: var(--hp-color); }
+.action-bar .bar-diplomatic { background: var(--accent2); }
+.action-bar .bar-exploration { background: var(--stamina-color); }
+.action-bar .bar-other { background: var(--text-dim); }
+
+.action-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+
+.action-legend span { color: var(--text-dim); }
+.action-legend strong { font-weight: normal; }
+
+/* NPC关系 */
+.relation-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.relation-bar-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.relation-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-input);
+  border-radius: 2px;
+  position: relative;
+}
+
+.relation-fill-positive { background: var(--stamina-color); }
+.relation-fill-negative { background: var(--hp-color); }
+
+/* 技能/装备列表 */
+.stats-simple-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stats-simple-list .item {
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.stats-simple-list .item-name { color: var(--text); }
+.stats-simple-list .item-meta { color: var(--text-dim); }
+
+/* 隐藏数值轨迹 */
+.traj-item {
+  margin-bottom: 6px;
+}
+
+.traj-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.traj-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.traj-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  position: relative;
+  overflow: hidden;
+}
+
+.traj-current {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 3px;
+  min-width: 2px;
+}
+
+.traj-peak {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: var(--gold);
+}
+
+/* 难度档位着色 */
+.difficulty-trivial  { color: var(--stamina-color); }
+.difficulty-moderate { color: var(--gold); }
+.difficulty-hard     { color: var(--accent); }
+.difficulty-extreme  { color: var(--hp-color); }
+
+/* 稀有度着色 */
+.rarity-common    { color: #aaa; }
+.rarity-uncommon  { color: var(--stamina-color); }
+.rarity-rare      { color: #3498db; }
+.rarity-epic      { color: var(--accent2); }
+.rarity-legendary { color: var(--gold); }
+
+/* 响应式 */
+@media (max-width: 600px) {
+  #stats-modal { width: 95vw; }
+  .stats-grid { grid-template-columns: 1fr; }
+  .stats-grid.triple { grid-template-columns: 1fr 1fr; }
+}
