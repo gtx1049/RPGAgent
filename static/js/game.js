@@ -454,7 +454,10 @@ function handleMessage(msg) {
         const e = msg.extra;
         if (e.hp !== undefined) updateHP(e.hp, e.max_hp);
         if (e.stamina !== undefined) updateStamina(e.stamina, e.max_stamina);
-        if (e.action_power !== undefined) updateAP(e.action_power, e.max_action_power);
+        if (e.action_power !== undefined) {
+          updateAP(e.action_power, e.max_action_power);
+          $("attr-ap").textContent = `${e.action_power ?? 0} / ${e.max_action_power ?? 0}`;
+        }
         if (e.moral_debt_level !== undefined) updateMoral(e.moral_debt_level, e.moral_debt_value);
         if (e.turn !== undefined) updateTurn(e.turn);
         if (e.npc_relations !== undefined) updateNPCs(e.npc_relations);
