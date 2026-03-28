@@ -1,3 +1,70 @@
+## 测试反馈 2026-03-28 22:57 (GMT+8)
+
+**测试时间：** 2026-03-28 22:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl + HTTP API（agent-browser 因无 Chrome/display 无法使用）
+
+### 一、首页与静态资源
+
+1. **[已测试] 首页加载正常** - HTTP 200，三个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡）均正常返回，页面 HTML 结构完整（导航栏、侧边栏、叙事区、行动按钮等）[优先级：—]
+
+2. **[已测试] 静态资源正常** - `/static/css/game.css` 返回 HTTP 200，页面样式完整（深色主题、氛围光效等 RPG 风格）[优先级：—]
+
+### 二、REST API 测试
+
+3. **[已测试] GET /api/games 正常** - 返回 3 个剧本完整信息（id、name、summary、tags），JSON 格式正确 [优先级：—]
+
+4. **[已测试] POST /api/games/example/start 正常** - 成功创建游戏会话（session_id=b8041ac5c18e），返回首场景"第一幕·电话"内容（神秘电话、未知号码、海滨路13号等悬念）[优先级：—]
+
+5. **[已测试] POST /api/games/action 现已返回 200** - 行动 API **已恢复正常**！发送"接听电话"行动成功，GameMaster 返回详细叙事（包含 thinking 过程和场景描写），内容连贯有趣，返回 5 个选项供玩家选择（A/B/C/D/E）[优先级：—]
+
+6. **[已测试] GET /api/sessions/{id}/stats/overview 正常** - 返回完整角色状态（turn=1、level=1、hp=100/100、action_power=2/3、道德债务=洁净等），数据结构正确 [优先级：—]
+
+7. **[已测试] GET /api/games/{id}/debug 正常** - 返回完整调试信息（scene_id、turn、stats、hidden_values、ability、equipped、flags 等），GameSession 属性正常 [优先级：—]
+
+8. **[已测试] GET /api/sessions/{id}/achievements 正常** - 返回 6 个成就，其中 3 个已解锁（和平谈判者、幸存者、问心无愧），结构正确 [优先级：—]
+
+### 三、WebSocket 连接状态
+
+9. **[观察] WebSocket 握手返回 101（需进一步验证）** - 本次测试通过 API 层面验证了游戏流程完整性，但未直接测试 WS 实时通信。根据上次记录（22:38）WS 101 握手成功 [优先级：—]
+
+### 四、游戏内容质量
+
+10. **[已测试] 示例剧本叙事质量高** - 首场景"深夜神秘电话"叙事生动，GameMaster 回复包含丰富的环境描写（雨夜、忙音、手机屏幕微光），选项设置合理（调查地点/回拨电话/网上搜索/关闭手机/自由行动），符合 RPG 沉浸感 [优先级：—]
+
+### 五、自动化测试受阻
+
+11. **[问题] agent-browser 因环境限制无法使用** - 当前环境无 X11 display 且 Chrome headless 模式失败（报错 "Missing X server or $DISPLAY"），无法进行浏览器 UI 层面的交互测试（游戏卡片点击、行动按钮响应、面板开关等）[优先级：中]
+
+### 六、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | HTTP 200 |
+| 静态资源 | ✅ 正常 | CSS 200 |
+| REST API 启动游戏 | ✅ 正常 | 3个剧本均成功 |
+| REST API stats/overview | ✅ 正常 | |
+| REST API debug | ✅ 正常 | |
+| REST API achievements | ✅ 正常 | |
+| POST /api/games/action | ✅ 已修复 | 之前500，现200正常返回！ |
+| WebSocket | ⚠️ 需验证 | 上次101成功，本次未直接测 |
+| 游戏流程完整性 | ✅ 正常 | 行动→叙事→选项完整闭环 |
+| 浏览器 UI 测试 | ⚠️ 无法执行 | 环境缺 Chrome/display |
+
+**已解决问题（本次确认）：**
+1. **✅ POST /api/games/action 500 错误** — 现已返回 200，叙事内容完整，游戏流程可正常闭环
+
+**持续性环境问题：**
+- **中**：agent-browser 因无 X11/display 无法执行 UI 自动化测试
+
+**建议：**
+- 当前游戏核心流程（REST API + 叙事 + 选项）运行正常，API 层面已全面恢复
+- 考虑在 CI/CD 环境安装 Chrome 以支持浏览器 UI 自动化测试
+- WebSocket 实时通信建议后续单独验证
+
+---
+
 # RPGAgent 测试反馈
 
 **测试时间：** 2026-03-28 22:38 (GMT+8)
@@ -696,3 +763,37 @@
 - agent-browser 因无 Chrome/display 无法执行 UI 自动化测试
 - 建议：在服务器环境配置 ANTHROPIC_API_KEY 或 OPENAI_API_KEY
 
+
+---
+
+## 测试反馈 2026-03-28 23:19 (GMT+8)
+
+**测试时间：** 2026-03-28 23:19 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl + HTTP API（agent-browser 因无 Chrome/display 无法使用）
+
+### 一、首页与静态资源
+
+1. **[已测试] 首页加载正常** - HTTP 200，HTML 结构完整，CSS/JS 资源路径正确 [优先级：—]
+2. **[已测试] 剧本列表正常** - GET /api/games 返回三个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡），数据完整 [优先级：—]
+
+### 二、游戏核心流程
+
+1. **[已测试] 开始游戏正常** - POST /api/games/example/start 成功创建 session（id: 5a225771d6bd），返回完整场景内容（第一幕·电话），叙事文本格式正确（Markdown）[优先级：—]
+2. **[已测试] 提交行动正常** - POST /api/games/action 返回 GM 叙事更新，选项列表（5个选项）正常下发，场景切换（scene_01 → scene_01）正确 [优先级：—]
+3. **[已测试] 统计面板正常** - GET /api/sessions/{session_id}/stats/overview 返回正确数据（turn:1, level:1, hp:100/100, moral_debt:洁净等）[优先级：—]
+
+### 三、已知问题
+
+1. **[问题] agent-browser UI自动化不可用** - 服务器环境缺少 Chrome/display，浏览器自动化测试无法执行 [优先级：中]
+2. **[问题] action API 响应较慢** - POST /api/games/action 耗时约10-15秒（依赖LLM推理），无流式输出推进体验，建议考虑SSE或WebSocket流式返回 [优先级：中]
+
+### 四、优化建议
+
+1. **[建议] 添加API响应时间监控** - action API 建议增加超时配置和错误处理，当前无超时限制 [优先级：低]
+2. **[建议] 增加WebSocket连接稳定性日志** - 方便调试WS断开问题 [优先级：低]
+
+**环境限制：**
+- agent-browser 因无 Chrome/display 无法执行 UI 自动化测试
+- 建议：在服务器环境配置 ANTHROPIC_API_KEY 或 OPENAI_API_KEY
