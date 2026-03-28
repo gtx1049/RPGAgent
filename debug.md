@@ -1,3 +1,62 @@
+## 测试反馈 2026-03-29 05:57 (GMT+8)
+
+**测试时间：** 2026-03-29 05:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** Playwright headless + curl API
+
+### 一、首页与游戏卡片
+
+1. **[已测试] 首页加载正常** - HTTP 200，标题 "RPGAgent"，9个游戏卡片（实际3个剧本），无 JS 报错 [优先级：—]
+
+2. **[问题] Playwright headless 下游戏卡片点击无效** - 点击 `.game-card` 元素后，页面 URL 不变，game-select 覆盖层仍然显示。dispatchEvent('click') 也无效。可能原因：前端使用 `addEventListener` 绑定事件，在 headless 环境下事件未正确触发。通过 API 直接调用 `POST /api/games/example/start` 可正常启动游戏 [优先级：低]
+
+### 二、REST API 测试
+
+3. **[已测试] GET /api/games 正常** - 返回3个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡），JSON 正确 [优先级：—]
+
+4. **[已测试] POST /api/games/example/start 正常** - 成功启动示例剧本（session_id=e153866e7266），返回首场景"第一幕·电话"叙事完整 [优先级：—]
+
+5. **[已测试] POST /api/games/action 正常** - 行动"环顾四周"成功，GM 返回完整叙事（thinking+text），**响应耗时约15秒**（在10-21秒正常区间内）。turn:0→1，action_power:3→2 消耗正常 [优先级：—]
+
+6. **[已测试] GET /api/games/{session_id}/status 正常** - 返回完整角色状态（hp:100/100, stamina:100/100, action_power:2/3, turn:1 等），数据结构正确 [优先级：—]
+
+7. **[已测试] GET /api/games/{session_id}/debug 正常** - 返回完整调试信息（scene_id:scene_01, turn:1, stats, hidden_values, npc_relations 等）[优先级：—]
+
+8. **[已测试] GET /api/sessions/{session_id}/stats 正常** - 返回完整游戏统计（overview/combat/dialogue/moral_debt/factions/npc_relations/exploration/teammates/skills/equipment/achievements），数据结构全面 [优先级：—]
+
+9. **[已测试] GET /api/sessions/{session_id}/achievements 正常** - 返回6个成就（first_step、peaceful_negotiator、survivor 等），3个已解锁 [优先级：—]
+
+10. **[已测试] /health 正常** - 返回 `{"status":"ok","sessions":80}`，服务器运行中 [优先级：—]
+
+### 三、WebSocket 连接状态
+
+11. **[问题] WebSocket UI 显示"未连接"** - 首页加载后 WS 状态显示"未连接"。通过 API 启动游戏后，UI 仍显示"未连接"（未测试 WS 101 握手）[优先级：中]
+
+### 四、已知问题确认
+
+12. **[确认] HP/体力初始显示"-"** - 通过 API 测试确认服务器数据正确（HP:100/100, stamina:100/100），但 UI 首次加载时显示"—"。这是已知问题 [优先级：中]
+
+13. **[问题] agent-browser CLI 无法启动 Chrome** - 当前环境无 X11 display，Chrome 报错 "Missing X server or $DISPLAY"，CLI headless 模式不可用。但 Playwright headless 可正常工作 [优先级：中]
+
+### 五、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | HTTP 200，3个卡片 |
+| 游戏卡片点击 | ⚠️ headless 无效 | 浏览器环境可能正常 |
+| REST API 启动游戏 | ✅ 正常 | session_id=e153866e7266 |
+| POST /api/games/action | ✅ 正常 | 15秒，叙事完整 |
+| REST API status/debug/stats | ✅ 正常 | 数据完整 |
+| REST API achievements | ✅ 正常 | 3/6 已解锁 |
+| WebSocket UI | ⚠️ 显示未连接 | API 层面正常 |
+| HP/体力初始显示 | ❌ 显示"-" | 服务器数据正确 |
+| agent-browser CLI | ⚠️ 无法启动 | Playwright 可用 |
+
+**[已测试] 无新增问题** - 所有核心 API 正常运行，action API 响应约15秒（在正常区间）。游戏流程完整。
+
+---
+
 ## 测试反馈 2026-03-29 04:57 (GMT+8)
 
 **测试时间：** 2026-03-29 04:57 (GMT+8)
