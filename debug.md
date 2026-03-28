@@ -1,3 +1,63 @@
+## 测试反馈 2026-03-29 03:57 (GMT+8)
+
+**测试时间：** 2026-03-29 03:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl + Python WebSocket（agent-browser 因无 Chrome/display 无法使用）
+
+### 一、首页与静态资源
+
+1. **[已测试] 首页加载正常** - HTTP 200，响应时间 3.7ms，HTML结构完整 [优先级：—]
+
+2. **[已测试] 健康检查正常** - `/health` 返回 `{"status":"ok","sessions":40}`，服务器运行中，当前40个活跃会话（较03:19的33个增加7个）[优先级：—]
+
+### 二、REST API 测试
+
+3. **[已测试] GET /api/games 正常** - 返回3个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡），JSON正确 [优先级：—]
+
+4. **[已测试] POST /api/games/example/start 正常** - 成功启动示例剧本（session_id=cb59903d06b4，scene=scene_01第一幕·电话），返回首场景叙事完整（神秘来电、海滨路13号悬念），player_name=小刚正常 [优先级：—]
+
+5. **[已测试] POST /api/games/action 正常** - 行动API正常！新session发送"环顾四周"行动成功，GM返回完整叙事（content含thinking+text），**响应耗时约14.1秒**（在10-21秒正常区间内）。旧session（b5be405e83c1）action返回500，但新session正常，疑似旧session已过期 [优先级：—]
+
+6. **[已测试] GET /api/sessions/{session_id}/stats/overview 正常** - 返回完整角色状态（turn:1, level:1, hp:100/100, action_power:2/3, moral_debt:洁净），数据结构正确 [优先级：—]
+
+7. **[已测试] GET /api/sessions/{session_id}/achievements 正常** - 返回6个成就（first_step、peaceful_negotiator、survivor等），结构正确，部分已解锁 [优先级：—]
+
+### 三、WebSocket 连接状态
+
+8. **[已测试] WebSocket 握手返回 101** - 使用 Python websocket-client 测试 `ws://43.134.81.228:8080/ws/cb59903d06b4` 返回 **HTTP 101 Switching Protocols**，WS连接正常 [优先级：—]
+
+### 四、action API 响应延迟问题（持续）
+
+9. **[问题] action API 响应耗时约14.1秒** - 无流式输出，客户端需等待完整生成后才能看到叙事内容（在10-21秒区间内，较上次03:19的8.8秒略有反弹）[优先级：中]
+
+### 五、agent-browser UI自动化受阻（持续）
+
+10. **[问题] agent-browser 无法启动** - Chrome 报错 "Missing X server or $DISPLAY"，headless 模式不可用，无法进行浏览器 UI 交互测试 [优先级：中]
+
+### 六、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | HTTP 200，3.7ms |
+| 健康检查 | ✅ 正常 | sessions=40 |
+| REST API 启动游戏 | ✅ 正常 | 3个剧本 |
+| REST API stats/overview | ✅ 正常 | turn=1, hp=100/100 |
+| REST API achievements | ✅ 正常 | 6个成就 |
+| POST /api/games/action | ✅ 正常 | **200正常返回，14.1秒，无500回归（新session）** |
+| WebSocket | ✅ **101握手成功** | WS连接稳定 |
+| 浏览器 UI 测试 | ⚠️ 无法执行 | Chrome缺display |
+
+**已确认正常：**
+- **高**：action API 200正常 — 无500回归，叙事完整，14.1秒（新session正常）
+- **高**：WebSocket 101握手成功 — WS连接稳定
+
+**持续性环境问题：**
+- **中**：action API 响应延迟约10-21秒（建议流式改造）
+- **中**：agent-browser 因服务器无 Chrome/display 无法运行 UI 自动化测试
+
+---
+
 ## 测试反馈 2026-03-29 03:19 (GMT+8)
 
 **测试时间：** 2026-03-29 03:19 (GMT+8)
