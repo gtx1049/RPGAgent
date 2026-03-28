@@ -478,3 +478,141 @@
 | 4 | Chrome CDP 自动化测试受阻 | 中 | 环境问题 |
 
 **注：** 根本原因是 API Key 未配置，强烈建议在服务器环境设置 `ANTHROPIC_API_KEY` 或 `OPENAI_API_KEY` 环境变量后重启服务。
+
+## 测试反馈 2026-03-28 22:04 (GMT+8)
+
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+
+### 一、首页与静态资源
+
+1. **[已测试] 首页加载正常** - HTTP 200，页面可访问 [优先级：—]
+
+2. **[已测试] 三个剧本均正常加载** - 示例剧本·第一夜、三只小猪、秦末·大泽乡均通过 API 验证，内容完整 [优先级：—]
+
+3. **[已测试] 静态资源正常** - `/static/css/game.css` 和 `/static/js/game.js` 均返回 HTTP 200 [优先级：—]
+
+4. **[问题] start_game API 仍要求 body 包含冗余 game_id 字段** - `POST /api/games/{game_id}/start` 的 URL 路径已含 `game_id`，但 body 仍强制要求 `game_id` 字段。debug.md 记录 commit 4e6e71a 已修复此问题，但服务器似乎未重启加载新代码 [优先级：中]
+
+### 二、REST API 测试
+
+5. **[已测试] GET /api/games 正常** - 返回 3 个剧本完整信息 [优先级：—]
+
+6. **[已测试] POST /api/games/{id}/start 正常** - 三个剧本均可成功启动：
+   - 示例剧本：session_id=cfbb64efdbbe，初始场景"第一幕·电话"（神秘电话剧情）✅
+   - 三只小猪：session_id=1e71b139e124，初始场景"森林边缘"（大灰狼视角）✅
+   - 秦末·大泽乡：session_id=748e6bf0237e，初始场景"大泽乡营地"（暴雨、900戍卒）✅ [优先级：—]
+
+7. **[已测试] GET /api/sessions/{id}/stats/overview 正常** - 返回完整角色状态（hp、action_power、moral_debt_level 等）[优先级：—]
+
+8. **[已测试] GET /api/games/{id}/debug 正常** - 返回完整调试信息（scene_id、turn、stats、hidden_values 等）[优先级：—]
+
+9. **[已测试] GET /api/sessions/{id}/achievements 正常** - 返回 6 个成就（第一步、和平谈判者、幸存者等），结构正确 [优先级：—]
+
+10. **[问题] POST /api/games/action 返回 Internal Server Error** - 与之前测试一致，API Key 未配置导致 agentscope LLM 调用失败 [优先级：高]
+
+### 三、WebSocket 连接状态
+
+11. **[问题] WebSocket 连接测试无响应（超时）** - 使用 curl 测试 `ws://43.134.81.228:8080/ws/{session_id}` 握手请求时，连接超时无 HTTP 响应。之前 debug.md 记录 WS 403 已修复，但本次测试（22:04）确认连接挂起，疑似服务器 WS 处理仍有问题 [优先级：高]
+
+### 四、游戏内容质量
+
+12. **[已测试] 剧本内容质量高** - 三个剧本叙事质量良好：
+    - 示例剧本：神秘悬疑风格（深夜神秘电话、未知号码）
+    - 三只小猪：童话新编（大灰狼视角，有策略选择）
+    - 秦末·大泽乡：历史沉浸（暴雨、戍卒困境、县尉压迫）[优先级：—]
+
+### 五、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | HTTP 200 |
+| 三个剧本 | ✅ 正常 | 均可正常启动 |
+| 静态资源 | ✅ 正常 | CSS/JS 200 |
+| REST API 启动游戏 | ✅ 正常 | |
+| REST API stats/overview | ✅ 正常 | |
+| REST API debug | ✅ 正常 | |
+| REST API achievements | ✅ 正常 | |
+| start_game body 冗余字段 | ⚠️ 未修复 | 服务器需重启 |
+| POST /api/games/action | ❌ 500错误 | API Key 未配置 |
+| WebSocket 连接 | ❌ 超时无响应 | WS 处理异常 |
+
+**未修复问题（持续性）：**
+1. **高**：POST /api/games/action 500 错误（ANTHROPIC_API_KEY 未配置）
+2. **高**：WebSocket 连接挂起无响应
+3. **中**：start_game body 冗余 game_id 字段（commit 4e6e71a 未生效，服务器需重启）
+
+**建议：**
+1. 服务器重启以加载最新代码（4e6e71a 等修复）
+2. 配置 ANTHROPIC_API_KEY 环境变量以启用行动 API
+3. 检查 WebSocket 服务端处理逻辑（连接挂起原因）
+
+## 测试反馈 2026-03-28 22:19 (GMT+8)
+
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl + HTTP API（agent-browser 因无 Chrome/display 无法使用）
+
+### 一、首页与静态资源
+
+1. **[已测试] 首页加载正常** - HTTP 200，三个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡）均正常返回，页面 HTML 结构完整 [优先级：—]
+
+2. **[已测试] 静态资源正常** - `/static/css/game.css` HTTP 200，无 404 [优先级：—]
+
+3. **[已测试] 健康检查正常** - `/health` 返回 `{"status":"ok","sessions":3}`，服务器运行中 [优先级：—]
+
+### 二、REST API 测试
+
+4. **[已测试] GET /api/games 正常** - 返回 3 个剧本完整信息（id、name、summary、tags）[优先级：—]
+
+5. **[已测试] POST /api/games/{id}/start 正常** - 成功启动三个剧本：
+   - 示例剧本：session_id=6e2fd2297f3f，scene_id=scene_01（第一幕·电话）
+   - 三只小猪：session_id 正常返回
+   - 秦末·大泽乡：session_id 正常返回，scene_id=daze_camp（初始场景）[优先级：—]
+
+6. **[已测试] GET /api/sessions/{id}/stats/overview 正常** - 返回完整角色状态（turn、level、hp、action_power、moral_debt_level 等），数据格式正确 [优先级：—]
+
+7. **[已测试] GET /api/games/{id}/debug 正常** - 返回完整调试信息（scene_id、turn、stats、hidden_values、npc_relations 等），GameSession 属性问题已修复 [优先级：—]
+
+8. **[已测试] GET /api/sessions/{id}/achievements 正常** - 返回 6 个成就（第一步、和平谈判者、幸存者、腰缠万贯、技能大师、问心无愧），结构正确 [优先级：—]
+
+9. **[问题] POST /api/games/action 返回 Internal Server Error** - 与历史记录一致，执行玩家行动返回 500 错误，服务器日志显示 `TypeError: Could not resolve authentication method`。原因：ANTHROPIC_API_KEY 环境变量未配置，agentscope LLM 调用失败 [优先级：高]
+
+### 三、WebSocket 连接状态
+
+10. **[问题] WebSocket 端点返回 404 Not Found** - 通过 curl 测试 `GET /ws` 返回 HTTP 404（非之前的 403）。正确路径应为 `ws://43.134.81.228:8080/ws/{session_id}`，但该路径目前也返回 404。之前 debug.md 记录"WS 403 已修复"，但当前（22:19）确认问题演变为 404，WebSocket 路由可能缺失或配置变更 [优先级：高]
+
+### 四、游戏内容质量
+
+11. **[已测试] 剧本叙事质量高** - 通过 API 验证各剧本内容：
+    - 示例剧本（scene_01）：神秘悬疑风格，深夜神秘电话场景描写生动
+    - 三只小猪：大灰狼视角，森林边缘场景，策略选择丰富
+    - 秦末·大泽乡（daze_camp）：历史沉浸，暴雨营地场景（900戍卒、陈胜吴广动态）[优先级：—]
+
+### 五、自动化测试受阻
+
+12. **[问题] agent-browser 无法使用** - 当前环境无 X11 display 且未安装 Chrome binary，agent-browser 报错 "Chrome exited before providing DevTools URL"。无法进行浏览器 UI 层面的交互测试（游戏卡片点击、行动按钮响应等）[优先级：中]
+
+### 六、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | HTTP 200 |
+| 静态资源 | ✅ 正常 | CSS 200 |
+| 健康检查 | ✅ 正常 | sessions=3 |
+| REST API 启动游戏 | ✅ 正常 | 3个剧本均成功 |
+| REST API stats/overview | ✅ 正常 | |
+| REST API debug | ✅ 正常 | GameSession问题已修复 |
+| REST API achievements | ✅ 正常 | |
+| POST /api/games/action | ❌ 500错误 | API Key 未配置（持续性） |
+| WebSocket 连接 | ❌ 404错误 | 端点未找到（演变自之前的403） |
+| 浏览器 UI 测试 | ⚠️ 无法执行 | 环境缺 Chrome/display |
+
+**未修复问题（持续性）：**
+1. **高**：POST /api/games/action 500 错误（ANTHROPIC_API_KEY 未配置）— 自 2026-03-28 13:08 首次发现至今
+2. **高**：WebSocket 连接异常（403→404 演变）
+
+**环境限制：**
+- agent-browser 因无 Chrome/display 无法执行 UI 自动化测试
+- 建议：在服务器环境配置 ANTHROPIC_API_KEY 或 OPENAI_API_KEY
+
