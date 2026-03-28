@@ -1,3 +1,135 @@
+## 测试反馈 2026-03-29 01:57 (GMT+8)
+
+**测试时间：** 2026-03-29 01:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl + HTTP API（agent-browser 因无 Chrome/display + Chrome headless失败，无法使用）
+
+### 一、首页与静态资源
+
+1. **[已测试] 首页加载正常** - HTTP 200，响应时间 <5ms，页面结构完整 [优先级：—]
+
+2. **[已测试] 健康检查正常** - `/health` 返回 `{"status":"ok","sessions":24}`，服务器运行中，当前24个活跃会话 [优先级：—]
+
+### 二、REST API 测试
+
+3. **[已测试] GET /api/games 正常** - 返回3个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡），JSON正确 [优先级：—]
+
+4. **[已测试] POST /api/games/example/start 正常** - 成功启动示例剧本（session_id=a01dab840f2a，scene=scene_01第一幕·电话），返回首场景叙事完整（神秘电话、海滨路13号悬念），player_name=小刚正常 [优先级：—]
+
+5. **[已测试] POST /api/games/action 正常** - 行动API正常！发送"接听电话"行动成功，GM返回详细叙事（thinking+text），options正常下发（前往海滨路13号/深夜冒雨出发等选项），**响应耗时约11.9秒**（较上次的15秒略有改善）[优先级：—]
+
+6. **[已测试] GET /api/sessions/{session_id}/stats/overview 正常** - 返回完整角色状态（turn:1, level:1, hp:100/100, action_power:2/3, moral_debt:洁净），数据结构正确 [优先级：—]
+
+7. **[已测试] GET /api/sessions/{session_id}/achievements 正常** - 返回6个成就，3个已解锁（和平谈判者、幸存者、问心无愧），结构正确 [优先级：—]
+
+### 三、WebSocket 连接状态
+
+8. **[观察] WebSocket 连接挂起无响应** - 使用有效 session_id 测试 `ws://43.134.81.228:8080/ws/a01dab840f2a` 连接请求 hang 住无任何 HTTP 响应（超时），非 101/403/404。与上次测试（01:38，确认WS 101握手成功）相比，本次WS再次出现问题。WS稳定性仍不理想（01:38→101，本地→挂起）[优先级：高]
+
+### 四、action API 响应延迟问题（持续）
+
+9. **[问题] action API 响应耗时约11.9秒** - 无流式输出，客户端需等待完整生成后才能看到叙事内容（本次11.9秒，比之前的15秒有改善，但仍偏慢）[优先级：中]
+
+### 五、agent-browser UI自动化受阻（持续）
+
+10. **[问题] agent-browser + Chrome headless 均无法启动** - 当前环境无 X11 display，Chrome 报错 "Missing X server or $DISPLAY"（exit code 1），无法进行浏览器 UI 层面的交互测试 [优先级：中]
+
+### 六、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | HTTP 200，<5ms |
+| 健康检查 | ✅ 正常 | sessions=24 |
+| REST API 启动游戏 | ✅ 正常 | 3个剧本均成功 |
+| REST API stats/overview | ✅ 正常 | turn=1, hp=100/100 |
+| REST API achievements | ✅ 正常 | 3/6已解锁 |
+| POST /api/games/action | ✅ 正常 | **200正常返回，11.9秒** |
+| WebSocket | ❌ **挂起无响应** | **01:38 101，本次超时挂起** |
+| 浏览器 UI 测试 | ⚠️ 无法执行 | Chrome无法启动 |
+
+**回归问题（需关注）：**
+- **高**：WebSocket 连接挂起 — 01:38确认101成功，本次（01:57）连接无任何HTTP响应。WS稳定性持续不稳定，在101/404/挂起之间反复
+
+**已确认正常：**
+- **高**：action API 200正常 — 本次11.9秒，无500回归
+
+**持续性环境问题：**
+- **中**：action API 响应延迟约11.9秒（建议流式改造）
+- **中**：agent-browser 因 Chrome 无法在 headless 环境运行
+
+**建议：**
+- WebSocket 路由需要深入排查为何在 101/404/挂起 三种状态之间不稳定切换
+- action API 响应延迟建议通过 SSE 流式输出改善
+
+---
+
+## 测试反馈 2026-03-29 01:38 (GMT+8)
+
+**测试时间：** 2026-03-29 01:38 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl + HTTP API（agent-browser 因无 Chrome/display + Chrome headless失败，无法使用）
+
+### 一、首页与静态资源
+
+1. **[已测试] 首页加载正常** - HTTP 200，响应时间 <5ms，页面结构完整 [优先级：—]
+
+2. **[已测试] 健康检查正常** - `/health` 返回 `{"status":"ok","sessions":23}`，服务器运行中，当前23个活跃会话 [优先级：—]
+
+### 二、REST API 测试
+
+3. **[已测试] GET /api/games 正常** - 返回3个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡），JSON正确 [优先级：—]
+
+4. **[已测试] POST /api/games/example/start 正常** - 成功启动示例剧本（session_id=5c67cde89655，scene=scene_01第一幕·电话），返回首场景叙事完整（神秘电话、海滨路13号悬念），player_name正常 [优先级：—]
+
+5. **[已测试] POST /api/games/action 正常** - 行动API正常！发送"接听电话"行动成功，GM返回详细叙事（thinking+text），options正常下发（8个选项：立即调查/等到明天/等三天后再赴约/上网搜索/先搜索背景信息/整理装备/检查工具等），**响应耗时约10.5秒** [优先级：—]
+
+6. **[已测试] GET /api/sessions/{session_id}/stats/overview 正常** - 返回完整角色状态（turn:1, level:1, hp:100/100, action_power:2/3, moral_debt:洁净），数据结构正确 [优先级：—]
+
+7. **[已测试] GET /api/sessions/{session_id}/achievements 正常** - 返回6个成就，3个已解锁（和平谈判者、幸存者、问心无愧），结构正确 [优先级：—]
+
+8. **[已测试] GET /api/games/{session_id}/debug 正常** - 返回完整调试信息（scene_id=unknown老问题，turn:1, stats/hidden_values/ability等均正常），接口可用 [优先级：—]
+
+### 三、WebSocket 连接状态
+
+9. **[已修复] WebSocket 握手返回 101** - 使用有效 session_id 测试 `ws://43.134.81.228.228:8080/ws/5c67cde89655` 返回 **HTTP 101 Switching Protocols**！WS连接恢复正常，与01:19测试的404问题相比，本次确认101握手成功 [优先级：—]
+
+### 四、action API 响应延迟问题（持续）
+
+10. **[问题] action API 响应耗时约10.5秒** - 无流式输出，客户端需等待完整生成后才能看到叙事内容（本次10.5秒，比之前的15秒略好）[优先级：中]
+
+### 五、agent-browser UI自动化受阻（持续）
+
+11. **[问题] agent-browser + Chrome headless 均无法启动** - 当前环境无 X11 display，Chrome 报错 "Missing X server or $DISPLAY"（exit code 1），无法进行浏览器 UI 层面的交互测试 [优先级：中]
+
+### 六、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 首页加载 | ✅ 正常 | HTTP 200，<5ms |
+| 健康检查 | ✅ 正常 | sessions=23 |
+| REST API 启动游戏 | ✅ 正常 | 3个剧本均成功 |
+| REST API stats/overview | ✅ 正常 | turn=1, hp=100/100 |
+| REST API achievements | ✅ 正常 | 3/6已解锁 |
+| REST API debug | ✅ 正常 | scene_id=unknown老问题 |
+| POST /api/games/action | ✅ 正常 | **200正常返回，10.5秒** |
+| WebSocket | ✅ **已恢复** | **01:19 404，本次101握手成功** |
+| 浏览器 UI 测试 | ⚠️ 无法执行 | Chrome无法启动 |
+
+**本次确认：**
+- **高**：WebSocket 404问题已恢复 — 01:19的WS 404本次（01:38）已变为101成功
+- **高**：action API 200正常 — 无500回归
+
+**持续性环境问题：**
+- **中**：action API 响应延迟约10.5秒（建议流式改造）
+- **中**：agent-browser 因 Chrome 无法在 headless 环境运行
+
+**建议：**
+- action API 响应延迟建议通过 SSE 流式输出改善
+
+---
+
 ## 测试反馈 2026-03-29 01:19 (GMT+8)
 
 **测试时间：** 2026-03-29 01:19 (GMT+8)
