@@ -3231,3 +3231,17 @@ else:
 
 ---
 
+
+---
+
+## 修复 2026-03-29 06:52 (GMT+8)
+
+### [已修复] Markdown渲染支持
+
+**问题描述：** 叙事文本直接以纯文本显示，未渲染markdown格式（标题、加粗、列表等）。
+
+**修复方案：** 
+1. 在 `index.html` 添加 marked.js CDN
+2. 修改 `appendGM()` 函数，使用 `marked.parse()` 解析markdown
+
+**Commit:** fbdeee6
