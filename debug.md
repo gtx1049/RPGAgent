@@ -1,3 +1,50 @@
+## 测试反馈 2026-03-29 08:57 (GMT+8)
+
+**测试时间：** 2026-03-29 08:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl API 测试
+
+### 一、队友系统 API 测试
+
+1. **[已测试] GET /api/teammates/{session_id}/available 正常** - 返回空数组（当前session无可用队友，正常）[优先级：—]
+
+2. **[已测试] GET /api/teammates/{session_id}/active 正常** - 返回空数组（无活跃队友，正常）[优先级：—]
+
+3. **[已测试] POST /api/teammates/{session_id}/recruit 正常** - 招募不存在角色返回清晰错误：`{"detail":"未知角色：xxx"}`，接口行为正确 [优先级：—]
+
+4. **[已测试] POST /api/teammates/{session_id}/dismiss 正常** - 解雇队友返回：`{"teammate_id":"xxx","permanently_left":false,"message":"「xxx」的忠诚度下降了。"}` [优先级：—]
+
+5. **[已测试] POST /api/teammates/{session_id}/loyalty 正常** - 修改忠诚度需使用 `delta` 字段（非 `loyalty_change`），返回 `{"ok":true,"teammate_id":"xxx","name":"xxx","loyalty":0}` [优先级：—]
+
+6. **[已测试] POST /api/teammates/{session_id}/act 正常** - 队友行动接口正常，无活跃队友时返回 `{"ok":true,"actions":[]}` [优先级：—]
+
+7. **[已测试] GET /api/teammates/{session_id}/snapshot 正常** - 返回 `{"profiles":{},"active":{}}`，结构正确 [优先级：—]
+
+### 二、队友系统 API 设计观察
+
+8. **[观察] 队友招募依赖剧本内置NPC配置** - 可用队友列表为空，说明示例剧本未配置可招募NPC。招募系统依赖游戏剧本的内容设计，非通用系统 [优先级：低]
+
+9. **[观察] loyalty 接口字段命名不直观** - 使用 `delta` 而非 `loyalty_change`，与前端可能期望的字段名不一致。建议统一字段命名规范 [优先级：低]
+
+10. **[观察] teammates/act 接口 body 冗余 session_id** - act 接口要求 body 中包含 `session_id`，但 URL path 已包含 `{session_id}`，存在数据冗余（与 start_game 的冗余设计类似）[优先级：低]
+
+### 三、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| /teammates/{id}/available | ✅ 正常 | 返回空数组 |
+| /teammates/{id}/active | ✅ 正常 | 返回空数组 |
+| /teammates/{id}/recruit | ✅ 正常 | 未知角色返回清晰错误 |
+| /teammates/{id}/dismiss | ✅ 正常 | 返回提示message |
+| /teammates/{id}/loyalty | ✅ 正常 | 需用delta字段 |
+| /teammates/{id}/act | ✅ 正常 | 空actions |
+| /teammates/{id}/snapshot | ✅ 正常 | 结构正确 |
+
+**[已测试] 队友系统 API 全部正常** - 所有端点行为符合预期，错误提示清晰，接口设计合理但存在少量字段命名不一致问题（低优先级，不影响使用）。
+
+---
+
 ## 测试反馈 2026-03-29 08:39 (GMT+8)
 
 **测试时间：** 2026-03-29 08:39 (GMT+8)
