@@ -475,6 +475,7 @@ async def get_stats_overview(session_id: str):
         "turn": gm.session.turn_count,
         "level": stats.get("level", 1),
         "hp": f"{stats.get('hp', 0)}/{stats.get('max_hp', 0)}",
+        "stamina": f"{stats.get('stamina', 0)}/{stats.get('max_stamina', 0)}",
         "action_power": f"{stats.get('action_power', 0)}/{stats.get('max_action_power', 0)}",
         "moral_debt_level": moral.get("level", "无债") if isinstance(moral, dict) else "无债",
         "moral_debt_value": moral.get("debt", 0) if isinstance(moral, dict) else 0,
