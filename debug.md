@@ -3351,3 +3351,35 @@ HP —/—
 - P3：体力消耗机制待服务器正常运行时验证
 
 **优先级：** P1（用户体验 - 断连提示缺失）
+
+## 测试反馈 2026-03-29 11:38 (GMT+8)
+
+**测试时间：** 2026-03-29 11:38 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl API 测试
+
+### 一、服务器状态
+
+1. **[已测试] /health 正常** - sessions=0，服务器运行中（API Key 未配置，无法启动游戏）[优先级：—]
+
+### 二、REST API 测试
+
+2. **[已测试] GET /api/games 正常** - 返回3个剧本（示例剧本·第一夜、三只小猪、秦末·大泽乡），JSON正确，含id/name/summary/tags/version/author字段 [优先级：—]
+
+### 三、服务器状态异常
+
+3. **[问题] sessions=0，API Key 未配置** - sessions计数从历史最高130降至0，/health返回 `{"status":"ok","sessions":0}`。POST /api/games/example/start 返回 503："API 密钥未配置。请设置 OPENAI_API_KEY 或 RPG_API_KEY 环境变量后重启服务器"。服务器疑似重启后未配置 API Key [优先级：高]
+
+4. **[观察] NPC接口无法测试** - `GET /api/games/{session_id}/npcs` 需要有效session_id，当前无活跃session无法测试 [优先级：—]
+
+### 四、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| /api/games | ✅ 正常 | 3个剧本，JSON正确 |
+| sessions计数 | ⚠️ 0 | 从130降至0，疑似服务器重启 |
+| 游戏启动API | ❌ 503 | API Key未配置 |
+| 行动API | ❌ 503 | API Key未配置 |
+
+**[已测试] GET /api/games 通过** - 列表API正常，但服务器整体因API Key未配置而无法进行游戏流程测试。
