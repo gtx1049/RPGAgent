@@ -4900,3 +4900,60 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 3. 更新 `start.sh` 确保环境变量正确加载
 
 **Commit:** e1d75ae, 42a2b55
+
+---
+
+## 测试反馈 2026-03-30 00:57 (GMT+8)
+
+**测试时间：** 2026-03-30 00:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl REST API
+
+### 测试项：2.11 回放系统 & 2.12 结局系统 & 2.13 事件系统 API 测试
+
+**结果：** [失败 - P1]
+
+**详情：**
+
+#### 回放系统 (`/api/replay`)
+| 端点 | 方法 | 结果 | 说明 |
+|------|------|------|------|
+| `/api/replay/start` | POST | **500 Internal Server Error** | body需`session_id`字段，携带有效session仍500 |
+| `/api/replay/stop` | POST | **500 Internal Server Error** | 携带session_id发送仍500 |
+| `/api/replay/{session_id}` | GET | **500 Internal Server Error** | 使用有效session访问返回500 |
+| `/api/replay/{session_id}/summary` | GET | **500 Internal Server Error** | 返回500 |
+| `/api/replay` | GET | **500** (已有记录) | get_active_gm()方法不存在 |
+| `/api/replay/sessions` | GET | **500** (已有记录) | 同上 |
+
+#### 结局系统 (`/api/endings`)
+| 端点 | 方法 | 结果 |
+|------|------|------|
+| `/api/endings` | GET | **500** (已有记录) |
+| `/api/endings/progress` | GET | **500** (已有记录) |
+
+#### 事件系统 (`/api/events`)
+| 端点 | 方法 | 结果 |
+|------|------|------|
+| `/api/events` | GET | **500** (已有记录) |
+| `/api/events/active` | GET | **500** (已有记录) |
+| `/api/events/history` | GET | **500** (已有记录) |
+
+**问题分析：**
+- 回放、结局、事件三大系统**全部返回500**，存在共同的底层代码问题
+- `POST /api/replay/start` 需要 `session_id` 参数（已验证），但提交后仍500
+- 问题持续多轮未修复，疑似这些功能模块未完成开发或存在未处理的异常
+- 注：GET `/api/replay`、`/api/replay/sessions`、`/api/endings`、`/api/endings/progress`、`/api/events`、`/api/events/active`、`/api/events/history` 在第29轮已标记为500，本轮再次验证，确认**未修复**
+
+**根因分析：**
+- 初步判断：后端 `get_active_gm()` 方法缺失，导致所有调用该方法的端点返回500
+- 回放/结局/事件可能共享同一个基础服务层，该层依赖 `get_active_gm()`
+- `POST /api/replay/start` 等写入类端点也返回500，问题不仅限于读取
+
+**优先级：** P1（核心功能层级的系统性故障）
+
+**建议：**
+1. 检查 `rpgagent/api/server.py` 中 `get_active_gm()` 的实现
+2. 为回放/结局/事件系统添加统一的异常处理，避免500传播
+3. 或明确标记这些功能为"开发中"，暂时从API文档隐藏避免用户困惑
+
