@@ -1,4 +1,32 @@
-**测试反馈 2026-03-29 23:38 (GMT+8)
+## 测试反馈 2026-03-29 23:57 (GMT+8)
+
+**测试时间：** 2026-03-29 23:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl API 测试
+
+### 测试项：4.3 状态管理 - 体力显示与更新
+
+**结果：** 部分通过
+
+**详情：**
+- ✅ `GET /api/games/{session_id}/status` 返回完整状态：`stamina: 100, max_stamina: 100`（字段完整，数值正确）
+- ✅ `GET /api/games/{session_id}/debug` 返回体力数据（`stats.stamina: 100, stats.max_stamina: 100`）
+- ❌ [P3] `GET /api/sessions/{session_id}/stats/overview` **不包含 stamina 字段**
+  - overview 仅含：`turn_count, current_scene, scene_title, current_day, current_period, level, gold`
+  - 缺少：`stamina, hp, action_power` 等核心状态字段
+  - 对比：完整 stats 接口返回 `overview` 外层无体力，但外层 combat/dialogue 等模块也无体力
+- ⚠️ [P3] 体力消耗机制未实际触发测试（需在游戏中触发战斗/长途移动等事件）
+
+**优先级：** P3（体验优化，overview 统计不完整但不影响核心游戏）
+
+**建议：**
+1. `stats/overview` 应补充 stamina、hp、action_power 等核心状态字段，使统计概览更完整
+2. 体力消耗机制建议后续通过实际游戏流程测试
+
+---
+
+## 测试反馈 2026-03-29 23:38 (GMT+8)
 
 **测试时间：** 2026-03-29 23:38 (GMT+8)
 **测试角色：** 小刚（资深RPG玩家）
