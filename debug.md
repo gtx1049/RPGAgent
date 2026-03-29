@@ -7,7 +7,23 @@
 
 ### 测试项：3.1 WebSocket连接 - 有效session_id连接
 
-**结果：** [失败 - P1]
+**结果：** [已修复 - P1]
+
+**修复记录 (2026-03-30 00:41 GMT+8)：**
+- **根因**：`server.py` WebSocket endpoint 在发送初始 `status_update` 时使用 `stats.hp`、`stats.max_hp` 等**属性访问**，但 `get_snapshot()` 返回的是 `dict`，导致 `AttributeError: 'dict' object has no attribute 'hp'`，异常导致连接立即关闭
+- **修复**：改为 `stats.get("hp", 0)` 等 dict.get() 方式访问，同时修复 `moral.level` 的访问方式
+- **Commit**: `491c76b`
+- **文件**: `rpgagent/api/server.py`
+
+**详情（修复前）：**
+- WebSocket握手成功（101协议切换），建立连接
+- 服务器发送1条 `scene_update` 消息后**立即主动关闭连接**
+- 测试3个不同session，均收到1条scene_update后服务器关闭
+- 连接生存时间<1秒，无法进行任何后续交互
+- 尝试发送action或ping均因连接已关闭而失败
+
+**问题分析（已过时）：**
+- 原分析认为WebSocket为"一次性"设计，实际是`AttributeError`导致连接崩溃
 
 **详情：**
 - WebSocket握手成功（101协议切换），建立连接
@@ -49,7 +65,7 @@
 
 ### 测试项：3.3 WebSocket连接稳定性 - 长时间连接保持
 
-**结果：** [失败 - P1]
+**结果：** [已修复 - P1]（与3.1同根，已在491c76b中一并修复）
 
 **详情：**
 - 服务器在首次消息后立即关闭连接
