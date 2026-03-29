@@ -370,7 +370,12 @@
 - [ ] CG画廊打开/关闭
 - [ ] CG全屏查看
 - [ ] 日志详情查看
-- [ ] ESC键关闭
+- [x] ESC键关闭 → **失败（P3）** [2026-03-30 03:38]
+  - 代码审查发现：game.js 中注册了两个独立的 ESC keydown 监听器
+  - 监听器1（行989-992）：ESC → `closeLogModal()` + `closeAttrPanel()`
+  - 监听器2（行1352-1354）：ESC → `closeMobileSidebar()`
+  - 问题：成就模态框（ach-modal-overlay）、统计模态框（stat-modal-overlay）、CG画廊（cg-gallery-overlay）、CG全屏（cg-overlay）均无 ESC 键关闭处理
+  - 建议：P3级，合并为一个 ESC 监听器，统一关闭所有打开的模态框和侧边栏
 
 ### 5.5 状态指示
 - [x] WebSocket连接状态 → **失败** [2026-03-29 19:20]

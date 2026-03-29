@@ -5296,3 +5296,62 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 - 成就解锁反馈：—（通过）
 - 隐藏成就发现：P3（体验优化，非核心功能）
 - 成就进度追踪：—（通过）
+
+---
+
+## 测试反馈 2026-03-30 03:38 (GMT+8)
+
+**测试时间：** 2026-03-30 03:38 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** 代码审查（game.js + index.html）
+
+### 测试项：5.4 模态框 - ESC键关闭
+
+**结果：** [失败]
+
+**详情：**
+- 代码审查 `game.js` 发现：页面注册了两个独立的 ESC keydown 监听器
+
+**监听器1（行989-992）：**
+```javascript
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    closeLogModal();
+    closeAttrPanel();
+  }
+});
+```
+- 负责关闭：日志模态框（log-modal-overlay）、属性面板（attr-modal-overlay）
+
+**监听器2（行1352-1354）：**
+```javascript
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    closeMobileSidebar();
+  }
+});
+```
+- 负责关闭：移动端侧边栏（sidebar + sidebar-overlay）
+
+**缺失的ESC处理：**
+| 模态框 | 元素ID | close函数 | ESC处理 |
+|--------|--------|-----------|---------|
+| 成就面板 | ach-modal-overlay | closeAchPanel() | ❌ 无 |
+| 统计面板 | stat-modal-overlay | closeStatPanel() | ❌ 无 |
+| CG画廊 | cg-gallery-overlay | closeCgGallery() | ❌ 无 |
+| CG全屏 | cg-overlay | closeCgOverlay() | ❌ 无 |
+
+**问题分析：**
+- 成就模态框和统计模态框是游戏内常用面板（通过📊属性/🏆成就按钮打开）
+- CG画廊和CG全屏在游戏内生成CG后应可关闭
+- 当前 ESC 只关闭日志/属性面板，用户打开成就或统计后无法用 ESC 关闭
+- 两个独立监听器同时触发（行为正确但不统一），建议合并
+
+**优先级：** P3（体验优化，非阻塞性问题）
+
+**建议修复：**
+1. 合并两个 ESC 监听器为一个，统一处理所有模态框和侧边栏的关闭
+2. 或者在现有的 ESC 监听器中添加对 ach/stat/cg 模态框的关闭调用
+3. 建议的关闭顺序：按打开顺序逆序关闭，或只关闭最上层
+
