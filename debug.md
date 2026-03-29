@@ -4120,3 +4120,22 @@ narrativeEl.scrollTop = narrativeEl.scrollHeight;
 - [P2] `/api/games/{game_id}/meta`、`/api/games/{game_id}/setting` 404 → 剧本元信息API未实现，如需编辑器功能应优先开发
 
 第40轮测试完成。事件和回放系统500错误表明显然后端存在未修复的bug，建议优先排查。
+
+## 测试反馈 2026-03-29 17:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+
+测试项：`GET /api/sessions/{session_id}/achievements` + `GET /api/sessions/{session_id}/achievements/unlocked`
+结果：通过
+
+详情：
+- `GET /api/sessions/{session_id}/achievements` → **200 OK**
+  - 新session返回6个成就对象，字段完整（id/name/description/icon/unlocked）
+  - unlocked_count=0, total_count=6
+  - 成就列表：第一步、和平谈判者、幸存者、腰缠万贯、技能大师、问心无愧
+- `GET /api/sessions/{session_id}/achievements/unlocked` → **200 OK**
+  - 返回 `{"achievements":[],"count":0}`，新会话无已解锁成就符合预期
+
+结论：成就系统API工作正常，接口返回数据结构清晰，无问题。
+
+第39轮测试完成。
