@@ -5136,3 +5136,49 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 **建议：**
 - 检查回放系统后端实现，确认get_active_gm()方法问题是否彻底解决
 - 回放系统为游戏体验重要功能（玩家回放历史决策），建议优先修复
+
+---
+
+**测试时间：** 2026-03-30 02:38 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+
+### 测试项：2.11 回放系统 - `GET /api/replay/{session_id}/export` - 导出回放
+
+**结果：** 失败（500 Internal Server Error）
+
+**详情：**
+- 新建session 69397812589e 访问 `/api/replay/69397812589e/export` 返回500
+- 回放系统API整体故障（同2.11其他端点）
+- 与第30轮02:19测试结果一致
+
+**优先级：** P2
+
+---
+
+### 测试项：2.12 结局系统 - `POST /api/endings/evaluate` - 评估结局
+
+**结果：** 失败（500 Internal Server Error）
+
+**详情：**
+- 携带有效session_id 69397812589e 发送POST请求返回500
+- 结局系统API整体故障（GET /api/endings 和 GET /api/endings/progress 在第29轮已标记为500）
+
+**优先级：** P2
+
+---
+
+### 测试项：2.12 结局系统 - `GET /api/endings/hidden` - 隐藏结局
+
+**结果：** 失败（500 Internal Server Error）
+
+**详情：**
+- 访问 `/api/endings/hidden` 返回500
+- 结局系统API整体故障（GET /api/endings 和 GET /api/endings/progress 在第29轮已标记为500）
+
+**优先级：** P2
+
+**结论：**
+- 回放系统（2.11）和结局系统（2.12）API均返回500，整体不可用
+- 回放/结局/事件系统API在第27轮曾标记为"已修复"，但当前再次返回500
+- 建议统一排查：检查这些API后端实现，确认get_active_gm()方法或其他通用依赖是否存在问题

@@ -1,6 +1,6 @@
 # RPGAgent 待测试功能清单
 
-> 最后更新：2026-03-30
+> 最后更新：2026-03-30 02:38
 > 项目地址：http://43.134.81.228:8080/
 
 ---
@@ -140,14 +140,17 @@
   - 回放系统API整体故障，与第29轮结论一致
 - [x] `GET /api/replay/{session_id}/summary` - 获取回放摘要 → **500 Internal Server Error** [2026-03-30 00:57]
   - 访问 `/api/replay/91682917044d/summary` 返回500
-- [ ] `GET /api/replay/{session_id}/export` - 导出回放
+- [x] `GET /api/replay/{session_id}/export` - 导出回放 → **500 Internal Server Error** [2026-03-30 02:38]
+  - 新建session 69397812589e 访问 `/api/replay/69397812589e/export` 返回500
+  - 回放系统API整体故障（同2.11其他端点）
 
 ### 2.12 结局系统 (`/api/endings`)
 - [x] `GET /api/endings` - 列出结局 → **500 Internal Server Error（未修复）** [2026-03-29 18:57]
   - 回放/结局/事件系统 API 500 问题在第27轮曾标记为"已修复"，但当前再次返回500
 - [x] `GET /api/endings/progress` - 结局进度 → **500 Internal Server Error（未修复）** [2026-03-29 18:57]
-- [ ] `POST /api/endings/evaluate` - 评估结局
-- [ ] `GET /api/endings/hidden` - 隐藏结局
+- [x] `POST /api/endings/evaluate` - 评估结局 → **500 Internal Server Error** [2026-03-30 02:38]
+  - 携带有效session_id发送POST请求返回500
+- [x] `GET /api/endings/hidden` - 隐藏结局 → **500 Internal Server Error** [2026-03-30 02:38]
   - ⚠️ `GET /api/endings` 和 `GET /api/endings/progress` 已在第29轮标记为500，本轮未变
 
 ### 2.13 事件系统 (`/api/events`)
