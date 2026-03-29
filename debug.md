@@ -3106,3 +3106,47 @@
 - special-btn: 金色边框高亮
 
 **建议**：移除或实现 `POST /api/games/action` REST接口，避免误导（前端已用WebSocket替代）
+
+---
+
+## 测试反馈 2026-03-29 10:03
+
+**测试项**：`GET /api/games/{game_id}`、`GET /api/games/{game_id}/scenes`、`GET /api/games/{game_id}/characters`（剧本结构管理API）
+
+**结果**：失败（404 Not Found）
+
+**详情**：
+- `GET /api/games/juese1` → 404 `{"detail":"Not Found"}`
+- `GET /api/games/juese1/scenes` → 404（测试juese1/sanzhuxiaozhu/qinmo三ID均404）
+- `GET /api/games/juese1/characters` → 404 `{"detail":"Not Found"}`
+
+**分析**：剧本结构管理相关API全部未实现，与第4.1节观察一致——游戏启动流程依赖 `GET /api/games/{session_id}/debug` 获取状态，而非直接读取剧本结构。
+
+**优先级**：P2（不影响核心启动流程，但编辑器场景管理依赖此API）
+
+**建议**：如编辑器需要场景管理功能，需实现完整的剧本CRUD API。当前游戏运行时通过 debug 接口获取动态状态，设计上可接受。
+
+---
+
+## 测试反馈 2026-03-29 10:19
+
+**测试项**：`4.2 行动系统 - 回合增加`
+
+**结果**：通过（但发现行动力消耗未实现的问题）
+
+**详情**：
+通过 WebSocket 发送 `{"action": "player_input", "content": "环顾四周"}`，连续执行4次行动：
+- 回合递增：turn 0→1→2→3→4（正确）
+- 行动力：始终为 3/3（异常——行动后未消耗）
+
+**发现的问题**：
+1. ✅ 回合增加功能正常：`game_manager.py` 中 `session.turn += 1` 正确执行
+2. ⚠️ 行动力消耗未实现：`process_action()` 函数中无 AP 消耗逻辑，`action_power` 字段只读不消耗，失去了作为行动限制的意义
+
+**优先级**：P2（不影响游戏继续玩，但行动力作为资源管理机制失效）
+
+**建议**：在 `process_action()` 中添加 `session.stats["action_power"] -= 1`（并检查是否足够），或将 AP 重置逻辑与回合系统联动（如每回合恢复）。
+
+**WebSocket消息格式注意**（踩坑记录）：
+- 正确格式：`{"action": "player_input", "content": "行动描述"}`
+- 错误格式：`{"type": "player_input", "action": "...", "turn": 0}`（这是之前的错误格式）
