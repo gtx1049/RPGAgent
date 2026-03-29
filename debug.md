@@ -14,7 +14,7 @@
 - ✅ **遮罩层淡入淡出**：`opacity: 0→1` + `transition: opacity 0.28s`，过渡柔和
 - ✅ **底部导航按钮active态**：`transition: color 0.15s`，颜色切换有平滑过渡
 - ✅ **[已修复] 冒险日志/游戏统计 Modal 淡入动画**：log-modal-overlay 和 stats-modal-overlay 改为 opacity+visibility 过渡(0.28s ease)替代原 display:none→flex 瞬间切换 [优先级：P3] [commit dc41abf]
-- ⚠️ [P3] **面板内容无入场动画**：各面板（#status-panel、#skills-panel、#equip-panel）内容更新时无动画。当前这些面板在 sidebar 中始终可见，无 tab 切换机制 [优先级：P3]
+- ✅ [已修复] **面板内容无入场动画**：各面板（#status-panel、#skills-panel、#equip-panel）内容更新时无动画。新增 triggerPanelAnim() 函数，updateSkills/updateEquipment 更新后触发 panel-fade-slide 入场动画。commit 73b4278 [优先级：P3]
 
 **优先级：** P3（体验优化，非阻塞性问题）
 
