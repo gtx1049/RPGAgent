@@ -11,13 +11,13 @@
 
 ### 二、新发现问题（扩展系统测试）
 
-2. **[问题] 结局系统 API 返回 500** - `GET /api/endings` 和 `GET /api/endings/progress` 均返回 500 Internal Server Error。服务端可能缺少结局数据初始化或相关模块异常 [优先级：中]
+2. **[已修复] 结局系统 API 返回 500** - `get_active_gm()` 方法不存在（game_manager.py 中未定义），导致 replay/events/endings 路由获取 GM 时抛出 AttributeError → 500。修复：添加 `GameManager.get_active_gm()` 方法，追踪最近活跃会话。commit 61119af [优先级：中]
 
-3. **[问题] 事件系统 API 返回 500** - `GET /api/events` 和 `GET /api/events/active` 均返回 500 Internal Server Error。服务端事件模块可能未实现或数据异常 [优先级：中]
+3. **[已修复] 事件系统 API 返回 500** - 同上原因，`get_active_gm()` 方法不存在。修复同上 [优先级：中]
 
-4. **[问题] 回放系统 API 返回 500** - `GET /api/replay/sessions` 返回 500 Internal Server Error。回放功能服务端异常 [优先级：中]
+4. **[已修复] 回放系统 API 返回 500** - 同上原因，`get_active_gm()` 方法不存在。修复同上 [优先级：中]
 
-5. **[问题] 存档系统 API 返回 404** - `GET /api/sessions/{session_id}/saves` 和 `GET /api/sessions/{session_id}/saves/autosave` 均返回 404 Not Found。存档接口可能未实现或路径不正确 [优先级：中]
+5. **[观察] 存档系统 API 测试路径说明** - `GET /api/sessions/{session_id}/saves` 返回 404，原因是测试使用了错误路径。正确路径为 `/api/games/{session_id}/saves`（路由前缀为 /games 而非 /sessions）。该路由代码存在且逻辑正常 [优先级：低]
 
 6. **[已测试] 市场 API 正常** - `/api/market/games` 和 `/api/market/tags` 均正常返回数据 [优先级：—]
 
