@@ -123,6 +123,36 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
     await websocket.accept()
 
+    # ── 发送初始状态（连接成功后的欢迎消息）─────────────
+    stats = session.gm.stats_sys.get_snapshot()
+    moral = session.gm.moral_sys.get_snapshot()
+    scene = session.gm.get_current_scene()
+    
+    await websocket.send_json({
+        "type": "scene_update",
+        "scene_id": scene.id if scene else "unknown",
+        "scene_title": scene.title if scene else "未知场景",
+        "content": scene.content[:500] if scene and scene.content else "",
+    })
+    await websocket.send_json({
+        "type": "status_update",
+        "extra": {
+            "hp": stats.hp,
+            "max_hp": stats.max_hp,
+            "stamina": stats.stamina,
+            "max_stamina": stats.max_stamina,
+            "action_power": stats.action_power,
+            "max_action_power": stats.max_action_power,
+            "moral_debt_level": moral.level if moral else "无",
+            "turn": session.turn,
+        },
+    })
+    await websocket.send_json({
+        "type": "connected",
+        "session_id": session_id,
+        "message": "连接成功，可以开始游戏",
+    })
+
     try:
         while True:
             raw = await websocket.receive_text()

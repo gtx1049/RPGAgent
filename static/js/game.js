@@ -476,6 +476,24 @@ function setWSStatus(status) {
 
 function handleMessage(msg) {
   switch (msg.type) {
+    case "connected":
+      // WS连接成功，欢迎消息
+      setWSStatus("connected");
+      if (msg.message) {
+        appendSystem(msg.message);
+      }
+      break;
+
+    case "scene_update":
+      // 场景更新
+      if (msg.scene_title) {
+        sceneTitleEl.textContent = msg.scene_title;
+      }
+      if (msg.content) {
+        appendGM(msg.content, "scene-header");
+      }
+      break;
+
     case "narrative":
       if (msg.content) appendGM(msg.content);
       if (msg.done) {
