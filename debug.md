@@ -3972,3 +3972,46 @@ narrativeEl.scrollTop = narrativeEl.scrollHeight;
 **[观察] action_power REST vs WebSocket** - REST API正确消耗AP（3→2），但前端可能依赖WebSocket推送更新UI，当前测试未验证前端实际显示。
 
 
+
+---
+
+## 测试反馈 2026-03-29 16:38 (GMT+8)
+
+**测试时间：** 2026-03-29 16:38 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl API 测试
+
+### 一、统计系统 API 测试
+
+1. **[通过] GET /api/sessions/{session_id}/stats/overview** - 返回完整统计概览：`session_id, turn=2, level=1, HP=100/100, AP=3/3, moral_debt_level=洁净, gold=0, day=1, period=上午, combat_rate=0.0, scene=第一幕·致电` [优先级：—]
+
+2. **[通过] GET /api/sessions/{session_id}/stats** - 返回详细统计，结构完整包含：overview/combat/dialogue/moral_debt/factions/npc_relations/exploration/hidden_values/teammates/skills/equipment/achievements。特别关注：探索率50%(1/2场景)、6个成就(0解锁)、道德债务洁净 [优先级：—]
+
+### 二、日志系统 API 测试
+
+3. **[通过] GET /api/logs/{session_id}** - 返回空数组 `[]`（新session无日志，正常）[优先级：—]
+
+4. **[通过] GET /api/logs/{session_id}/latest** - 返回 `{"detail":"尚无冒险日志"}`（消息清晰，符合预期）[优先级：—]
+
+### 三、CG系统 API 测试
+
+5. **[通过] GET /api/sessions/{session_id}/cg** - 返回 `{"count":0,"cg_list":[]}`（新session无CG，正常）[优先级：—]
+
+6. **[通过] GET /api/sessions/{session_id}/cg/latest** - 返回 `{"has_cg":false}`（无CG时返回清晰状态码）[优先级：—]
+
+7. **[问题] GET /api/sessions/{session_id}/cg/history** - 返回 404 Not Found [优先级：P2]
+   - 端点 `/cg/history` 不存在或路径配置错误
+   - 而 `/cg` 和 `/cg/latest` 均正常响应
+   - 建议：确认正确的CG历史端点路径，或补充实现该接口
+
+### 四、队友系统复验（示例剧本·第一夜）
+
+8. **[观察] 招募系统无队友可招募** - 示例剧本 `available`/`active` 均为空数组，`recruit` 接口对任意 `teammate_id` 返回"未知角色"。当前剧本未配置可招募NPC，队友系统功能无法完整验证（API基础设施正常，内容缺失）[优先级：P3]
+
+### 五、测试小结
+
+- **新通过项**：stats/overview、stats、logs、cg、cg/latest（5个API）
+- **问题项**：cg/history 返回404（P2）
+- **内容缺失**：示例剧本无队友可招募，无法测试忠诚度影响（P3，需游戏内容支持）
+- **建议**：cg/history 端点需修复或确认路径；队友忠诚度完整测试需要包含NPC的剧本
