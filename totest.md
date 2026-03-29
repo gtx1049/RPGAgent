@@ -387,8 +387,16 @@
 - [ ] 移动端侧边栏
 
 ### 5.4 模态框
-- [ ] CG画廊打开/关闭
-- [ ] CG全屏查看
+- [x] CG画廊打开/关闭 → **部分通过（P3）** [2026-03-30 06:04]
+  - openCgGallery/showCgFull/closeCgGallery函数存在且逻辑完整
+  - HTML/CSS基础设施完备，样式完整（缩略图max 320x200, border-radius, hover缩放）
+  - 触发路径：scene_cg消息自动触发 或 全屏视图"📖 画廊"按钮
+  - ⚠️ [P3] CG生成API未实现（/api/scenes/{id}/cg/generate 404），新session CG历史为空，无法端到端验证
+  - ⚠️ [P3] ESC键无法关闭画廊（ESC处理缺失，归入5.4 ESC键统一关闭问题）
+  - ⚠️ [P3] 移动端底部导航无CG入口
+- [x] CG全屏查看 → **失败（P3）** [2026-03-30 06:19]
+  - **Bug**：showCgFull()和openCgGallery()添加open class但不移除内联style="display:none"，CSS .open{display:flex}被内联样式覆盖导致CG全屏/画廊无法显示
+  - 修复：在showCgFull()和openCgGallery()中添加overlay.style.display = ''移除内联样式
 - [ ] 日志详情查看
 - [x] ESC键关闭 → **失败（P3）** [2026-03-30 03:38]
   - 代码审查发现：game.js 中注册了两个独立的 ESC keydown 监听器

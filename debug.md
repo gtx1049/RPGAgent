@@ -50,6 +50,39 @@ gm = get_manager().get_active_gm()
 
 ---
 
+## 测试反馈 2026-03-30 06:04 (GMT+8)
+
+**测试时间：** 2026-03-30 06:04 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** Browser automation + 代码审查
+
+### 测试项：5.4 模态框 - CG画廊打开/关闭
+
+**结果：** [部分通过（P3）]
+
+**详情：**
+- `openCgGallery()` 函数存在（game.js:1199-1205）：获取CG历史→渲染grid→显示overlay
+- `showCgFull(imgUrl)` 函数存在（game.js:1249）：全屏展示CG
+- `closeCgGallery()` 函数存在（game.js:1231-1238）：关闭画廊
+- HTML结构完整：`#cg-overlay`（全屏）、`#cg-gallery-overlay`（画廊Modal）、`#cg-gallery-grid`、`#cg-gallery-empty`
+- CSS样式完整：`.cg-thumb`（max-width:320px, max-height:200px, border-radius, hover缩放）
+- 触发路径：scene_cg消息自动触发 或 全屏视图"📖 画廊"按钮
+
+**问题：**
+- CG生成API未实现：`/api/scenes/{id}/cg/generate` 和 `/api/games/{id}/cg/generate` 均返回404
+- 新session CG历史为空，无法端到端验证画廊打开后的实际渲染效果
+- ESC键无法关闭画廊（ESC处理缺失，归入5.4 ESC键统一关闭问题）
+- 移动端底部导航无CG入口
+
+**优先级：** P3（体验优化）
+
+**建议：**
+1. CG生成API实现后端到端验证
+2. 画廊ESC键关闭逻辑（与其他模态框统一）
+
+---
+
 ## 测试反馈 2026-03-30 00:38 (GMT+8)
 
 **测试时间：** 2026-03-30 00:38 (GMT+8)
@@ -5507,3 +5540,40 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 1. 后端实现 CG 生成端点（`POST /api/scenes/{scene_id}/cg/generate`）
 2. 移动端底部导航考虑增加CG入口（与成就/统计同级）
 3. CG生成前可考虑：叙事区显示"🎨 CG生成中..."占位提示
+
+## 测试反馈 2026-03-30 06:19 (GMT+8)
+
+**测试时间：** 2026-03-30 06:19 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** Browser automation (agent-browser)
+
+### 测试项：5.4 模态框 - CG全屏查看
+
+**结果：** [失败 P3]
+
+**详情：**
+- ✅ `showCgFull(url)` 函数存在，调用后正确添加"open" class到`#cg-overlay`
+- ✅ `closeCgFull()` 函数存在，调用后正确移除"open" class
+- ✅ `openCgGallery()` 和 `closeCgGallery()` 函数存在，行为正确
+- ✅ HTML元素完整：`#cg-overlay`（全屏）、`#cg-gallery-overlay`（画廊Modal）
+- ❌ **根本Bug**：`#cg-overlay`和`#cg-gallery-overlay`元素在HTML中有内联 `style="display:none"`
+- ❌ `showCgFull()` 和 `openCgGallery()` 只添加"open" class，**不移除内联 `style="display:none"`**
+- ❌ CSS `.open { display: flex }` 规则被内联样式覆盖，CG全屏和画廊均无法显示
+- ✅ `closeCgGallery()` 和 `closeCgFull()` 正确移除"open" class（隐藏本就靠内联样式生效）
+- ❌ ESC键对CG overlay无效（class被移除但inline style保持display:none，无可见效果）
+
+**问题：**
+- JS函数依赖CSS类切换显示，但内联 `display:none` 优先级高于CSS类
+- showCgFull()添加"open" class后，overlay仍是display:none（内联样式覆盖）
+
+**优先级：** P3（体验优化）
+
+**建议：**
+- 修复：在 `showCgFull()` 和 `openCgGallery()` 中添加：
+  ```javascript
+  overlay.style.display = '';  // 移除内联display:none
+  // 或
+  overlay.style.removeProperty('display');
+  ```
+- 同时在 `closeCgFull()` 和 `closeCgGallery()` 中确保正确恢复隐藏状态
