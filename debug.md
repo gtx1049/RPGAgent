@@ -4015,3 +4015,10 @@ narrativeEl.scrollTop = narrativeEl.scrollHeight;
 - **问题项**：cg/history 返回404（P2）
 - **内容缺失**：示例剧本无队友可招募，无法测试忠诚度影响（P3，需游戏内容支持）
 - **建议**：cg/history 端点需修复或确认路径；队友忠诚度完整测试需要包含NPC的剧本
+
+### 六、API复验 - 2.1游戏管理
+
+9. **[通过] POST /api/games/{game_id}/start** - 启动游戏 [优先级：P0]
+   - 有效game_id（example）：200，返回 session_id("ed5ecd0239c5")、scene(content含markdown格式叙事)、turn=0
+   - 无效game_id（invalid_id）：422，返回 `{"detail":"剧本不存在: invalid_id"}`，错误提示清晰
+   - API基础设施正常，P0核心功能验证通过
