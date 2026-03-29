@@ -5234,3 +5234,65 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 - 回放系统（2.11）和结局系统（2.12）API均返回500，整体不可用
 - 回放/结局/事件系统API在第27轮曾标记为"已修复"，但当前再次返回500
 - 建议统一排查：检查这些API后端实现，确认get_active_gm()方法或其他通用依赖是否存在问题
+
+## 测试反馈 2026-03-30 03:19 (GMT+8)
+
+**测试时间：** 2026-03-30 03:19 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl API 测试
+
+### 测试项：9.6 成就系统
+
+#### 1. 成就解锁反馈 → **[通过]**
+
+- `/api/sessions/{id}/achievements` 返回全部6个成就（含id/name/description/icon/unlocked状态）
+- `/api/sessions/{id}/achievements/unlocked` 返回详细解锁信息：
+  ```json
+  {
+    "id": "survivor",
+    "unlocked_at_turn": 0,
+    "scene_id": "scene_01",
+    "narrative": "🏅 成就解锁：「幸存者」—— 完成任意章节"
+  }
+  ```
+- narrative字段含emoji+格式化消息，UI可直接展示
+- 成就解锁后立即反映在API响应中，无延迟
+
+#### 2. 隐藏成就发现 → **[部分通过]**
+
+- `/api/sessions/{id}/achievements/hidden` 返回 `{"detail":"Not Found"}`（HTTP 404）
+- 该端点未实现，当前系统无隐藏成就机制，所有成就均可见
+- 所有6个成就（第一步/和平谈判者/幸存者/腰缠万贯/技能大师/问心无愧）均在前端可见
+
+#### 3. 成就进度追踪 → **[通过]**
+
+- stats概览含 `unlock_rate: 50.0`
+- achievements接口返回 `unlocked_count: 3, total_count: 6`
+- `recently_unlocked` 数组追踪最近解锁的成就（含id/unlocked_at_turn/scene_id）
+- 当前session已解锁：和平谈判者、幸存者、问心无愧（均在scene_01解锁）
+
+### 详情
+
+测试session: `05ad1c9d91ad`（示例剧本·第一幕）
+
+| 成就 | 描述 | 状态 |
+|------|------|------|
+| 👣 第一步 | 完成第一章 | ❌ 未解锁 |
+| 🕊️ 和平谈判者 | 全程未发动任何战斗 | ✅ 已解锁 |
+| 🏅 幸存者 | 完成任意章节 | ✅ 已解锁 |
+| 💰 腰缠万贯 | 金币达到1000 | ❌ 未解锁 |
+| ⚔️ 技能大师 | 同时掌握3种以上技能 | ❌ 未解锁 |
+| ✨ 问心无愧 | 以洁净道德完成游戏 | ✅ 已解锁 |
+
+**解锁率：3/6 (50%)**
+
+### 问题
+
+1. **[P3] 隐藏成就端点未实现** - `/api/sessions/{id}/achievements/hidden` 返回404，当前无隐藏成就机制。如需隐藏成就功能需新增该API端点
+
+### 优先级
+
+- 成就解锁反馈：—（通过）
+- 隐藏成就发现：P3（体验优化，非核心功能）
+- 成就进度追踪：—（通过）

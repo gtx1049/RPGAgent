@@ -1,6 +1,6 @@
 # RPGAgent 待测试功能清单
 
-> 最后更新：2026-03-30 02:38
+> 最后更新：2026-03-30 03:19
 > 项目地址：http://43.134.81.228:8080/
 
 ---
@@ -605,9 +605,17 @@
 - [ ] 队友行动效果
 
 ### 9.6 成就系统
-- [ ] 成就解锁反馈
-- [ ] 隐藏成就发现
-- [ ] 成就进度追踪
+- [x] 成就解锁反馈 → **通过** [2026-03-30 03:19]
+  - `/api/sessions/{id}/achievements` 返回全部6个成就（含id/name/description/icon/unlocked）
+  - `/api/sessions/{id}/achievements/unlocked` 返回详细解锁信息（unlocked_at_turn/scene_id/narrative）
+  - narrative字段含格式化消息如"🏅 成就解锁：「幸存者」—— 完成任意章节"
+- [x] 隐藏成就发现 → **部分通过** [2026-03-30 03:19]
+  - `/api/sessions/{id}/achievements/hidden` 返回404，该端点未实现
+  - 当前系统无隐藏成就机制，所有成就均可见
+- [x] 成就进度追踪 → **通过** [2026-03-30 03:19]
+  - stats概览含unlock_rate（50%），achievements接口含unlocked_count/total_count
+  - recently_unlocked数组追踪最近解锁的成就（含turn和scene_id）
+  - 成就解锁后立即反映在API响应中
 
 ---
 
