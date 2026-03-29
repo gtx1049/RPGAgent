@@ -3150,3 +3150,29 @@
 **WebSocket消息格式注意**（踩坑记录）：
 - 正确格式：`{"action": "player_input", "content": "行动描述"}`
 - 错误格式：`{"type": "player_input", "action": "...", "turn": 0}`（这是之前的错误格式）
+
+---
+
+## 修复 2026-03-29 06:48 (GMT+8)
+
+### [已修复] GM叙事显示原始JSON问题
+
+**问题描述：** 游戏页面显示GM叙事时，会显示完整的Msg对象JSON（包含id、name、metadata、timestamp等字段），而不是只显示content文本。
+
+**根本原因：** `rpgagent/core/game_master.py` 第384行：
+```python
+llm_output = response if isinstance(response, str) else str(response)
+```
+AgentScope的 `reply()` 返回 `Msg` 对象，`str(msg)` 返回的是整个对象的字符串表示，而非 `content` 字段。
+
+**修复方案：** 改为检查对象类型并提取 `content` 字段：
+```python
+if isinstance(response, str):
+    llm_output = response
+elif hasattr(response, 'content'):
+    llm_output = response.content
+else:
+    llm_output = str(response)
+```
+
+**Commit:** f31e8e1
