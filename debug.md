@@ -5444,3 +5444,18 @@ document.addEventListener("keydown", e => {
 - [P3] CSS中无debug面板样式定义
 
 优先级：P3（体验优化，调试功能非核心阻塞）
+
+## 测试反馈 2026-03-30 04:57
+测试项：8.2 阅读体验 - 字体大小与行距
+结果：通过
+详情：
+- 选取理由：8.2阅读体验中唯一未测试项目
+- 通过代码审查 static/css/game.css 获取字体规格数据：
+  * 桌面端叙事区（#narrative）：font-size 15px，line-height 1.9
+  * 移动端叙事区（@media max-width: 700px）：font-size 14px，line-height 1.8
+  * 背景色#0f0f1a，文字色#dcdde1，对比度约7:1（WCAG AAA标准）
+- 字体大小和行距设置合理，桌面端15px/1.9适合RPG叙事阅读
+- 移动端适当调整为14px/1.8，适应小屏显示
+- 分隔线(12px)和系统消息(13px)字体略小（P3改进项）
+
+总结：字体大小与行距设置符合可读性标准，通过。
