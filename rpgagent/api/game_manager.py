@@ -46,6 +46,7 @@ class GameManager:
         self._sessions: Dict[str, GameSession] = {}
         self._lock = asyncio.Lock()
         self._auto_save_task: Optional[asyncio.Task] = None
+        self._active_session_id: Optional[str] = None  # 最近一次活跃的会话 ID
 
     async def start_game(
         self,
@@ -81,6 +82,7 @@ class GameManager:
 
         async with self._lock:
             self._sessions[session_id] = game_session
+            self._active_session_id = session_id
 
         # 生成 autosave ID 并触发首次存档
         game_session.autosave_id = f"autosave_{session_id}"
@@ -92,7 +94,17 @@ class GameManager:
         return game_session
 
     def get_session(self, session_id: str) -> Optional[GameSession]:
-        return self._sessions.get(session_id)
+        session = self._sessions.get(session_id)
+        if session:
+            self._active_session_id = session_id
+        return session
+
+    def get_active_gm(self) -> Optional["GameMaster"]:
+        """获取最近活跃游戏的 GameMaster 实例"""
+        if not self._active_session_id:
+            return None
+        session = self._sessions.get(self._active_session_id)
+        return session.gm if session else None
 
     async def close_session(self, session_id: str) -> bool:
         """关闭并清理会话"""
