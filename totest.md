@@ -322,7 +322,12 @@
   - ✅ appendGM/appendPlayer/appendSystem 三处均实现自动滚动
   - ⚠️ [P3] 无用户阅读检测：用户手动上滚阅读历史时，新GM叙事会将其强行拉回底部
   - ⚠️ [P3] 打字机效果期间每8ms执行一次scrollTop更新，高频重排影响性能
-- [ ] 新叙事自动定位
+- [x] 新叙事自动定位 → **部分通过（P3）** [2026-03-30 07:02]
+  - ✅ `appendGM()` 每次append后执行 `narrativeEl.scrollTop = narrativeEl.scrollHeight` 实现自动滚底
+  - ✅ 新GM叙事生成后正确滚动到底部，保持最新内容可见
+  - ⚠️ [P3] 无用户阅读检测：用户手动上滚阅读历史时，新GM叙事会将其强行拉回底部，打断阅读节奏
+  - ⚠️ [P3] 建议：增加"新内容"视觉提示，让用户选择是否滚动；或检测用户是否在阅读历史模式
+  - **注：** REST API `POST /api/games/action` 可正常返回GM叙事，但WS P1阻塞导致前端无法接收实时更新
 - [ ] 历史叙事可回滚
 - [x] CG缩略图点击 → **部分通过（P3）** [2026-03-30 05:38]
   - ✅ `scene_cg` 消息处理时，`appendGM()` 插入的 `<img>` 标签正确绑定 `onclick="openCgGallery()"`
