@@ -5426,3 +5426,21 @@ document.addEventListener("keydown", e => {
 - 叙事区line-height 1.9 + font-size 15px，符合之前测试验证的阅读体验标准
 - CSS变量系统完善，颜色编码语义清晰（HP红/体力绿/AP金）
 - 无对比度问题
+
+## 测试反馈 2026-03-30 04:38
+测试项：5.3 侧边栏面板 - 调试面板（debug）
+结果：失败（P3）
+详情：
+- 选取理由：侧边栏📋调试按钮尚未测试
+- 创建session test_session_042，启动示例剧本"第一夜"游戏
+- 点击📋调试按钮，**无任何UI反应**
+- 根因：openDebugPanel() 函数（game.js:1333-1337）仅一行console.log，是空壳函数
+- HTML中无debug-modal-overlay等DOM元素
+- 调试面板功能完全未实现
+
+问题：
+- [P3] openDebugPanel() 空壳函数，无实际渲染逻辑
+- [P3] HTML中无debug模态框结构
+- [P3] CSS中无debug面板样式定义
+
+优先级：P3（体验优化，调试功能非核心阻塞）

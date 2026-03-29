@@ -361,7 +361,10 @@
   - 点击📜冒险日志按钮打开日志模态框，通过 `/api/logs/{session_id}` 获取数据
   - 新游戏(session新)显示"暂无日志"和"选择左侧日志查看内容"（符合预期）
   - 日志列表左侧栏+内容右侧栏布局，关闭按钮(×)功能正常
-- [ ] 调试面板（debug）
+- [x] 调试面板（debug）→ **失败（P3）** [2026-03-30 04:38]
+  - openDebugPanel() 函数为空壳函数，仅console.log无实际渲染
+  - HTML中无debug模态框DOM结构；CSS中无对应样式
+  - 调试功能完全未实现，属于死代码
 - [x] 面板切换动画 → **部分通过** [2026-03-29 19:57]
   - ✅ 侧边栏滑入滑出：CSS `transform: translateX(100%)→0` + `transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)`，滑动动画流畅
   - ✅ 遮罩层淡入淡出：`opacity: 0→1` + `transition: opacity 0.28s`
