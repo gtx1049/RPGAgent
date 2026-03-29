@@ -7,9 +7,15 @@
 
 ### 测试项：5.2 行动按钮 - 行动力不足禁用
 
-**结果：** 失败
+**结果：** [已修复]
 
-**详情：**
+**修复详情：**
+- `launchGame` 函数中新增从 debug API 获取 `action_power` 和 `max_action_power` 并调用 `updateAP()` 的逻辑
+- `updateAP()` 会同时更新 AP 指示点（●●●→●●○→●○○→○○○）和 `state.ap`，并触发 `renderActionButtons()` 重新渲染按钮 disabled 状态
+- 根本原因：之前 `launchGame` 只从 debug API 获取 HP/体力，未获取 AP，导致 `state.ap` 保持初始值 3，WS 断开后按钮仍显示启用
+- **Commit**: 822e83c
+
+**详情（修复前）：**
 - 通过REST API启动游戏(session_id: 591927f37f9b)，连续发送3次行动消耗AP至0/3
 - 验证API响应：`action_power: 0/3`（确认AP已耗尽）
 - 浏览器端检查：
