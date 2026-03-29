@@ -1,3 +1,60 @@
+## 测试反馈 2026-03-29 08:39 (GMT+8)
+
+**测试时间：** 2026-03-29 08:39 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl API 测试
+
+### 一、服务器健康状态
+
+1. **[已测试] /health 正常** - sessions=128，服务器运行稳定 [优先级：—]
+
+### 二、新发现问题（扩展系统测试）
+
+2. **[问题] 结局系统 API 返回 500** - `GET /api/endings` 和 `GET /api/endings/progress` 均返回 500 Internal Server Error。服务端可能缺少结局数据初始化或相关模块异常 [优先级：中]
+
+3. **[问题] 事件系统 API 返回 500** - `GET /api/events` 和 `GET /api/events/active` 均返回 500 Internal Server Error。服务端事件模块可能未实现或数据异常 [优先级：中]
+
+4. **[问题] 回放系统 API 返回 500** - `GET /api/replay/sessions` 返回 500 Internal Server Error。回放功能服务端异常 [优先级：中]
+
+5. **[问题] 存档系统 API 返回 404** - `GET /api/sessions/{session_id}/saves` 和 `GET /api/sessions/{session_id}/saves/autosave` 均返回 404 Not Found。存档接口可能未实现或路径不正确 [优先级：中]
+
+6. **[已测试] 市场 API 正常** - `/api/market/games` 和 `/api/market/tags` 均正常返回数据 [优先级：—]
+
+7. **[已测试] 编辑器页面正常** - `/editor` GET 返回完整 HTML（剧本编辑器页面）[优先级：—]
+
+8. **[已测试] 市场页面正常** - `/market` GET 返回完整 HTML（剧本市场页面）[优先级：—]
+
+9. **[已测试] 编辑器 API 部分正常** - `/api/editor/games` 返回游戏列表（含路径 `/root/.openclaw/workspace/RPGAgent/games/...`），但 `/api/editor/scenes/{game_id}` 返回 404 [优先级：—]
+
+10. **[已测试] 压缩/队友 API 行为正常** - `/api/compression/{session_id}/context-stats` 404（未触发压缩，正常），`/api/teammates/{session_id}/available` 和 `/api/teammates/{session_id}/active` 返回空数组（无队友，正常）[优先级：—]
+
+11. **[已测试] 日志 API 正常** - `GET /api/logs/{session_id}` 返回空数组（新建session无日志，正常）[优先级：—]
+
+### 三、已知系统状态确认
+
+12. **[已测试] 核心功能稳定** - 首页、REST API（games/start/action/stats）、WebSocket、游戏流程均正常运行，sessions=128持续增长 [优先级：—]
+
+### 四、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| /health | ✅ 正常 | sessions=128 |
+| /api/endings | ❌ 500 | 结局系统异常 |
+| /api/events | ❌ 500 | 事件系统异常 |
+| /api/replay/sessions | ❌ 500 | 回放系统异常 |
+| /api/sessions/{id}/saves | ❌ 404 | 存档接口未实现 |
+| /api/market/games | ✅ 正常 | 返回游戏列表 |
+| /api/market/tags | ✅ 正常 | 返回标签列表 |
+| /editor | ✅ 正常 | GET 200 |
+| /market | ✅ 正常 | GET 200 |
+| /api/editor/games | ✅ 正常 | 返回编辑器游戏列表 |
+| /api/editor/scenes/{id} | ❌ 404 | 场景接口未找到 |
+
+**[已测试] 新发现4个系统异常** - 结局系统、事件系统、回放系统、存档系统均返回错误。建议优先排查存档系统（404表示接口可能未挂载）和结局/事件系统（500表示接口存在但执行异常）。
+
+---
+
 ## 测试反馈 2026-03-29 08:19 (GMT+8)
 
 **测试时间：** 2026-03-29 08:19 (GMT+8)
