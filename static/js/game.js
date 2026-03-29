@@ -198,6 +198,15 @@ function updateNPCs(npcRelations) {
   }
 }
 
+// ── 面板内容入场动画 ─────────────────────────
+
+function triggerPanelAnim(el) {
+  if (!el) return;
+  el.classList.remove("panel-enter");
+  void el.offsetWidth;
+  el.classList.add("panel-enter");
+}
+
 // ── 技能展示 ─────────────────────────────────
 
 function updateSkills(skills) {
@@ -205,6 +214,7 @@ function updateSkills(skills) {
   const container = $("skills-list");
   if (!state.skills.length) {
     container.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">暂无已学技能</div>';
+    triggerPanelAnim(container);
     return;
   }
   container.innerHTML = "";
@@ -220,6 +230,7 @@ function updateSkills(skills) {
     }
     container.appendChild(tag);
   });
+  triggerPanelAnim(container);
 }
 
 // ── 装备展示 ─────────────────────────────────
@@ -246,6 +257,7 @@ function updateEquipment(equipped) {
   const items = Object.entries(equipped || {}).filter(([, v]) => v);
   if (!items.length) {
     container.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">无装备</div>';
+    triggerPanelAnim(container);
     return;
   }
   container.innerHTML = "";
@@ -258,6 +270,7 @@ function updateEquipment(equipped) {
       <span class="equip-name ${rarityClass}">${info.name || slot}</span>`;
     container.appendChild(div);
   });
+  triggerPanelAnim(container);
 }
 
 // ── 行动按钮渲染 ─────────────────────────────
