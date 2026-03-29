@@ -380,11 +380,15 @@ class GameMaster:
         from agentscope.message import Msg
         msg = Msg(name="玩家", content=user_prompt, role="user")
         response = await self.dm.reply(msg)
-        # 提取 content 字段：response 可能是 str 或 Msg 对象
+        # 提取纯文本：response 可能是 str 或 Msg 对象
+        # Msg.content 可能是 str 或 ContentBlock 列表，用 get_text_content() 提取纯文本
         if isinstance(response, str):
             llm_output = response
+        elif hasattr(response, 'get_text_content'):
+            llm_output = response.get_text_content() or str(response)
         elif hasattr(response, 'content'):
-            llm_output = response.content
+            c = response.content
+            llm_output = c if isinstance(c, str) else str(c)
         else:
             llm_output = str(response)
 

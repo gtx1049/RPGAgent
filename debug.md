@@ -3245,3 +3245,70 @@ else:
 2. 修改 `appendGM()` 函数，使用 `marked.parse()` 解析markdown
 
 **Commit:** fbdeee6
+
+## 测试反馈 2026-03-29 18:58 (GMT+8)
+
+**测试时间：** 2026-03-29 18:58 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl REST API 测试
+
+### 一、测试项：4.2 叙事响应
+
+**测试方法：** 启动示例剧本（session: 6bf50c05c01c），通过 `POST /api/games/action` 发送"接听电话"行动，检查GM叙事响应。
+
+### 二、测试结果
+
+| 维度 | 状态 | 详情 |
+|------|------|------|
+| GM叙事响应 | ✅ 正常 | 发送行动后收到完整GM叙事（1805字符joined），含thinking+text双内容块 |
+| 叙事内容质量 | ✅ 优秀 | 沉浸式氛围描写（雨夜、秒针走动、咖啡杯、神秘声音），选项以markdown表格呈现 |
+| GM思考透明度 | ✅ 优秀 | response包含thinking字段，展示AI GameMaster推理过程（"Let me set the scene properly..."） |
+| 叙事选项 | ✅ 有 | narrative文本中包含markdown选项表（立刻出发/调查地址/回拨电话/休息等待） |
+| REST API streaming格式 | ⚠️ 问题 | narrative数组=1805个单字符，command.options=76个单字符，**程序化解析困难** |
+| 响应耗时 | ⚠️ 偏长 | 约24秒（本次测试长于历史均值10-15秒，可能服务器负载波动） |
+
+### 三、关键发现：REST API streaming格式问题
+
+**问题描述：** `POST /api/games/action` 的响应体结构：
+```json
+{
+  "session_id": "6bf50c05c01c",
+  "narrative": ["M","s","g","(",...1805个单字符],
+  "command": {
+    "action": "choice",
+    "next_scene": "first_night",
+    "options": ["立","刻","出","发",...76个单字符],
+    "narrative_hint": "...",
+    "action_tag": "start_investigation"
+  }
+}
+```
+
+**影响评估：**
+- narrative数组join后完整内容可读，但streaming格式非标准JSON，客户端解析困难
+- command.options被拆分为单字符，**无法直接用于渲染选项列表**（需前端特殊处理）
+- 前端已迁移至WebSocket（player_input消息），REST API为遗留接口（P2优先级）
+
+**历史上下文：** 第24轮测试已识别前端从REST迁移至WebSocket（`POST /api/games/action` 返回500，但WebSocket player_input正常工作）
+
+### 四、游戏体验（叙事代入感）
+
+**GM叙事内容示例（接听电话后）：**
+> 电话那头只剩下忙音。你握着手机，指尖还残留着听筒冰凉的触感。雨声敲打着窗户，像无数细小的手指在玻璃上急促地叩击。神秘声音：「海滨路13号，有一个人失踪了。你来查。三天后，我联系你。」声音沙哑，分辨不出男女。背景里有隐约的海浪声。三天后。但那个地址已经烙印在你脑海里了。
+
+**小刚评价：** 叙事质量优秀，氛围塑造精准（雨夜、私家侦探、海滨路悬念），符合CRPG沉浸式开场标准。GM thinking字段的透明化是一大亮点，让玩家了解AI决策过程。
+
+### 五、总结
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 叙事响应速度 | ⚠️ ~24秒 | 本次偏长，10-24秒区间波动 |
+| 叙事内容质量 | ✅ 优秀 | 沉浸感强，GM thinking透明 |
+| REST API streaming格式 | ⚠️ 非标准 | 单字符数组难以程序化解析 |
+| 核心功能 | ✅ 可用 | 前端已用WebSocket替代REST |
+
+**[已测试] 叙事响应核心功能正常** - GM叙事质量优秀，但REST API的streaming格式（非标准JSON）导致选项难以程序化解析。前端已迁移至WebSocket，此REST API为遗留接口（P2优先级，不影响核心功能）。
+
+---
+
