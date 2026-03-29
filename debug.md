@@ -13,8 +13,8 @@
 - ✅ **侧边栏滑入滑出动画**：CSS `transform: translateX(100%)→translateX(0)` + `transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)`，滑动动画流畅自然
 - ✅ **遮罩层淡入淡出**：`opacity: 0→1` + `transition: opacity 0.28s`，过渡柔和
 - ✅ **底部导航按钮active态**：`transition: color 0.15s`，颜色切换有平滑过渡
-- ⚠️ [P3] **面板内容切换无过渡动画**：点击bnav按钮（状态/技能/装备/冒险日志）切换面板时，新面板内容瞬间出现，无淡入或滑入效果，视觉跳跃感明显
-- ⚠️ [P3] **面板内容无入场动画**：各面板（#status-panel、#skills-panel、#equip-panel、#log-panel）切换时直接显示无动画，CSS中未定义`.panel`或`.panel-enter`类入场动画
+- ✅ **[已修复] 冒险日志/游戏统计 Modal 淡入动画**：log-modal-overlay 和 stats-modal-overlay 改为 opacity+visibility 过渡(0.28s ease)替代原 display:none→flex 瞬间切换 [优先级：P3] [commit dc41abf]
+- ⚠️ [P3] **面板内容无入场动画**：各面板（#status-panel、#skills-panel、#equip-panel）内容更新时无动画。当前这些面板在 sidebar 中始终可见，无 tab 切换机制 [优先级：P3]
 
 **优先级：** P3（体验优化，非阻塞性问题）
 
