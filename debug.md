@@ -4655,3 +4655,37 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 1. 优先修复WS连接问题（P1）- 这是阻塞所有游戏内操作的根本原因
 2. 考虑增加AP恢复机制或降低AP消耗速率（P1）
 
+
+---
+
+## 测试反馈 2026-03-29 23:19（第48轮）
+**测试项：** 8.3.2 操作确认提示
+**结果：** 失败
+
+**详情：**
+代码审查确认 `game.js` 中无任何操作确认机制：
+
+1. **`executeAction()` 函数** (game.js:312-329)
+   - 直接调用 `sendPlayerInput(text)`，无 `confirm()` 对话框
+   - 唯一检查：`action.cost > state.ap` 时阻止执行并显示系统消息
+   - 这是数值校验，非确认机制
+
+2. **`sendPlayerInput()` 函数** (game.js:359-364)
+   - 直接发送 WebSocket 消息：`state.ws.send(JSON.stringify({ action: "player_input", content: text }))`
+   - 无任何确认步骤
+
+3. **对比：编辑器有确认**
+   - `editor.html:566-572` 对删除操作有 `confirm()` 对话框
+   - 游戏主界面(game.js)无任何确认
+
+4. **实际影响**
+   - 所有预设行动（环顾四周/与NPC交谈等）点击后直接执行
+   - 自由行动输入提交后直接发送
+   - 玩家误触只能重新开始或等待GM叙事消化
+
+**优先级：** P3（容错机制，非阻塞）
+
+**建议：**
+- 高风险操作（如消耗AP的行动）添加 `confirm()` 确认
+- 或提供"撤销"机制，允许回退最近一次操作
+- 至少对消耗关键资源（如AP=1时）的行动添加确认提示
