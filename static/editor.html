@@ -247,6 +247,7 @@ function renderItemList() {
   if (!currentGame) {
     list.innerHTML = '<div style="padding:16px;color:var(--text2);font-size:13px">请先选择剧本</div>';
     title.textContent = '-';
+    addBtn.onclick = () => alert('请先选择剧本');
     return;
   }
 
@@ -587,9 +588,19 @@ function extractTitle(content) {
 }
 
 function syncRight() {
-  document.getElementById('right').classList.remove('active');
-  document.getElementById('right-meta').classList.remove('active');
-  document.getElementById('editor-pane').style.display = '';
+  if (currentTab === 'characters') {
+    // Show character panel, hide scene editor
+    document.getElementById('right').classList.add('active');
+    document.getElementById('right-meta').classList.remove('active');
+    document.getElementById('editor-pane').style.display = 'none';
+    document.getElementById('right-header').textContent = '角色详情';
+  } else {
+    // Show scene editor, hide character panel
+    document.getElementById('right').classList.remove('active');
+    document.getElementById('right-meta').classList.remove('active');
+    document.getElementById('editor-pane').style.display = '';
+    document.getElementById('right-header').textContent = '角色详情';
+  }
   document.getElementById('content-editor').value = '';
   document.getElementById('scene-title-input').value = '';
   document.getElementById('sb-item').textContent = '-';
