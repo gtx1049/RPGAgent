@@ -4140,6 +4140,45 @@ narrativeEl.scrollTop = narrativeEl.scrollHeight;
 
 第39轮测试完成。
 
+## 测试反馈 2026-03-29 18:05 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+
+测试项：`GET /api/exploration/{session_id}/clues` + `GET /api/exploration/{session_id}/summary` + `POST /api/exploration/{session_id}/explore/{site_id}` + `GET /api/exploration/{session_id}/sites`
+结果：**全部404 Not Found**
+
+详情：
+- `GET /api/exploration/{session_id}/clues` → **404** → `{"detail":"Not Found"}`
+- `GET /api/exploration/{session_id}/summary` → **404** → `{"detail":"Not Found"}`
+- `POST /api/exploration/{session_id}/explore/{site_id}` → **404** → `{"detail":"Not Found"}`
+- `GET /api/exploration/{session_id}/sites` → **404** → `{"detail":"Not Found"}`
+
+结论：探索系统（线索收集、地点探索）API端点全部未实现，路由返回404。建议优先级 **P2**（编辑器/剧情创作完成后可接入探索系统）。目前不影响核心游戏流程。
+
+第40轮测试完成。
+
+## 测试反馈 2026-03-29 18:19 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+
+测试项：9.1.2 节奏把控（紧张/平缓场景）
+结果：**部分通过**
+
+详情：
+- 示例剧本（第一幕·电话）节奏设计优秀：
+  1. **开场电话**：快节奏、神秘感，短促对话后立刻挂断建立悬念
+  2. **事务所环境**：平缓氛围节奏，丰富的空间描写（办公桌/书架/窗边/角落/门边地图）
+  3. **地图调查**：情报收集+悬念加深（海滨路13号孤立、废弃厂房、去年的地图）
+  4. **分支选项**：4个选项（立刻出发/查阅档案/检查装备/休息到天亮）提供不同节奏走向
+- 叙事质量高：环境细节（雨声/咖啡/旧纸张）与玩家决策自然融合，紧张与平缓交替
+- narrative_hint 字段嵌入选项描述，辅助叙事节奏（Pacing cue设计优秀）
+- ⚠️ **[P1] AP消耗过快阻塞调查节奏**：执行3次行动（接听电话→环顾四周→查看地图）后AP归零（3/3→0/3），玩家在调查关键期行动力耗尽，体验断裂
+- ⚠️ **[P2] REST API `POST /api/games/action` 响应无 `turn` 字段**：debug接口确认turn=3递增正常，但REST响应JSON中turn=null，前端如依赖此字段会出错（WebSocket替代方案不受影响）
+
+结论：叙事节奏设计本身质量高，但AP资源管理过于激进，P1级问题。建议：调查/探索类行动AP消耗降低至每2次行动消耗1点，或基础AP上限提升至5点。
+
+第41轮测试完成。
+
 ## 测试反馈 2026-03-29 18:42 (GMT+8)
 **测试角色：** 小刚（资深RPG玩家）
 **测试地址：** http://43.134.81.228:8080/
