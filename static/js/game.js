@@ -55,16 +55,15 @@ function appendGM(text, className = "gm-text") {
   const div = document.createElement("div");
   div.className = className;
   narrativeEl.appendChild(div);
-  let i = 0;
-  const SPEED = 12;
-  const run = () => {
-    if (i < text.length) {
-      div.textContent += text[i++];
-      narrativeEl.scrollTop = narrativeEl.scrollHeight;
-      setTimeout(run, SPEED);
-    }
-  };
-  run();
+  
+  // 渲染 markdown
+  if (typeof marked !== 'undefined') {
+    div.innerHTML = marked.parse(text);
+  } else {
+    // Fallback: 直接显示纯文本
+    div.textContent = text;
+  }
+  narrativeEl.scrollTop = narrativeEl.scrollHeight;
 }
 
 function appendPlayer(text) {
