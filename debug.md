@@ -3925,3 +3925,50 @@ narrativeEl.scrollTop = narrativeEl.scrollHeight;
 
 **优先级建议：** P3（影响长篇叙事阅读体验，但不影响核心流程）
 
+---
+
+## 测试反馈 2026-03-29 16:19 (GMT+8)
+
+**测试时间：** 2026-03-29 16:19 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** REST API 测试（curl）
+
+### 一、API 游戏操作测试
+
+#### 1. `POST /api/games/action` - 玩家行动 → **通过**
+- 发送 `{"session_id": "e07e42c305da", "action": "环顾四周"}` → **200 OK**
+- 返回GM叙事（场景描写+骰点判定结果）、options（5个选项，管道符分隔）、scene_cg=null
+- 行动力消耗正确：3→2
+- 回合递增正确：0→1
+
+#### 2. `GET /api/games/{session_id}/status` - 获取玩家状态 → **通过**
+- 有session时返回完整玩家状态：HP 100/100, stamina 100/100, AP 2/3, turn 1
+- 属性全10，inventory/equipped/skills全空，hidden_values含道德债务/精神状态
+
+#### 3. `GET /api/games/{session_id}/npcs` - 获取NPC列表 → **通过**
+- 当前场景无NPC，返回空数组 `[]`，符合预期
+
+#### 4. `GET /api/games/{session_id}/debug` - 获取调试信息 → **通过**
+- 返回完整debug数据：stats、hidden_values（含道德债务/精神状态的thresholds和current_effect）、action_power、pending_triggered_scenes、npc_relations、flags
+
+### 二、状态管理REST API验证
+
+| 维度 | 预期 | 实际 | 状态 |
+|------|------|------|------|
+| 初始AP | 3/3 | 3/3 | ✅ |
+| 行动后AP | 2/3 | 2/3 | ✅ |
+| 初始turn | 0 | 0 | ✅ |
+| 行动后turn | 1 | 1 | ✅ |
+| HP/stamina | 100/100 | 100/100 | ✅ |
+| hidden_values | 含道德债务/精神状态 | 正确 | ✅ |
+
+### 三、总结
+
+**[已测试] 游戏操作API全部正常** - status、debug、action、npcs四个核心接口行为符合预期，数据结构完整，状态更新逻辑正确。
+
+**[观察] action接口options字段** - 返回的options为管道符分隔字符串（如"拿起咖啡喝一口|查看案件卷宗|检查手机通话记录|走到窗边|继续等待（结束第一幕）"），前端WebSocket可能已做解析，REST API遗留格式兼容性无影响。
+
+**[观察] action_power REST vs WebSocket** - REST API正确消耗AP（3→2），但前端可能依赖WebSocket推送更新UI，当前测试未验证前端实际显示。
+
+
