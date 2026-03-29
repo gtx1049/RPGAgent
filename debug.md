@@ -4202,3 +4202,72 @@ narrativeEl.scrollTop = narrativeEl.scrollHeight;
 结论：响应式框架完整且可用，但顶栏按钮触控区域过小（低于44px标准），建议增大按钮尺寸。侧边栏标签文字可适当放大至12-13px。整体移动端体验良好，可正常浏览和点击游戏卡片。
 
 第42轮测试完成。
+
+---
+
+## 测试反馈 2026-03-29 18:57 (GMT+8)
+
+**测试时间：** 2026-03-29 18:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl API 测试
+**测试session：** 26e171feb01e
+
+### 一、压缩与上下文系统 API（2.10）
+
+| 端点 | 方法 | 结果 | 备注 |
+|------|------|------|------|
+| `/api/compression/{session_id}/compress` | POST | ❌ 404 Not Found | 接口未实现 |
+| `/api/compression/{session_id}/context-stats` | GET | ❌ 404 Not Found | 接口未实现 |
+| `/api/compression/{session_id}/compress/act-review` | POST | ❌ 404 Not Found | 接口未实现 |
+| `/api/compression/{session_id}/compress/rebuild-prompt` | POST | ❌ 404 Not Found | 接口未实现 |
+
+**结论：** 压缩与上下文系统 API 全部未实现（404），属于系统预留接口，暂不影响核心游戏流程。
+
+### 二、回放系统 API（2.11）
+
+| 端点 | 方法 | 结果 | 备注 |
+|------|------|------|------|
+| `/api/replay` | GET | ❌ 500 Internal Server Error | 与第27轮相同问题 |
+| `/api/replay/sessions` | GET | ❌ 500 Internal Server Error | 与第27轮相同问题 |
+
+**结论：** 回放系统 API 仍返回 500。第27轮 debug.md 记录此问题为"已修复"（commit 61119af），但当前服务器再次出现同类错误，推测服务器重启后修复未持久化或被覆盖。
+
+### 三、结局系统 API（2.12）
+
+| 端点 | 方法 | 结果 | 备注 |
+|------|------|------|------|
+| `/api/endings` | GET | ❌ 500 Internal Server Error | 同上 |
+| `/api/endings/progress` | GET | ❌ 500 Internal Server Error | 同上 |
+
+### 四、事件系统 API（2.13）
+
+| 端点 | 方法 | 结果 | 备注 |
+|------|------|------|------|
+| `/api/events` | GET | ❌ 500 Internal Server Error | 同上 |
+| `/api/events/active` | GET | ❌ 500 Internal Server Error | 同上 |
+| `/api/events/history` | GET | ❌ 500 Internal Server Error | 同上 |
+
+### 五、新发现：500错误复现问题
+
+**[P2] 回放/结局/事件系统 API 500错误重新出现**
+
+- **描述：** 第27轮debug.md记录此问题为"已修复"（61119af），但当前再次返回500
+- **可能原因：** 服务器重启后修复未持久化，或新引入代码覆盖了修复
+- **建议：** 检查 GameManager.get_active_gm() 方法是否在服务器重启后仍然存在，或将修复合并到主分支
+
+**详细错误链：**
+```
+replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError → 500
+```
+
+### 六、总结
+
+| 系统 | 状态 | 优先级 |
+|------|------|--------|
+| 压缩与上下文（2.10） | ❌ 404 未实现 | P3（预留接口） |
+| 回放系统（2.11） | ❌ 500 错误复现 | P2 |
+| 结局系统（2.12） | ❌ 500 错误复现 | P2 |
+| 事件系统（2.13） | ❌ 500 错误复现 | P2 |
+
+**影响评估：** 500错误涉及回放、结局、事件三个子系统，均为游戏外延展功能，不影响核心启动→行动→叙事循环。但如未来启用这些功能，将直接阻塞。
