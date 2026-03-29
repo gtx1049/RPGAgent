@@ -1086,6 +1086,12 @@ async function launchGame(gameId, playerName) {
       if (s.stamina !== undefined && s.max_stamina !== undefined) {
         updateStamina(s.stamina, s.max_stamina);
       }
+      // 初始化行动力（解决WS断开后AP不更新的问题）
+      if (debug.action_power !== undefined && debug.max_action_power !== undefined) {
+        updateAP(debug.action_power, debug.max_action_power);
+      } else if (s.action_power !== undefined && s.max_action_power !== undefined) {
+        updateAP(s.action_power, s.max_action_power);
+      }
     }
   } catch (_) { /* 非阻塞，后续WS消息会更新 */ }
 
