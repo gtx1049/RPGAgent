@@ -116,8 +116,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     session = manager.get_session(session_id)
 
     if not session:
-        await websocket.accept()
-        await websocket.send_json({"type": "error", "content": "会话不存在或已过期"})
+        # 不接受无效连接，直接关闭（避免握手后关闭的资源浪费）
         await websocket.close(code=4000)
         return
 
