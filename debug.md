@@ -4139,3 +4139,20 @@ narrativeEl.scrollTop = narrativeEl.scrollHeight;
 结论：成就系统API工作正常，接口返回数据结构清晰，无问题。
 
 第39轮测试完成。
+
+## 测试反馈 2026-03-29 18:05 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+
+测试项：`GET /api/exploration/{session_id}/clues` + `GET /api/exploration/{session_id}/summary` + `POST /api/exploration/{session_id}/explore/{site_id}` + `GET /api/exploration/{session_id}/sites`
+结果：**全部404 Not Found**
+
+详情：
+- `GET /api/exploration/{session_id}/clues` → **404** → `{"detail":"Not Found"}`
+- `GET /api/exploration/{session_id}/summary` → **404** → `{"detail":"Not Found"}`
+- `POST /api/exploration/{session_id}/explore/{site_id}` → **404** → `{"detail":"Not Found"}`
+- `GET /api/exploration/{session_id}/sites` → **404** → `{"detail":"Not Found"}`
+
+结论：探索系统（线索收集、地点探索）API端点全部未实现，路由返回404。建议优先级 **P2**（编辑器/剧情创作完成后可接入探索系统）。目前不影响核心游戏流程。
+
+第40轮测试完成。
