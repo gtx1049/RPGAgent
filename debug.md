@@ -3881,3 +3881,47 @@ HP —/—
 **结论：** 基础快捷触达已建立（bnav/行动按钮），但对高频预设操作缺乏键盘快捷方式，与同类RPG游戏体验存在差距。
 
 **优先级建议：** P3（影响资深RPG玩家的操作效率，但不影响核心流程）
+
+---
+
+## 测试反馈 2026-03-29 15:57 (GMT+8)
+
+**测试时间：** 2026-03-29 15:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** 代码分析 + Chrome DevTools Protocol 截图验证
+
+### 测试项：5.1 叙事区 - 叙事文字滚动
+
+**结果：部分通过**
+
+**详情：**
+
+| 检查项 | 状态 | 说明 |
+|--------|------|------|
+| 滚动容器配置 | ✅ | `#narrative { overflow-y: auto; scroll-behavior: smooth; }` |
+| 自动滚底机制 | ✅ | `appendGM/Player/System` 后均执行 `scrollTop = scrollHeight` |
+| 溢出时显示滚动条 | ✅ | `overflow-y: auto` 确保内容溢出时显示滚动条 |
+| 用户阅读历史检测 | ❌ [P3] | 无 `scroll` 事件监听，用户上滚阅读会被新内容拉回 |
+| 性能影响 | ⚠️ [P3] | 打字机效果每8ms更新一次 `scrollTop`，高频重排 |
+
+**代码证据：**
+```javascript
+// appendGM() 中打字机效果
+const run = () => {
+  if (i < html.length) {
+    // ...
+    narrativeEl.scrollTop = narrativeEl.scrollHeight;  // 每8ms执行
+    setTimeout(run, SPEED);
+  }
+};
+
+// appendPlayer/appendSystem
+narrativeEl.scrollTop = narrativeEl.scrollHeight;
+```
+
+**小刚体验建议：**
+作为资深RPG玩家，我习惯在长叙事中暂停回看前面的内容。当前系统的问题是：如果我在读一段重要剧情时有新的GM叙事出现，屏幕会自动跳到底部，体验较差。建议增加"阅读模式"：当用户手动滚动后，暂停自动滚动，直到用户主动点击"查看最新"或发送新行动。
+
+**优先级建议：** P3（影响长篇叙事阅读体验，但不影响核心流程）
+
