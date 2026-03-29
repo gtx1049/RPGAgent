@@ -4098,3 +4098,25 @@ narrativeEl.scrollTop = narrativeEl.scrollHeight;
 - ⚠️ [P3] 详情模态框无动画效果（直接显示无过渡），用户体验略显生硬
 
 第39轮测试完成。市场功能整体体验良好，核心流程完整。
+
+## 测试反馈 2026-03-29 17:38
+测试项：2.13 事件系统 `GET /api/events/history` + 2.11 回放系统 `GET /api/replay`
+结果：失败（P1）
+详情：
+- `GET /api/events/history` → **500 Internal Server Error**（参数session_id未传，后端未做空参数处理）
+- `GET /api/replay` → **500 Internal Server Error**（回放概览端点500错误）
+- `GET /api/replay/sessions` → **500 Internal Server Error**（已记录，第26轮发现）
+- `GET /api/games/juese1/meta` → **404 Not Found**（元信息端点不存在，剧本元信息API未实现）
+- `GET /api/games/juese1/setting` → **404 Not Found**（设置端点不存在）
+
+**问题分析**：
+- 事件系统：所有事件API（`/api/events`、`/api/events/active`、`/api/events/history`）均返回500，表明事件模块代码存在bug（可能是数据库连接、LLM调用或未捕获异常）
+- 回放系统：回放API全部返回500，与事件系统问题相似——后端模块异常未捕获
+- 剧本元信息：`/api/games/{game_id}/meta` 和 `/api/games/{game_id}/setting` 404，说明游戏管理API层面未完整实现
+
+**优先级建议**：
+- [P1] `/api/events` 系列端点500 → 需要后端修复事件模块异常处理
+- [P2] `/api/replay` 系列端点500 → 回放功能不可用，但非核心流程
+- [P2] `/api/games/{game_id}/meta`、`/api/games/{game_id}/setting` 404 → 剧本元信息API未实现，如需编辑器功能应优先开发
+
+第40轮测试完成。事件和回放系统500错误表明显然后端存在未修复的bug，建议优先排查。
