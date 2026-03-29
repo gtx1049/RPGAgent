@@ -1046,6 +1046,9 @@ async function launchGame(gameId, playerName) {
   state.sessionId = data.session_id;
   sceneTitleEl.textContent = data.scene?.title || gameId;
 
+  // 激活氛围光效（默认神秘氛围）
+  setAtmosphere(0);
+
   if (data.scene?.content) {
     appendGM(data.scene.content, "scene-header");
   }
