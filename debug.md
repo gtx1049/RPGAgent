@@ -48,9 +48,14 @@
 
 ### 测试项：3.1 WebSocket连接 - 无效session_id连接
 
-**结果：** [问题]
+**结果：** [已修复]
 
-**详情：**
+**修复详情：**
+- `server.py` WebSocket endpoint 中，无效session时直接 `await websocket.close(code=4000)` 而非先 `accept()` 再关闭
+- 修复后无效连接在握手阶段即被拒绝，不建立完整连接，避免资源浪费
+- **Commit**: `862b78e`
+
+**原详情：**
 - 无效session_id也成功建立WebSocket握手
 - 服务器返回 `{"type":"error","content":"会话不存在或已过期"}` 后关闭
 - 错误提示清晰，但行为不当（无效session也建立完整连接）
