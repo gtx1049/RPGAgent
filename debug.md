@@ -1,3 +1,28 @@
+## 修复记录 2026-03-30 03:07 (GMT+8)
+
+### [已修复] 回放/结局/事件系统 API 500错误
+
+**问题：** `/api/replay/*`、`/api/endings/*`、`/api/events/*` 所有端点返回 500 Internal Server Error
+
+**根因：** `replay.py`、`events.py`、`endings.py` 中的 `get_gm()` 函数错误导入：
+```python
+# 错误：导入的是 game_manager 模块本身
+from rpgagent.api.game_manager import game_manager
+gm = game_manager.get_active_gm()  # AttributeError: module 'game_manager' has no attribute 'get_active_gm'
+```
+`game_manager` 是模块文件名，`get_active_gm()` 是 `GameManager` 类的方法，需通过 `get_manager()` 单例访问。
+
+**修复：** 三文件统一改为：
+```python
+from rpgagent.api.game_manager import get_manager
+gm = get_manager().get_active_gm()
+```
+
+**文件：** `rpgagent/api/routes/replay.py`、`events.py`、`endings.py`
+**Commit:** `5ffcf24`
+
+---
+
 ## 测试反馈 2026-03-30 02:57 (GMT+8)
 
 **测试时间：** 2026-03-30 02:57 (GMT+8)
