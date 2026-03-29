@@ -3075,3 +3075,34 @@
 - `GET /api/games/{game_id}/scenes` → 404（未实现）
 - `GET /api/games/{game_id}/characters` → 404（未实现）
 → 剧本结构管理类API均未实现，但不影响启动核心流程（依赖debug接口获取状态）
+
+## 测试反馈 2026-03-29 09:58
+测试项：4.2 行动系统 - 预设行动按钮
+结果：⚠️ 发现1个问题
+
+### 预设行动按钮渲染 ✅ 通过
+- 5个预设行动按钮正确渲染：环顾四周(👀,1AP)、与NPC交谈(💬,1AP)、接近目标(🚶,1AP)、调查(🔍,1AP)、休整(🛌,免费)
+- 技能按钮单独分类，cost标注清晰
+- 自由行动按钮（✏️ 自由行动）使用金色边框突出
+
+### 按钮点击响应 ⚠️ REST API有bug
+- `POST /api/games/action` REST接口 → **500 Internal Server Error**（未实现/bug）
+- 但前端实际通过 **WebSocket `player_input`** 发送行动，该通道正常工作
+- **优先级：P2**（前端已绕过，核心流程未受影响）
+
+### 行动选项选择 ✅ 通过
+- `renderOptions()` 正确处理服务器下发选项，选项区显示/隐藏逻辑正确
+
+### 自由行动输入 ✅ 通过
+- 自定义行动输入框正常弹出，`#action-buttons` 变暗防止重复点击
+
+### 行动力检查 ✅ 通过
+- AP不足时显示 `【行动力不足】` 系统消息，执行前正确拦截
+
+### 视觉反馈 ✅ 通过
+- hover: border→accent, 背景变亮
+- active: scale(0.96) 缩放反馈
+- disabled: opacity 0.4
+- special-btn: 金色边框高亮
+
+**建议**：移除或实现 `POST /api/games/action` REST接口，避免误导（前端已用WebSocket替代）
