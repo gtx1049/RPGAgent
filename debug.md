@@ -5623,3 +5623,39 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 4. 断线时在UI添加"重新连接"按钮（类似"重新连接..."）
 5. 可区分"连接中/已断开/连接失败"三种状态，显示不同颜色徽章
 
+
+## 测试反馈 2026-03-30 06:57 (GMT+8)
+
+**测试时间：** 2026-03-30 06:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl API 测试
+
+### 测试项：9.1 叙事体验 - 结局多样性（分支走向）
+
+**结果：** [失败]
+
+**详情：**
+- 启动示例剧本 session（id: 9e08088328ab）成功
+- 结局/事件/回放系统 API **全部返回 500 Internal Server Error**：
+  - `GET /api/endings` → 500
+  - `GET /api/endings/progress` → 500
+  - `GET /api/endings/hidden` → 500
+  - `POST /api/endings/evaluate` → 500（携带有效session_id）
+  - `GET /api/replay` → 500
+  - `GET /api/replay/sessions` → 500
+  - `GET /api/replay/{session}/summary` → 500
+  - `GET /api/events` → 500
+
+**问题：**
+- 回放系统是追踪玩家分支路径的核心依赖，API 500 导致无法验证分支走向
+- 结局系统 API 500 导致无法评估结局多样性（每个剧本有多少种不同结局？）
+- debug.md 记录 commit 5ffcf24 已修复 game_manager 导入问题（`from rpgagent.api.game_manager import get_manager`），但服务器未部署该 commit（本地领先 origin/master 30 commits）
+- 本次测试结果与第29轮一致，问题未修复
+
+**优先级：** P1（回放/结局/事件系统 API 整体故障，阻塞叙事完整性验证）
+
+**建议：**
+1. 部署 commit 5ffcf24 及相关修复到服务器
+2. 验证回放系统能记录玩家每次选择的路径
+3. 验证结局系统能正确统计已解锁的结局数量

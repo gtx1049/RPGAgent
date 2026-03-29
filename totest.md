@@ -620,7 +620,20 @@
   - ⚠️ [P1] AP消耗过快：3次行动后AP归零（3/3→0/3），玩家在关键调查阶段行动力耗尽，体验断裂
 - [x] 悬念设置（抉择影响剧情） → **通过** [2026-03-29 21:19]
   - 示例剧本测试：选择"回拨电话"→忙音空号；选择"先休息"→时间跳转至第二幕·海滨路13号，场景/氛围随选择变化；叙事质量高，GM内心描写细腻；选项有策略维度（即时行动 vs 信息收集）
-- [ ] 结局多样性（分支走向）
+- [x] 结局多样性（分支走向） → **失败** [2026-03-30 06:57]
+  - 结局/事件/回放系统 API **全部返回 500 Internal Server Error**
+  - `GET /api/endings` → 500
+  - `GET /api/endings/progress` → 500
+  - `GET /api/endings/hidden` → 500
+  - `POST /api/endings/evaluate` → 500（携带有效session_id）
+  - `GET /api/replay` → 500
+  - `GET /api/replay/sessions` → 500
+  - `GET /api/replay/{session}/summary` → 500
+  - `GET /api/events` → 500
+  - 回放系统是追踪玩家分支路径的核心依赖，无法验证分支走向
+  - 结局系统无法评估结局多样性
+  - debug.md 记录 commit 5ffcf24 已修复 game_manager 导入问题，但服务器未部署该 commit（本地领先 origin/master 30 commits）
+  - 与第29轮结果一致，问题未修复
 
 ### 9.2 战斗/决策系统
 - [x] 策略深度（选项有策略考量） → **部分通过** [2026-03-29 22:38]
