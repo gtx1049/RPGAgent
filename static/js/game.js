@@ -990,6 +990,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Escape") {
       closeLogModal();
       closeAttrPanel();
+      closeAchPanel();
+      closeStatPanel();
+      closeCgGallery();
+      closeCgFull();
+      closeMobileSidebar();
     }
   });
   // 初始渲染行动按钮
@@ -1347,13 +1352,6 @@ function switchBottomTab(tab) {
       break;
   }
 }
-
-// ── Escape 键关闭抽屉 ────────────────────────────
-document.addEventListener("keydown", e => {
-  if (e.key === "Escape") {
-    closeMobileSidebar();
-  }
-});
 
 // ── 启动
 initSelectScreen();
