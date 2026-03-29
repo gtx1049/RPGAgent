@@ -5033,3 +5033,82 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 - 侧边栏始终显示：状态(HP/体力/AP)、技能(暂无)、装备(无)、NPC关系(暂无)、阵营(暂无)
 - 面板切换动画流畅（侧边栏滑入 0.28s，遮罩淡入 0.28s）
 - WS连接状态显示"连接中…"但实际WS连接有问题（P1级）
+
+## 测试反馈 2026-03-30 02:02 (GMT+8)
+
+**测试时间：** 2026-03-30 02:02 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl API 测试
+
+### 测试项：2.1 游戏管理 API - 剧本结构管理（PUT/GET setting/meta、场景CRUD、角色CRUD、CG）
+
+**结果：** 全部 404 Not Found
+
+**详情：**
+
+| API 端点 | 结果 | 详情 |
+|----------|------|------|
+| `PUT /api/games/example/meta` | ❌ 404 | 剧本元信息更新接口不存在 |
+| `GET /api/games/example/setting` | ❌ 404 | 剧本设置读取接口不存在 |
+| `PUT /api/games/example/setting` | ❌ 404 | 剧本设置更新接口不存在 |
+| `GET /api/games/example/scenes/scene_01` | ❌ 404 | 单个场景读取接口不存在 |
+| `PUT /api/games/example/scenes/scene_01` | ❌ 404 | 单个场景更新接口不存在 |
+| `DELETE /api/games/example/scenes/scene_01` | ❌ 404 | 场景删除接口不存在 |
+| `GET /api/games/example/characters/{char_id}` | ❌ 404 | 单个角色读取接口不存在 |
+| `PUT /api/games/example/characters/{char_id}` | ❌ 404 | 单个角色更新接口不存在 |
+| `GET /api/scenes/scene_01/cg` | ❌ 404 | 场景CG读取接口不存在 |
+| `POST /api/scenes/scene_01/cg/generate` | ❌ 404 | CG生成接口不存在 |
+
+**分析：**
+- 剧本结构管理 API（meta/setting/scenes/characters/cg）全套未实现
+- `GET /api/games/example/scenes` 和 `GET /api/games/example/characters` 在之前测试中已确认返回404
+- 当前 `/editor` 页面能显示场景和角色列表，说明编辑器前端依赖的 API 与 `/api/games/{id}/scenes` 等不是同一套
+- 剧本元信息、设置、场景、角色、CG 五大管理模块的 REST API 均缺失
+
+**优先级：** P2（编辑器核心功能依赖这些 API）
+
+**建议：**
+1. 实现剧本元信息 CRUD（meta/setting）
+2. 实现场景管理 CRUD（scenes/{scene_id}）
+3. 实现角色管理 CRUD（characters/{char_id}）
+4. 实现 CG 系统 API
+
+---
+
+### 测试项：2.6 日志系统 - 获取指定日志文件
+
+**结果：** 404（日志文件不存在）
+
+**详情：**
+- 新建的 session（id: b1bbcd011da2）调用 `GET /api/logs/{session_id}/test.log` 返回 HTTP 404, `{"detail":"日志文件不存在"}`
+- 行为正确：新 session 无历史日志文件，404 是合理响应
+- 注意：路径是 `/api/logs/{session_id}/{filename}` 而非 `/api/logs/{session_id}/files/{filename}`
+
+**优先级：** —（行为正确，无问题）
+
+---
+
+### 测试项：11.1 API 错误处理 - 无效输入校验
+
+**结果：** 通过
+
+**详情：**
+
+| 场景 | API 端点 | 结果 | 错误提示 |
+|------|----------|------|----------|
+| 无效 session_id | GET /api/games/invalid_session/debug | ✅ 404 | `{"detail":"会话不存在"}` |
+| 无效 game_id | POST /api/games/invalid_game/start | ✅ 404 | `{"detail":"剧本不存在: invalid_game"}` |
+| 缺少 body | POST /api/games/action (无body) | ✅ 422 | `{"detail":[{"type":"missing","loc":["body"]...}]}` |
+| 缺少必填字段 | POST /api/games/action ({}) | ✅ 422 | 同时告知 session_id 和 action 缺失 |
+
+**优先级：** —（通过，错误处理完善）
+
+**观察：**
+- REST API 错误处理已较完善：404/422 返回清晰 JSON 错误信息
+- ⚠️ [P2] 前端 UI 不显示 REST API 错误（无效game_id、无效session等不弹窗告知用户）
+
+---
+
+### 服务器健康状态
+- `/health` → `{"status":"ok","sessions":15}`，服务器运行正常

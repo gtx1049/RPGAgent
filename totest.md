@@ -1,6 +1,6 @@
 # RPGAgent 待测试功能清单
 
-> 最后更新：2026-03-29
+> 最后更新：2026-03-30
 > 项目地址：http://43.134.81.228:8080/
 
 ---
@@ -31,19 +31,20 @@
   - 无效game_id：422，返回 `{"detail":"剧本不存在: invalid_id"}`，错误提示清晰
 - [x] `GET /api/games/{game_id}` - 获取剧本结构 → **404 Not Found** [2026-03-29 10:03]
 - [x] `GET /api/games/{game_id}/meta` - 获取剧本元信息 → **404 Not Found（juese1/sanzhuxiaozhu/qinmo均返回404，meta/setting/scene/characters等子端点均未实现）** [2026-03-29 13:57]
-- [ ] `PUT /api/games/{game_id}/meta` - 更新剧本元信息
-- [ ] `GET /api/games/{game_id}/setting` - 获取剧本设置
-- [ ] `PUT /api/games/{game_id}/setting` - 更新剧本设置
+- [x] `PUT /api/games/{game_id}/meta` - 更新剧本元信息 → **404 Not Found** [2026-03-30 02:02]
+  - PUT /api/games/example/meta 返回404，所有game结构管理API均未实现
+- [x] `GET /api/games/{game_id}/setting` - 获取剧本设置 → **404 Not Found** [2026-03-30 02:02]
+- [x] `PUT /api/games/{game_id}/setting` - 更新剧本设置 → **404 Not Found** [2026-03-30 02:02]
 - [x] `GET /api/games/{game_id}/scenes` - 列出场景 → **404 Not Found（juese1/sanzhuxiaozhu/qinmo均返回404）** [2026-03-29 10:03]
-- [ ] `GET /api/games/{game_id}/scenes/{scene_id}` - 获取场景
-- [ ] `PUT /api/games/{game_id}/scenes/{scene_id}` - 更新场景
+- [x] `GET /api/games/{game_id}/scenes/{scene_id}` - 获取场景 → **404 Not Found** [2026-03-30 02:02]
+- [x] `PUT /api/games/{game_id}/scenes/{scene_id}` - 更新场景 → **404 Not Found** [2026-03-30 02:02]
 - [x] `POST /api/games/{game_id}/scenes` - 创建场景 → **404 Not Found（juese1返回404，game structure API未实现）** [2026-03-29 20:19]
-- [ ] `DELETE /api/games/{game_id}/scenes/{scene_id}` - 删除场景
+- [x] `DELETE /api/games/{game_id}/scenes/{scene_id}` - 删除场景 → **404 Not Found** [2026-03-30 02:02]
 - [x] `GET /api/games/{game_id}/characters` - 列出角色 → **404 Not Found** [2026-03-29 10:03]
-- [ ] `GET /api/games/{game_id}/characters/{char_id}` - 获取角色
-- [ ] `PUT /api/games/{game_id}/characters/{char_id}` - 更新角色
-- [ ] `GET /api/scenes/{scene_id}/cg` - 获取场景CG
-- [ ] `POST /api/scenes/{scene_id}/cg/generate` - 生成场景CG
+- [x] `GET /api/games/{game_id}/characters/{char_id}` - 获取角色 → **404 Not Found** [2026-03-30 02:02]
+- [x] `PUT /api/games/{game_id}/characters/{char_id}` - 更新角色 → **404 Not Found** [2026-03-30 02:02]
+- [x] `GET /api/scenes/{scene_id}/cg` - 获取场景CG → **404 Not Found** [2026-03-30 02:02]
+- [x] `POST /api/scenes/{scene_id}/cg/generate` - 生成场景CG → **404 Not Found** [2026-03-30 02:02]
 
 ### 2.2 游戏操作 (`/api/games`)
 - [x] `POST /api/games/action` - 玩家行动 → **通过** [2026-03-29 16:19]
@@ -91,7 +92,8 @@
 ### 2.6 日志系统 (`/api/logs/{session_id}`)
 - [x] `GET /api/logs/{session_id}` - 列出日志 → **通过（新session返回空数组）** [2026-03-29 16:38]
 - [x] `GET /api/logs/{session_id}/latest` - 获取最新日志 → **通过（返回 {"detail":"尚无冒险日志"}）** [2026-03-29 16:38]
-- [ ] `GET /api/logs/{session_id}/{filename}` - 获取指定日志
+- [x] `GET /api/logs/{session_id}/{filename}` - 获取指定日志 → **404（日志文件不存在）** [2026-03-30 02:02]
+  - 新session无日志文件，返回 `{"detail":"日志文件不存在"}`（HTTP 404），行为正确
 
 ### 2.7 CG系统 (`/api/sessions/{session_id}/cg`)
 - [x] `GET /api/sessions/{session_id}/cg` - 获取CG历史 → **通过（返回 {"count":0,"cg_list":[]}）** [2026-03-29 16:38]
@@ -617,9 +619,13 @@
 ## 十一、错误处理
 
 ### 11.1 API错误
-- [ ] 无效session_id
-- [ ] 无效game_id
-- [ ] 缺少参数
+- [x] 无效session_id → **通过** [2026-03-30 02:02]
+  - GET /api/games/invalid_session_abc/debug → HTTP 404, `{"detail":"会话不存在"}`，错误提示清晰
+- [x] 无效game_id → **通过** [2026-03-30 02:02]
+  - POST /api/games/invalid_game/start → HTTP 404, `{"detail":"剧本不存在: invalid_game"}`，错误提示清晰
+- [x] 缺少参数 → **通过** [2026-03-30 02:02]
+  - POST /api/games/action (空body) → HTTP 422, `{"detail":[{"type":"missing","loc":["body"],"msg":"Field required"...}]}`，详细告知缺少字段
+  - POST /api/games/action ({}) → HTTP 422, 同时告知session_id和action两个必填字段缺失
 - [ ] API Key未配置
 - [ ] LLM调用失败
 
