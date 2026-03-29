@@ -3634,3 +3634,29 @@ HP —/—
 - **P3**：`prompt` 默认值改为空或增加简短说明
 
 **关联已记录问题：** 无新增阻塞性问题，属于 P2/P3 体验改进。
+
+---
+
+## 测试反馈 2026-03-29 13:57 (GMT+8)
+
+**测试时间：** 2026-03-29 13:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl API 测试
+
+### 一、`GET /api/games/{game_id}/meta` 测试
+
+**测试项：** REST API — `GET /api/games/{game_id}/meta` — 获取剧本元信息
+**测试结果：** ❌ 404 Not Found
+
+**详情：**
+- `juese1` → HTTP 404, `{"detail":"Not Found"}`
+- `sanzhuxiaozhu` → HTTP 404, `{"detail":"Not Found"}`
+- `qinmo` → HTTP 404, `{"detail":"Not Found"}`
+
+**根因分析：**
+所有 `/api/games/{game_id}/*` 子端点（meta/setting/scenes/characters）均未实现，与已记录的 `/api/games/{game_id}/scenes`、`/api/games/{game_id}/characters` 返回 404 的表现一致。当前游戏元信息仅能通过 `POST /api/games/{game_id}/start` 启动响应中附带，或通过 WebSocket 连接后的 debug 面板获取。
+
+**优先级：** P2（已知架构限制，非新发现问题）
+
+**关联已记录问题：** 属于遗留架构演进问题，前端已迁移至 WebSocket 实时通信，REST API 部分端点未同步实现或已废弃。
