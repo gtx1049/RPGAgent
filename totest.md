@@ -134,7 +134,10 @@
 - [x] `GET /api/replay/sessions` - 列出回放会话 → **500 Internal Server Error（未修复）** [2026-03-29 18:57]
 - [x] `GET /api/replay/{session_id}` - 获取回放 → **500 Internal Server Error** [2026-03-30 00:57]
   - 使用有效session_id访问 `/api/replay/91682917044d` 返回500
-- [ ] `GET /api/replay/{session_id}/turn/{turn_num}` - 获取回合记录
+- [x] `GET /api/replay/{session_id}/turn/{turn_num}` - 获取回合记录 → **500 Internal Server Error** [2026-03-30 02:19]
+  - 新建session e38c4ab73daa 发起请求 `/api/replay/e38c4ab73daa/turn/0` 返回500
+  - 复用旧session 91682917044d 同样返回500
+  - 回放系统API整体故障，与第29轮结论一致
 - [x] `GET /api/replay/{session_id}/summary` - 获取回放摘要 → **500 Internal Server Error** [2026-03-30 00:57]
   - 访问 `/api/replay/91682917044d/summary` 返回500
 - [ ] `GET /api/replay/{session_id}/export` - 导出回放

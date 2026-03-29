@@ -5112,3 +5112,27 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 
 ### 服务器健康状态
 - `/health` → `{"status":"ok","sessions":15}`，服务器运行正常
+
+---
+
+## 测试反馈 2026-03-30 02:19 (GMT+8)
+
+**测试时间：** 2026-03-30 02:19 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+
+### 测试项：2.11 回放系统 - `GET /api/replay/{session_id}/turn/{turn_num}` - 获取回合记录
+
+**结果：** 失败（500 Internal Server Error）
+
+**详情：**
+- 新建session发起请求 `/api/replay/{session_id}/turn/0` 返回500
+- 复用旧session 91682917044d 同样返回500
+- 回放系统API整体故障，与第29轮结论一致
+- 回放/结局/事件系统API在第27轮曾标记为"已修复"，但当前再次返回500
+
+**优先级：** P2
+
+**建议：**
+- 检查回放系统后端实现，确认get_active_gm()方法问题是否彻底解决
+- 回放系统为游戏体验重要功能（玩家回放历史决策），建议优先修复
