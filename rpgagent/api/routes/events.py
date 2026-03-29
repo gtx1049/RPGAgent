@@ -12,8 +12,8 @@ router = APIRouter(prefix="/events", tags=["events"])
 
 
 def get_gm() -> "GameMaster":
-    from rpgagent.api.game_manager import game_manager
-    gm = game_manager.get_active_gm()
+    from rpgagent.api.game_manager import get_manager
+    gm = get_manager().get_active_gm()
     if not gm:
         raise HTTPException(status_code=404, detail="当前无活跃游戏")
     return gm
