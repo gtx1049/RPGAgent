@@ -5500,3 +5500,43 @@ document.addEventListener("keydown", e => {
 - 关联：2.11（回放系统）、2.12（结局系统）、2.13（事件系统）API 均返回500，属于同一类后端问题链
 优先级：P2（事件系统属于游戏辅助功能，但当前因回放/结局/事件三个系统同时500，建议后端统一排查）
 建议：后端统一排查 event/replay/ending 相关路由，可能是共享依赖（如数据库连接、LLM调用）故障
+
+## 测试反馈 2026-03-30 05:38 (GMT+8)
+
+**测试时间：** 2026-03-30 05:38 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl API + 代码审查（game.js/game.css）
+
+### 测试项：4.4 叙事显示 - CG缩略图显示
+
+**结果：** [部分通过（P3）]
+
+**详情：**
+- ✅ **CSS样式完整**：`game.css` 中 `.cg-thumb-wrapper`（居中，margin:12px）和 `.cg-thumb`（max-width:320px, max-height:200px, border-radius:8px, hover:scale(1.03)）样式定义完整
+- ✅ **HTML结构完整**：游戏页面包含 `#cg-overlay`（全屏CG视图）、`#cg-gallery-overlay`（CG画廊Modal）、`#cg-gallery-grid`（缩略图网格）、`#cg-gallery-empty`（空状态提示"暂无 CG 记录"）
+- ✅ **JS处理器完整**：`game.js:534-540` 处理 `scene_cg` WS消息类型，收到后：
+  - `appendGM()` 插入 `<div class="cg-thumb-wrapper"><img src="${msg.content}" class="cg-thumb" onclick="openCgGallery()" .../>`
+  - 自动调用 `openCgGallery()` 打开画廊
+- ✅ **CG历史API正常**：`GET /api/sessions/{session_id}/cg` → `{"count":0,"cg_list":[]}`（新session无CG，符合预期）
+- ✅ **画廊入口存在**：全屏CG视图（`#cg-overlay`）内有"📖 画廊"按钮（`#cg-open-gallery-btn`）可打开完整画廊
+- ❌ **CG生成API未实现**：测试 `POST /api/scenes/{id}/cg/generate` → 404；`POST /api/games/{id}/cg/generate` → 404（后端 generate 端点未实现，无法生成实际CG进行端到端测试）
+- ⚠️ [P3] **移动端无CG入口**：底部导航（bnav）仅含状态/技能/背包/菜单，无独立CG按钮；用户需依赖叙事区内联CG缩略图触发画廊，纯探索用户不够直观
+
+**CG生成→显示完整流程：**
+1. 后端生成CG图片（当前未实现，API 404）
+2. WS推送 `scene_cg` 消息（含图片URL）
+3. 前端 `appendGM()` 将CG缩略图插入叙事区
+4. 缩略图点击 → `openCgGallery()` → 画廊Modal
+5. 画廊内点击 → `showCgFull()` → 全屏视图
+
+**问题：**
+- CG生成API未实现，属于后端能力缺失，非前端问题
+- 移动端CG入口不够显著（P3体验问题）
+
+**优先级：** P3（基础设施完备，CG生成能力缺失影响端到端体验）
+
+**建议：**
+1. 后端实现 CG 生成端点（`POST /api/scenes/{scene_id}/cg/generate`）
+2. 移动端底部导航考虑增加CG入口（与成就/统计同级）
+3. CG生成前可考虑：叙事区显示"🎨 CG生成中..."占位提示

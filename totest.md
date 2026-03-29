@@ -302,7 +302,14 @@
   - 实际用途：WS连接失败时 `appendSystem("连接中断，请刷新页面重试。")`；日志面板加载失败提示
   - ✅ 样式与其他叙事元素区分明确；✅ 用于关键系统状态通知
   - ⚠️ [P3] 系统消息样式（dim+居中+背景）与玩家输入（dim+左边界）视觉相似，区分度不足
-- [ ] CG缩略图显示
+- [x] CG缩略图显示 → **部分通过（P3）** [2026-03-30 05:38]
+  - ✅ CSS `.cg-thumb-wrapper` / `.cg-thumb` 样式完整（max-width:320px, max-height:200px, border-radius, hover缩放效果）
+  - ✅ HTML结构完整：`#cg-overlay`(全屏)、`#cg-gallery-overlay`(画廊Modal)、`#cg-gallery-grid`、`#cg-gallery-empty`
+  - ✅ JS `scene_cg` 消息处理器：收到后 `appendGM()` 追加CG缩略图 + 自动打开画廊
+  - ✅ CG历史API正常：`/api/sessions/{id}/cg` 返回 `{"count":0,"cg_list":[]}`（新session无CG符合预期）
+  - ✅ 全屏视图有"📖 画廊"按钮可打开完整画廊
+  - ❌ CG生成API未实现：`/api/scenes/{id}/cg/generate` 和 `/api/games/{id}/cg/generate` 均404
+  - ⚠️ [P3] 移动端底部导航无CG入口（依赖叙事区内联缩略图触发）
 
 ---
 
@@ -317,7 +324,11 @@
   - ⚠️ [P3] 打字机效果期间每8ms执行一次scrollTop更新，高频重排影响性能
 - [ ] 新叙事自动定位
 - [ ] 历史叙事可回滚
-- [ ] CG缩略图点击
+- [x] CG缩略图点击 → **部分通过（P3）** [2026-03-30 05:38]
+  - ✅ `scene_cg` 消息处理时，`appendGM()` 插入的 `<img>` 标签正确绑定 `onclick="openCgGallery()"`
+  - ✅ `openCgGallery()` 函数存在且逻辑完整（`game.js:1199-1205`）：获取CG历史→渲染grid→显示overlay
+  - ✅ `showCgFull()` 函数存在（`game.js:1249`）：全屏展示CG
+  - ⚠️ [P3] 依赖CG生成API实现才能端到端测试（当前生成端点404）
 
 ### 5.2 行动按钮区
 - [x] 预设行动按钮渲染 → **通过** [2026-03-29 14:57]
