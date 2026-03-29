@@ -4570,35 +4570,18 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 
 ### 测试项：8.1 视觉体验 - 氛围光效渲染
 
-**结果：** 失败
+**结果：** 已修复
 
 **详情：**
 
-1. **[问题] 氛围光效完全不显示**
-   - 首页有两个光效元素：`#atmo-glow-1`（左上，400x400px）和 `#atmo-glow-2`（右下，500x500px）
-   - 浏览器运行时检查：`backgroundColor = rgba(0, 0, 0, 0)`（完全透明）
-   - CSS `opacity: 0.08` 无效——因为背景是透明的，再低的 opacity 也是透明的
+1. **[已修复] 氛围光效完全不显示**
+   - 根因：`setAtmosphere()` 函数从未被调用（game.js 中无任何调用点）
+   - 修复：commit 93d0ebf 在 `launchGame()` 成功后调用 `setAtmosphere(0)`，激活默认神秘氛围（#7b2d8e）
+   - 修复文件：`static/js/game.js` — 在 `state.sessionId = data.session_id` 后添加 `setAtmosphere(0)` 调用
 
-2. **[根因] `setAtmosphere()` 函数从未被调用**
-   - `setAtmosphere(index)` 定义于 `game.js:494`，根据场景切换氛围颜色（6种预设）
-   - 代码审查确认：整个 `game.js` 中无任何调用点
-   - 氛围光效是"建造好但从未开灯的房间"——基础设施完备，功能完全未激活
-
-3. **[代码结构分析]**
-   - ATMOS 数组定义了 6 种氛围配置：`神秘(#7b2d8e)/危险(#e94560)/宁静(#1a7a4a)/压迫(#8e44ad)/血腥(#c0392b)/寒冷(#1a5276)`
-   - `setAtmosphere()` 遍历两个光效元素并设置背景色
-   - 但没有触发条件——游戏启动后、WebSocket 收到 `scene_update` 后均未调用此函数
-
-4. **[影响评估]**
-   - 当前游戏场景没有氛围光效变化，视觉体验缺少一层沉浸感
-   - 代码已预留接口（`ATMOS` 数组 + `setAtmosphere` 函数），但激活机制缺失
-
-**优先级：** P3（不影响核心流程，但影响 RPG 沉浸感体验）
-
-**建议：**
-- 在游戏启动/场景切换时调用 `setAtmosphere()`，根据剧本或场景类型选择氛围
-- 或者在 WebSocket `scene_update` 消息处理中，根据 `msg.scene_type` 或 `msg.atmosphere` 字段触发氛围变化
-- 如果暂时不需要，可以移除这段死代码以减少维护负担
+2. **[已观察] 场景切换时氛围变化**
+   - 当前 server 未发送 atmosphere 字段，场景切换时氛围保持不变（默认神秘）
+   - 后续可扩展：在 `scene_change` 消息中携带 atmosphere 索引，实现动态氛围变化
 
 ---
 
