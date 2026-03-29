@@ -4284,3 +4284,20 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 - 代码层面已确认：grep 搜索 "undo|撤销|回退|后悔|confirm" 均无结果
 - 建议优先级 P3：添加操作确认弹窗（confirm）或撤销按钮机制，提升容错性
 - 实际游戏测试：点击预设行动"环顾四周"后直接发送，无任何确认提示
+
+## 测试反馈 2026-03-29 19:20
+测试项：5.5 状态指示（WebSocket连接状态、当前场景名称、回合数显示）
+结果：部分失败
+详情：
+- ❌ WebSocket连接状态：游戏启动后（REST API已创建session 3ca2b261d48c）ws-status仍显示红色"未连接"，WS未能成功建立连接
+  - 问题：前端game.js中WebSocket连接失败，导致实时状态更新通道中断
+  - 影响：所有WS专属功能（status_update、scene_change等消息类型）无法使用
+  - 优先级：P1（影响核心实时交互）
+- ❌ 当前场景名称：scene-title显示占位符"—"，未加载正确标题
+  - API响应已返回scene.title="第一幕·电话"，但前端未正确渲染
+  - 问题原因同WS连接失败：handleMessage中的scene_change消息无法到达
+  - 优先级：P2（影响场景上下文感知）
+- ✅ 回合数显示：turn-counter正确初始化为"第 0 回合"，格式正确
+  - HTML结构完整：<div class="turn-counter" id="turn-counter">第 0 回合</div>
+  - 代码逻辑正确：updateTurn()函数会将turn更新到DOM
+  - 优先级：已通过
