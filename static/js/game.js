@@ -57,13 +57,39 @@ function appendGM(text, className = "gm-text") {
   narrativeEl.appendChild(div);
   
   // 渲染 markdown
+  let html;
   if (typeof marked !== 'undefined') {
-    div.innerHTML = marked.parse(text);
+    html = marked.parse(text);
   } else {
-    // Fallback: 直接显示纯文本
-    div.textContent = text;
+    html = text.replace(/\n/g, '<br>');
   }
-  narrativeEl.scrollTop = narrativeEl.scrollHeight;
+  
+  // 打字机效果
+  const SPEED = 8;
+  let i = 0;
+  const tmpDiv = document.createElement('div');
+  div.appendChild(tmpDiv);
+  
+  const run = () => {
+    if (i < html.length) {
+      // 找到下一个 HTML 标签的完整内容
+      if (html[i] === '<') {
+        const tagEnd = html.indexOf('>', i);
+        if (tagEnd !== -1) {
+          i = tagEnd + 1;
+          tmpDiv.innerHTML = html.substring(0, i);
+          narrativeEl.scrollTop = narrativeEl.scrollHeight;
+          setTimeout(run, 0);
+          return;
+        }
+      }
+      i++;
+      tmpDiv.innerHTML = html.substring(0, i);
+      narrativeEl.scrollTop = narrativeEl.scrollHeight;
+      setTimeout(run, SPEED);
+    }
+  };
+  run();
 }
 
 function appendPlayer(text) {
