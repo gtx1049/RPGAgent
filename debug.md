@@ -4512,3 +4512,49 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 
 ---
 
+
+## 测试反馈 2026-03-29 22:05 (GMT+8)
+
+**测试时间：** 2026-03-29 22:05 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl API 测试
+
+### 测试项：2.3 存档系统 - 保存/加载游戏
+
+**结果：** 部分通过（保存成功，加载失败）
+
+**详情：**
+
+1. **[已测试] `POST /api/games/{session_id}/saves/{save_id}` - 保存游戏 → ✅ 通过**
+   - 新建 session 后调用 `POST /api/games/662dbd5cb00b/saves/test_save`
+   - 返回 `{"ok":true,"save_id":"test_save"}`，保存成功
+   - ⚠️ 路径为 `/api/games/...` 而非 totest.md 原记录的 `/api/sessions/...`
+
+2. **[已测试] `GET /api/games/{session_id}/saves` - 列出存档 → ✅ 正常（路径勘误）**
+   - 原 totest.md 记录为 404，但正确路径为 `/api/games/{session_id}/saves`
+   - 返回完整存档列表（autosave + 手动存档），含 id/slot/created_at 字段
+
+3. **[问题] `GET /api/games/{session_id}/saves/{save_id}/load` - 加载存档 → ❌ 500 Internal Server Error**
+   - 即使刚创建的存档，加载仍返回 500
+   - 后端尝试读取存档文件时失败（文件不存在或路径错误）
+
+4. **[问题] `GET /api/games/{session_id}/saves/autosave/load` - 加载自动存档 → ❌ 404 Not Found**
+   - `GET /api/games/{session_id}/saves/autosave` 返回 `has_autosave:true`（autosave 记录存在）
+   - 但 `autosave/load` 返回 `{"detail":"存档不存在"}`
+   - **根因推测**：autosave 记录和实际存档文件不同步，autosave 元数据存在但文件本身缺失
+
+5. **[观察] 存档文件可能未实际写入磁盘**
+   - 两次测试均显示：保存操作返回 `{"ok":true}`，但加载时找不到文件
+   - 可能是 save 操作只写了数据库/内存记录，但序列化存档数据未实际落盘
+   - 建议检查后端 `save_game` 和 `load_game` 的文件读写逻辑
+
+**优先级：** P2（存档功能是核心功能，但部分可用——列表和创建成功，仅加载失败）
+
+**建议：**
+- 检查后端存档文件实际存储路径和读取逻辑
+- 确认存档数据是否真正落盘（而非仅更新内存/数据库记录）
+- 统一 API 路径规范（当前混用 `/api/games/` 和 `/api/sessions/` 前缀）
+
+---
+
