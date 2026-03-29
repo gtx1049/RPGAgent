@@ -137,13 +137,13 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     await websocket.send_json({
         "type": "status_update",
         "extra": {
-            "hp": stats.hp,
-            "max_hp": stats.max_hp,
-            "stamina": stats.stamina,
-            "max_stamina": stats.max_stamina,
-            "action_power": stats.action_power,
-            "max_action_power": stats.max_action_power,
-            "moral_debt_level": moral.level if moral else "无",
+            "hp": stats.get("hp", 0),
+            "max_hp": stats.get("max_hp", 0),
+            "stamina": stats.get("stamina", 0),
+            "max_stamina": stats.get("max_stamina", 0),
+            "action_power": stats.get("action_power", 0),
+            "max_action_power": stats.get("max_action_power", 3),
+            "moral_debt_level": moral.get("level", "无") if isinstance(moral, dict) else moral.level,
             "turn": session.turn,
         },
     })
