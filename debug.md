@@ -7,21 +7,24 @@
 
 ### 测试项：4.3 状态管理 - 体力显示与更新
 
-**结果：** 部分通过
+**结果：** [已修复]
 
-**详情：**
+**修复详情：**
+- `stats/overview` 端点新增 `stamina` 字段返回：`f"{stats.get('stamina', 0)}/{stats.get('max_stamina', 0)}"`（commit d2def30）
+- `hp` 和 `action_power` 原本已存在于该端点；本次补充 `stamina` 字段使核心状态覆盖完整
+
+**详情（修复前）：**
 - ✅ `GET /api/games/{session_id}/status` 返回完整状态：`stamina: 100, max_stamina: 100`（字段完整，数值正确）
 - ✅ `GET /api/games/{session_id}/debug` 返回体力数据（`stats.stamina: 100, stats.max_stamina: 100`）
-- ❌ [P3] `GET /api/sessions/{session_id}/stats/overview` **不包含 stamina 字段**
-  - overview 仅含：`turn_count, current_scene, scene_title, current_day, current_period, level, gold`
-  - 缺少：`stamina, hp, action_power` 等核心状态字段
-  - 对比：完整 stats 接口返回 `overview` 外层无体力，但外层 combat/dialogue 等模块也无体力
+- ✅ [已修复] `GET /api/sessions/{session_id}/stats/overview` **已包含 stamina 字段**（commit d2def30）
+  - overview 现包含：turn, level, hp, **stamina**, action_power, moral_debt_level, moral_debt_value, gold, day, period, combat_rate, scene
+  - hp 和 action_power 原本已存在，本次新增 stamina 字段补全核心状态
 - ⚠️ [P3] 体力消耗机制未实际触发测试（需在游戏中触发战斗/长途移动等事件）
 
 **优先级：** P3（体验优化，overview 统计不完整但不影响核心游戏）
 
 **建议：**
-1. `stats/overview` 应补充 stamina、hp、action_power 等核心状态字段，使统计概览更完整
+1. ✅ `stats/overview` 已补充 stamina 字段（commit d2def30）
 2. 体力消耗机制建议后续通过实际游戏流程测试
 
 ---
