@@ -4356,3 +4356,14 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
   - [P4] 叙事区无节奏标记——长篇GM叙事无视觉分隔，新章节仅靠"───"分隔线
 
 建议：增加任务指引模块；选项可考虑加★/▲等优先级标记。
+
+## 测试反馈 2026-03-29 20:19
+测试项：2.1 游戏管理 - `POST /api/games/{game_id}/scenes` 创建场景
+结果：失败
+详情：
+- API响应：404 Not Found
+- 测试方法：使用 juese1 game_id 向 `POST /api/games/juese1/scenes` 发送请求
+- 返回内容：{"detail":"请求的资源不存在"}
+- 结论：创建场景 API 端点未实现，与 `GET /api/games/{game_id}/scenes` 返回 404 的问题一致
+- 优先级：P2（编辑器场景管理核心功能，但依赖于 game structure API 先完善）
+- 建议：先实现 `GET /api/games/{game_id}` 获取剧本结构端点，再实现场景 CRUD 系列接口
