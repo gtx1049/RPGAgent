@@ -4689,3 +4689,18 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 - 高风险操作（如消耗AP的行动）添加 `confirm()` 确认
 - 或提供"撤销"机制，允许回退最近一次操作
 - 至少对消耗关键资源（如AP=1时）的行动添加确认提示
+
+---
+
+## 修复 2026-03-29 16:41 (GMT+8)
+
+### [已修复] WebSocket连接后无初始状态问题
+
+**问题描述：** WS连接建立后没有发送欢迎消息或初始状态，客户端需要等待玩家发送行动才能收到任何反馈。
+
+**修复方案：** 
+1. 服务端 WS 连接成功后立即发送 `scene_update`、`status_update`、`connected` 三条消息
+2. 前端处理 `connected` 和 `scene_update` 消息类型
+3. 更新 `start.sh` 确保环境变量正确加载
+
+**Commit:** e1d75ae, 42a2b55
