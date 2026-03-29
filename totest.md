@@ -264,7 +264,11 @@
   - 数值+等级双通道：raw value + level name ("洁净")
 - [x] 回合数显示 → **通过** [2026-03-29 16:19]
   - REST API验证：初始turn=0，发送action后turn=1，递增正确
-- [ ] 技能列表显示
+- [x] 技能列表显示 → **部分通过** [2026-03-30 03:57]
+  - API `/api/games/{session_id}/status` 返回完整 `skills: []` 和 `skill_points: 0`
+  - API `/api/sessions/{session_id}/stats` 返回详细技能统计：`{"total_skills": 0, "total_skill_points_spent": 0, "skills": []}`
+  - 新角色技能为空时，UI应显示"暂无已学技能"（与装备显示逻辑一致）
+  - ⚠️ [P3] 新角色无技能，无法验证实际渲染效果；技能系统依赖游戏内事件触发，非初始可见
 - [x] 装备显示 → **通过** [2026-03-30 02:57]
   - API (`/api/games/{session_id}/status`) 返回正确的 equipped 数据结构：`{weapon: null, offhand: null, armor: null, accessory_a: null, accessory_b: null}`
   - UI 正确显示"无装备"空状态（attr-equipped 容器显示 `.attr-empty "无装备"`）
