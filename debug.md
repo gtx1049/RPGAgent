@@ -3451,3 +3451,40 @@ HP —/—
 - `.gm-text p` 段落间距 8px 略小，密集叙事时可考虑 12px（P3，视觉体验优化）
 
 **结论：** 叙事文字清晰度达到优秀标准，无阻塞问题。建议后续优化可聚焦于分隔线和系统消息的字体大小。
+
+---
+
+## 测试反馈 2026-03-29 20:19 (GMT+8)
+
+**测试时间：** 2026-03-29 20:19 (GMT+8)  
+**测试角色：** 小刚（资深RPG玩家）  
+**测试地址：** http://43.134.81.228:8080/  
+**测试方式：** Playwright DOM/CSS 分析
+
+### 一、8.3 交互体验 - 按钮悬停与点击反馈
+
+**测试项：** 8.3.1 按钮悬停反馈 + 8.3.2 按钮点击反馈 + 8.3.3 选中状态显示  
+**结果：** ✅ 全部通过
+
+**详情：**
+
+通过 Playwright 获取页面 CSS 样式规则，确认以下视觉反馈机制完善：
+
+1. **悬停反馈（:hover）**
+   - `.game-card:hover` → border-color: accent(#e94560), background: panel(#16213e) ✅
+   - `.action-btn:hover` → border-color: accent, color: white, background: bg-input ✅
+   - `.btn-primary:hover` → opacity: 0.85 ✅
+   - `.action-btn.skill-btn:hover` → border-color: gold(#f0c040) ✅
+   - `.action-btn.special-btn:hover` → background: rgba(240,192,64,0.1) ✅
+
+2. **点击反馈（:active）**
+   - `.action-btn:active` → transform: scale(0.96) - 按下缩小 ✅
+   - `.option-btn:active` → transform: scale(0.98) ✅
+   - 反馈明确，手感良好
+
+3. **选中状态（.active）**
+   - `bnav-btn.active` class 存在，bnav-status 初始即有 active class ✅
+   - CSS 样式表明 active 态有独立样式定义 ✅
+
+**无阻塞问题。**  
+*P3 优化建议：可考虑为不同类型按钮的 hover 添加差异化视觉强度（如 primary/secondary/danger 按钮层级），目前所有按钮 hover 效果较为一致。*
