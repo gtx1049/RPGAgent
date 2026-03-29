@@ -380,7 +380,13 @@ class GameMaster:
         from agentscope.message import Msg
         msg = Msg(name="玩家", content=user_prompt, role="user")
         response = await self.dm.reply(msg)
-        llm_output = response if isinstance(response, str) else str(response)
+        # 提取 content 字段：response 可能是 str 或 Msg 对象
+        if isinstance(response, str):
+            llm_output = response
+        elif hasattr(response, 'content'):
+            llm_output = response.content
+        else:
+            llm_output = str(response)
 
         self.session.add_history("gm", llm_output)
 
