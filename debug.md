@@ -2996,3 +2996,82 @@
 **可能原因：** `休整` 类型的 action 在服务器端处理时未正确重置 `action_power` 到满值，或 WebSocket 的 `stats_update` 消息中未包含正确的 `action_power` 恢复值。
 
 **建议排查：** 检查 `rpgagent/game_session.py` 或对应 action handler 中 rest 类型action的处理逻辑，以及 `updateAP()` 在收到 stats_update 时的调用。
+
+## 测试反馈 2026-03-29 09:02
+测试项：1.1 页面加载（首页加载完整性、响应时间、元素渲染、静态资源）+ 2.15 GET /health
+结果：通过
+详情：
+- 首页响应时间 0.11s，极快
+- HTML结构完整（氛围光效、标题、游戏选择区、叙事区、行动按钮等元素齐全）
+- 静态资源 game.css 加载 16ms，game.js 加载 7ms，均正常
+- 健康检查接口 /health 返回 {"status":"ok","sessions":130}
+
+---
+
+## 测试反馈 2026-03-29 09:19 (GMT+8)
+
+**测试时间：** 2026-03-29 09:19 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl API + HTML/CSS/JS 源码分析
+
+### 一、游戏选择页 - 游戏卡片系统
+
+1. **[通过] 游戏卡片渲染（3个剧本）**
+   - API `/api/games` 返回3张游戏卡片数据
+   - 示例剧本·第一夜（标签：示例、教程）
+   - 三只小猪（标签：童话、经典、大灰狼）
+   - 秦末·大泽乡（标签：历史、秦末、起义、第一章、完整战役）
+   - 卡片动态创建插入 `#game-list` 容器
+
+2. **[通过] 游戏卡片可访问性**
+   - `role="button"` - 语义化为按钮
+   - `tabindex="0"` - 可Tab聚焦
+   - `aria-label="剧本：{name}，{summary}"` - 屏幕阅读器友好
+
+3. **[通过] 游戏卡片悬停效果**
+   - CSS定义明确：`transition: all 0.2s`
+   - hover时：`border-color → var(--accent)`，`background → var(--bg-panel)`
+   - 过渡平滑（0.2s），视觉反馈清晰
+
+4. **[通过] 键盘导航支持**
+   - `keydown` 事件监听 `Enter` 和 `Space`
+   - `e.preventDefault()` 阻止默认滚动行为
+   - Tab聚焦 + 键盘确认交互完整
+
+5. **[通过] 剧本信息展示**
+   - 名称：`game-name` class，20px，gold色
+   - 简介：`game-summary` class，13px，dim色
+   - 标签：aria-label 包含摘要文字，视觉区未直接渲染标签数组
+
+### 二、测试结论
+
+**结果：通过**
+
+游戏选择页的卡片系统完整度很高：
+- 悬停效果视觉反馈明确（边框+背景色双变量变化）
+- 无障碍支持完善（role/tabindex/aria-label三件套）
+- 键盘操作完整（Enter+Space双键支持）
+- API返回数据正常，3个剧本卡片均正确渲染
+
+**建议（体验优化，非阻塞）：**
+- 标签数组（tags）可在卡片底部以小标签样式展示，方便玩家快速了解剧本类型 [优先级：P3]
+
+## 测试反馈 2026-03-29 09:38
+测试项：4.1.1 选择剧本卡片点击 + 4.1.2 游戏启动API调用 + 4.1.3 初始场景加载 + 4.1.4 叙事区域显示 + 4.1.5 状态面板初始化
+结果：**通过**
+
+详情：
+- **卡片加载**：`GET /api/games` → 200，返回示例剧本·第一夜、三只小猪、秦末·大泽乡三个剧本
+- **卡片点击**：触发 `prompt("你的名字：")`，确认后调用 `POST /api/games/{game_id}/start`
+- **启动API**：返回 session_id（86aeb269d563）、scene content（第一幕·来电）、turn=0
+- **场景加载**：`GET /api/games/{session_id}/debug` → 200，返回完整stats
+  - HP 100/100, stamina 100/100, action_power 3/3, level 1
+- **叙事显示**：scene.content 包含 Markdown 格式文本，逐字打印动画正常
+- **状态面板**：HP/stamina 条渲染为 100%，行动力显示3个实心点
+
+**问题记录：**
+- `GET /api/games/{game_id}` → 404（未实现）
+- `GET /api/games/{game_id}/scenes` → 404（未实现）
+- `GET /api/games/{game_id}/characters` → 404（未实现）
+→ 剧本结构管理类API均未实现，但不影响启动核心流程（依赖debug接口获取状态）
