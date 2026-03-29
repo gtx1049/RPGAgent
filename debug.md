@@ -5577,3 +5577,49 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
   overlay.style.removeProperty('display');
   ```
 - 同时在 `closeCgFull()` 和 `closeCgGallery()` 中确保正确恢复隐藏状态
+
+## 测试反馈 2026-03-30 06:38 (GMT+8)
+
+**测试时间：** 2026-03-30 06:38 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** Browser automation (agent-browser) + 代码审查
+
+### 测试项：11.2.1 网络断开提示
+
+**结果：** [失败 P2]
+
+**详情：**
+
+通过 agent-browser 实际测试 + 代码审查验证了网络断开处理机制：
+
+**首页加载时间测试（curl）：**
+- HTTP 200，响应时间 56ms
+- DNS: 0.4ms，连接建立: 1.4ms，首字节: 54ms
+- 性能优秀，无性能问题
+
+**WS断开处理实测：**
+- 当前状态：WS显示"未连接"红色徽章（之前session残留）
+- 点击"环顾四周"按钮后：❌ 叙事区无任何变化，操作被静默忽略
+- 代码分析（game.js）：
+  - `sendPlayerInput()` 第407行：`if (!state.connected) return;` → **静默吞掉用户操作**
+  - `ws.onclose`（第447行）：仅 `setWSStatus("disconnected")`，**无系统消息**
+  - `ws.onerror`（第450行）：`appendSystem("连接中断，请刷新页面重试。")` ✅
+  - **无auto-reconnect逻辑**
+  - **无重试按钮UI**
+
+**问题：**
+1. WS意外断开（close事件）时，叙事区无任何提示，用户不知道连接已断开
+2. 用户操作在断线状态下被静默吞掉，无法判断是"正在等待"还是"已失败"
+3. 无自动重连机制，需要用户手动刷新页面
+4. 无专用"重试连接"按钮，体验断裂
+
+**优先级：** P2（影响核心操作流畅度）
+
+**建议：**
+1. `ws.onclose` 应触发系统消息提示（参考 `ws.onerror` 的处理方式）
+2. `sendPlayerInput()` 断线时应在叙事区显示明确提示（而非静默return）
+3. 添加自动重连逻辑（指数退避重试，如每3s/6s/12s尝试一次）
+4. 断线时在UI添加"重新连接"按钮（类似"重新连接..."）
+5. 可区分"连接中/已断开/连接失败"三种状态，显示不同颜色徽章
+
