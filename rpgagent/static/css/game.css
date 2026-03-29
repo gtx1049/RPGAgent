@@ -520,17 +520,21 @@ body {
 
 /* ── 冒险日志 Modal ─────────────────────── */
 #log-modal-overlay {
-  display: none;
+  display: flex;
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.75);
   z-index: 200;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.28s ease, visibility 0.28s;
 }
 
 #log-modal-overlay.open {
-  display: flex;
+  opacity: 1;
+  visibility: visible;
 }
 
 #log-modal {
@@ -849,17 +853,21 @@ body {
 
 /* ── 游戏统计 Modal ───────────────────── */
 #stats-modal-overlay {
-  display: none;
+  display: flex;
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.7);
   z-index: 200;
   justify-content: center;
   align-items: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.28s ease, visibility 0.28s;
 }
 
 #stats-modal-overlay.active {
-  display: flex;
+  opacity: 1;
+  visibility: visible;
 }
 
 #stats-modal {
