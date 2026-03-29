@@ -157,8 +157,10 @@
 - [x] `GET /api/events` - 世界事件概览 → **500 Internal Server Error（未修复）** [2026-03-29 18:57]
 - [x] `GET /api/events/active` - 活跃事件 → **500 Internal Server Error（未修复）** [2026-03-29 18:57]
 - [x] `GET /api/events/history` - 事件历史 → **500 Internal Server Error（未修复）** [2026-03-29 18:57]
-- [ ] `POST /api/events/evaluate` - 评估事件
-  - ⚠️ `GET /api/events`、`GET /api/events/active`、`GET /api/events/history` 已在第29轮标记为500，本轮验证仍为500
+- [x] `POST /api/events/evaluate` - 评估事件 → **500 Internal Server Error（未修复）** [2026-03-30 05:19]
+  - 携带有效session_id发送POST请求返回500
+  - `GET /api/events`、`GET /api/events/active`、`GET /api/events/history` 均已在第29轮标记为500，本轮验证POST方法同为500
+  - 事件系统API整体故障（2.11回放/结局/事件系统 API 500问题链）
 
 ### 2.14 市场系统 (`/api/market`)
 - [x] `GET /api/market/games` - 市场游戏列表 → **正常** [2026-03-29 08:39]
