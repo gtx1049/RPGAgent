@@ -4949,3 +4949,44 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 2. 为回放/结局/事件系统添加统一的异常处理，避免500传播
 3. 或明确标记这些功能为"开发中"，暂时从API文档隐藏避免用户困惑
 
+
+## 测试反馈 2026-03-30 01:19 (GMT+8)
+
+**测试时间：** 2026-03-30 01:19 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** curl API 测试
+
+### 测试项：2.3 存档系统 - 手动存档加载 / 自动存档加载
+
+**结果：** [未修复 - P1]
+
+**测试过程：**
+1. 创建新游戏 session（session_id: c7fb36110dbc，示例剧本）
+2. 创建手动存档：`POST /api/games/c7fb36110dbc/saves/test_save` → `{"ok":true,"save_id":"test_save"}` ✅
+3. 列出存档：`GET /api/games/c7fb36110dbc/saves` → 返回包含 test_save 和大量 autosave 的列表 ✅
+4. 加载手动存档：`GET /api/games/c7fb36110dbc/saves/test_save/load` → **500 Internal Server Error** ❌
+5. 加载自动存档：`GET /api/games/c7fb36110dbc/saves/autosave/load` → **404** `{"detail":"存档不存在"}` ❌
+
+**详情：**
+- ✅ 存档创建功能正常：新建存档返回 `{"ok":true}`
+- ✅ 存档列表正常：返回完整存档列表（手动存档 + 大量 autosave）
+- ❌ 手动存档加载失败：返回 `Internal Server Error`（500），服务器内部错误
+- ❌ 自动存档加载失败：返回 404 `{"detail":"存档不存在"}`，HTTP code = 404
+  - autosave 记录存在（`has_autosave: true`），但文件不存在或读取失败
+  - autosave 记录和实际存档文件不同步
+
+**问题分析：**
+- 存档系统存在文件持久化问题：存档记录（metadata）存在，但实际存档文件不存在
+- 可能原因：存档数据未实际写入磁盘，或写入路径不正确
+- `POST /api/games/{sid}/saves/{id}` 返回成功但文件未真正创建
+- 多个 autosave 记录显示同一个 session（c7fb36110dbc）的 autosave 存在，但加载时文件不存在
+
+**优先级：** P1（核心功能，存档是RPG游戏的命脉功能）
+
+**建议：**
+1. 检查存档文件写入逻辑：确认 `POST /api/games/{sid}/saves/{id}` 后文件是否真正写入
+2. 检查存档文件路径配置是否正确
+3. autosave 应该在每次行动前自动创建，当前行为可能是：创建了记录但未写文件
+4. 或者：load 接口在读取存档文件时路径错误，导致文件找不到
+
