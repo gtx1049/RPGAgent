@@ -1267,14 +1267,26 @@ function switchBottomTab(tab) {
     sidebar.classList.add("open");
     const overlay = $("sidebar-overlay");
     if (overlay) overlay.classList.add("visible");
-    // 滚动到对应面板
+    // 滚动到对应面板并添加入场动画
     setTimeout(() => {
       const PANEL_IDS = {
-        status: sidebar.querySelector(".panel") ? sidebar.querySelector(".panel").parentElement.id : null,
-        skills: "skills-list",
-        inventory: "equip-list",
+        status: "status-panel",
+        skills: "skills-panel",
+        inventory: "equip-panel",
         menu: "log-btn",
       };
+      const targetId = PANEL_IDS[tab];
+      if (targetId) {
+        const target = sidebar.querySelector("#" + targetId);
+        if (target) {
+          // 强制重绘后添加入场动画
+          target.classList.remove("panel-enter");
+          void target.offsetWidth;
+          target.classList.add("panel-enter");
+          // 平滑滚动到目标
+          sidebar.scrollTo({ top: target.offsetTop - 8, behavior: "smooth" });
+        }
+      }
     }, 50);
   }
 
