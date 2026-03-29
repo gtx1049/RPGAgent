@@ -265,7 +265,12 @@
 - [x] 回合数显示 → **通过** [2026-03-29 16:19]
   - REST API验证：初始turn=0，发送action后turn=1，递增正确
 - [ ] 技能列表显示
-- [ ] 装备显示
+- [x] 装备显示 → **通过** [2026-03-30 02:57]
+  - API (`/api/games/{session_id}/status`) 返回正确的 equipped 数据结构：`{weapon: null, offhand: null, armor: null, accessory_a: null, accessory_b: null}`
+  - UI 正确显示"无装备"空状态（attr-equipped 容器显示 `.attr-empty "无装备"`）
+  - 装备槽位与 SLOT_NAMES 映射正确：weapon→武器, offhand→副手, armor→护甲, accessory→饰品
+  - 装备段在属性面板中正确渲染（位于"战斗属性"下方，"已学技能"上方）
+  - 测试方式：browser agent 设置 sessionId 后调用 `openAttrPanel()` 验证渲染结果
 
 ### 4.4 叙事显示
 - [x] GM叙事文本渲染 → **❌ 阻塞** [2026-03-29 14:57]

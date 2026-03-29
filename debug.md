@@ -1,3 +1,30 @@
+## 测试反馈 2026-03-30 02:57 (GMT+8)
+
+**测试时间：** 2026-03-30 02:57 (GMT+8)
+**测试角色：** 小刚（资深RPG玩家）
+**测试地址：** http://43.134.81.228:8080/
+**测试方式：** Browser automation (agent-browser)
+
+### 测试项：4.3 状态管理 - 装备显示
+
+**结果：** [通过]
+
+**详情：**
+- API `/api/games/{session_id}/status` 返回正确的 equipped 数据结构：
+  ```json
+  {"weapon": null, "offhand": null, "armor": null, "accessory_a": null, "accessory_b": null}
+  ```
+- 属性面板正确渲染"无装备"空状态
+- 装备槽位映射正确：weapon→武器, offhand→副手, armor→护甲, accessory_a/b→饰品
+- 装备段位于属性面板正确位置（战斗属性下方，已学技能上方）
+- 关闭按钮(×)功能正常
+
+**问题：** 无
+
+**优先级：** N/A
+
+---
+
 ## 测试反馈 2026-03-30 00:38 (GMT+8)
 
 **测试时间：** 2026-03-30 00:38 (GMT+8)
