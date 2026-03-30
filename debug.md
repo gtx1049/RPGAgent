@@ -1,6 +1,6 @@
 # RPGAgent 问题追踪
 
-> 最后更新：2026-03-31 21:42 (GMT+8)
+> 最后更新：2026-03-31 07:38 (GMT+8)
 > 整理策略：只保留活跃问题，已通过/已修复的测试记录已归档到 git commit 历史
 
 ---
@@ -44,7 +44,7 @@
 | P3-7 | NPC关系系统缺损 | 2026-03-31 07:08 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/e5e8a21) - 剧本hidden_value_actions补充relation_delta配置，game_master.py新增talk_to_npc关键词推断 |
 | P3-8 | 编辑器/游戏无自动保存机制 | 2026-03-30 23:05 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/12a2617)（游戏侧120秒后台存档） |
 | P3-9 | 场景删除API路径勘误（旧路径404，实际路径可用） | 2026-03-30 12:38 | ✅ 已关闭 - commit 21fe6b1 |
-| P3-10 | API路径不一致（sessions/games前缀混用） | 2026-03-30 12:57 | 待规范 |
+| P3-10 | API路径不一致（sessions/games前缀混用） | 2026-03-31 07:38 | ⚠️ 未修复 - 存档用`/api/games/{id}/saves`，统计/成就用`/api/sessions/{id}/*`，前端需区分调用 |
 | P3-11 | /health接口无内存监控信息 | 2026-03-30 15:38 | [已修复](https://github.com/gtx1049/RPGAgent/commit/1ee96e4) |
 | P3-12 | 行动前无confirm()确认对话框 | 2026-03-30 20:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/1d2221d) |
 | P3-13 | 编辑器场景创建+按钮无响应 | 2026-03-30 23:42 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/97141d2) - 页面加载时自动选中第一个剧本，+按钮立即可用 |
@@ -1656,4 +1656,63 @@
 **服务器状态**（测试时）：
 - sessions: 3（活跃session数正常）
 - memory: rss=145MB
+
+
+## 测试反馈 2026-03-31 07:38（第92轮 - 小刚测试）
+
+### 测试项：P3-10 API路径不一致（sessions/games前缀混用）复测
+
+**结果**：⚠️ **P3问题仍存在（未修复）**
+
+**测试session**：994693f49fa5（示例剧本·第一夜）
+
+**验证结果**：
+| 端点 | HTTP | 结果 |
+|------|------|------|
+| `/api/games/{sid}/status` | 200 | ✅ 返回HP/体力/AP/回合 |
+| `/api/games/{sid}/debug` | 200 | ✅ 返回完整调试信息 |
+| `/api/games/{sid}/saves` | 200 | ✅ 返回存档列表（数组） |
+| `/api/games/{sid}/achievements` | **404** | ❌ 路径不存在 |
+| `/api/sessions/{sid}/stats` | 200 | ✅ 返回完整统计 |
+| `/api/sessions/{sid}/achievements` | 200 | ✅ 返回成就列表 |
+| `/api/sessions/{sid}/stats/overview` | 200 | ✅ 返回统计概览 |
+| `/api/sessions/{sid}/saves` | **404** | ❌ 路径不存在 |
+
+**问题分析**：
+- **存档系统**：使用 `/api/games/{id}/saves`
+- **统计/成就系统**：使用 `/api/sessions/{id}/stats|achievements`
+- **游戏状态**：使用 `/api/games/{id}/status|debug`
+- 同一 session_id 资源，API路径前缀不统一（games vs sessions），前端调用需区分记忆
+
+**优先级**：P3（体验问题，不影响功能，但增加认知负担）
+
+**建议**：
+1. 统一所有 session 相关 API 为 `/api/games/{session_id}/*` 前缀
+2. 或统一为 `/api/sessions/{session_id}/*` 前缀
+3. 在文档中明确标注路径规范，避免后续开发继续混用
+
+---
+
+### 测试项：P1-4 探索系统写入API复测
+
+**结果**：✅ **P1-4已修复（确认生效）**
+
+**测试session**：994693f49fa5（示例剧本·第一夜）
+
+**验证结果**：
+- `GET /api/exploration/{sid}/sites` → 200，返回探索地点列表 ✅
+- `POST /api/exploration/{sid}/explore/chen_sheng_will` → 200，返回探索结果 ✅
+- 探索成功后发放奖励：铁剑×1、金币30、吴广秘密藏匿点情报×1 ✅
+- 服务器状态：sessions=3, memory rss=145MB ✅
+
+**结论**：P1-4探索系统写入API已完全修复并验证生效，服务器已部署最新commit
+
+---
+
+### 系统健康检查
+
+**结果**：✅ 通过
+- `/health` → sessions=3, memory rss=145MB, python_heap=0 ✅
+- 所有核心API响应正常
+- 服务器运行稳定
 
