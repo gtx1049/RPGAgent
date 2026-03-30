@@ -128,12 +128,28 @@ async def player_action(req: PlayerActionRequest):
         # 返回相对路径，前端拼接 BASE_URL
         scene_cg_url = session.gm.session.scene_cg_path
 
+    # 获取当前状态（解决P2：action响应缺状态字段）
+    stats = session.gm.stats_sys.get_snapshot()
+    hp = stats.get("hp", 0)
+    max_hp = stats.get("max_hp", 0)
+    stamina = stats.get("stamina", 0)
+    max_stamina = stats.get("max_stamina", 0)
+    action_power = stats.get("action_power", 0)
+    max_action_power = stats.get("max_action_power", 0)
+
     return ActionResponse(
         session_id=req.session_id,
         narrative=narrative,
         options=[],  # 从cmd解析
         hidden_value_changes={},
         relation_changes={},
+        hp=hp,
+        max_hp=max_hp,
+        stamina=stamina,
+        max_stamina=max_stamina,
+        action_power=action_power,
+        max_action_power=max_action_power,
+        turn=session.turn,
         scene_change=scene.id if scene else None,
         command=cmd,
         scene_cg=scene_cg_url,

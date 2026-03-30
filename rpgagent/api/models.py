@@ -162,6 +162,14 @@ class ActionResponse(BaseModel):
     scene_change: Optional[str] = None
     command: Optional[dict] = None
     scene_cg: Optional[str] = None  # CG 图片 URL（若有新生成）
+    # ── 当前状态（解决前端无法从action响应获取状态的问题）────────────
+    hp: int = 0
+    max_hp: int = 0
+    stamina: int = 0
+    max_stamina: int = 0
+    action_power: int = 0
+    max_action_power: int = 0
+    turn: int = 0
 
 
 class GameInfo(BaseModel):

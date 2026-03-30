@@ -4,20 +4,28 @@
   "version": "1.0",
   "author": "RPGAgent",
   "summary": "一个简短的示例剧本，演示 RPGAgent 的基本用法。",
-  "tags": ["示例", "教程"],
+  "tags": [
+    "示例",
+    "教程"
+  ],
   "first_scene": "scene_01",
   "systems_enabled": {
     "moral_debt": true,
     "combat": true
   },
-
   "hidden_values": [
     {
       "id": "moral_debt",
       "name": "道德债务",
       "description": "你的沉默与不作为会在内心累积。值越高，行事越冷酷。",
       "direction": "ascending",
-      "thresholds": [0, 11, 26, 51, 76],
+      "thresholds": [
+        0,
+        11,
+        26,
+        51,
+        76
+      ],
       "effects": {
         "0": {
           "narrative_tone": "内心平静",
@@ -32,17 +40,26 @@
         "26": {
           "narrative_tone": "你开始合理化沉默",
           "narrative_style": "normal",
-          "locked_options": ["主动干预"]
+          "locked_options": [
+            "主动干预"
+          ]
         },
         "51": {
           "narrative_tone": "你已经习惯了",
           "narrative_style": "fragmented",
-          "locked_options": ["主动干预", "积极行动"]
+          "locked_options": [
+            "主动干预",
+            "积极行动"
+          ]
         },
         "76": {
           "narrative_tone": "你不再相信正直有意义",
           "narrative_style": "dissociated",
-          "locked_options": ["主动干预", "积极行动", "道德洁癖选项"],
+          "locked_options": [
+            "主动干预",
+            "积极行动",
+            "道德洁癖选项"
+          ],
           "trigger_scene": "moral_breakdown",
           "cross_triggers": [
             {
@@ -60,7 +77,11 @@
       "name": "精神状态",
       "description": "接触黑暗真相会侵蚀你的理智。",
       "direction": "descending",
-      "thresholds": [0, 30, 60],
+      "thresholds": [
+        0,
+        30,
+        60
+      ],
       "effects": {
         "0": {
           "narrative_tone": "理智正常",
@@ -75,13 +96,14 @@
         "60": {
           "narrative_tone": "与现实脱节",
           "narrative_style": "dissociated",
-          "locked_options": ["冷静对话"],
+          "locked_options": [
+            "冷静对话"
+          ],
           "trigger_scene": "insanity_breakdown"
         }
       }
     }
   ],
-
   "hidden_value_actions": {
     "silent_witness": {
       "moral_debt": 5
