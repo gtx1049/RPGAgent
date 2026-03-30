@@ -34,13 +34,14 @@
 |---|------|----------|------|
 | P3-1 | 新叙事自动定位打断阅读 | 2026-03-30 07:02 | 待优化 |
 | P3-2 | 编辑器无撤销/重做功能 | 2026-03-30 09:19 | 待实现 |
-| P3-3 | 场景/角色/删除操作后无UI反馈 | 2026-03-30 12:38 | 待优化 |
+| P3-3 | 场景/角色/删除操作后无UI反馈 | 2026-03-30 13:10 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/563262b) |
 | P3-4 | 移动端侧边栏JS间歇性失灵 | 2026-03-30 10:25 | 待排查 |
 | P3-5 | 队友系统前端完全缺失 | 2026-03-30 10:57 | 待实现 |
 | P3-6 | 体力接口缺stamina字段 | 2026-03-28 | 待确认 |
 | P3-7 | NPC关系系统缺损 | 2026-03-28 | 待确认 |
 | P3-8 | 编辑器/游戏无自动保存机制 | 2026-03-30 12:19 | 待实现 |
 | P3-9 | 场景删除API路径勘误（旧路径404，实际路径可用） | 2026-03-30 12:38 | 需更新文档 |
+| P3-10 | API路径不一致（sessions/games前缀混用） | 2026-03-30 12:57 | 待规范 |
 
 ---
 
@@ -164,7 +165,7 @@
 
 ---
 
-### P3-3: 场景/角色创建后无UI反馈
+### P3-3: 场景/角色创建后无UI反馈 ✅ 已修复（563262b）
 
 **问题：** 点击"创建"后UI无任何反馈，无法判断是成功还是失败
 
@@ -212,6 +213,22 @@
 
 ---
 
+### P3-10: API路径不一致
+
+**问题：** 统计/成就类API使用`/api/sessions/{id}`前缀，而状态/debug类API使用`/api/games/{id}`前缀
+
+**详情：**
+- `/api/games/{id}/status` ✓
+- `/api/games/{id}/debug` ✓
+- `/api/games/{id}/saves` ✓
+- `/api/sessions/{id}/stats` ✓（注意是sessions不是games）
+- `/api/sessions/{id}/achievements` ✓（注意是sessions不是games）
+- `/api/sessions/{id}/stats/overview` ✓（注意是sessions不是games）
+
+**建议**：P3级，统一API路径规范，或在文档中明确区分两类端点的差异
+
+---
+
 ## 已归档（参考）
 
 已通过/已修复的测试记录已归档到 git commit 历史：
@@ -226,6 +243,7 @@
 
 ## 测试时间线
 
+- **2026-03-30 12:57**: 10.1.2 API响应时间 ✅ 通过（发现P3-API路径不一致/偶发500）
 - **2026-03-30 12:19**: 6.4 自动保存 ⚠️ P3（编辑器/游戏均无自动保存）
 - **2026-03-30 11:57**: 6.3 角色属性配置 ⚠️ P2（缺少RPG数值属性）
 - **2026-03-30 11:19**: 5.4 模态框日志详情 ✅ 通过
@@ -303,3 +321,21 @@
 1. 编辑器：增加每60秒自动保存（editor.js setInterval）
 2. 游戏：增加每N回合自动存档（后端在 action 处理后自动更新 autosave）
 测试会话：b26c5abf0483（示例剧本·第一夜）
+
+---
+
+## 测试反馈 2026-03-30 12:57
+测试项：10.1.2 API响应时间
+结果：✅ 通过（P3级观察）
+详情：
+**响应时间分级**：
+- 极速（<10ms）：GET /, GET /api/games, GET /api/sessions/{id}/achievements, GET /api/sessions/{id}/stats/overview
+- 快速（10-50ms）：POST /api/games/{id}/start, GET /api/games/{id}/status, GET /api/games/{id}/debug, GET /api/games/{id}/saves, GET /api/sessions/{id}/stats
+- 正常（>10s）：POST /api/games/action（10-13秒，含LLM生成）
+
+**关键发现**：
+- ⚠️ [P3] API路径不一致：stats/achievements/overview使用`/api/sessions/{id}`前缀，而status/debug使用`/api/games/{id}`前缀，前端调用需注意区分
+- ⚠️ [P3] action API在连续高频调用时偶发500（第3次测试返回500 Internal Server Error）
+- ✅ 所有基础查询API均在50ms内响应，性能良好
+- ✅ LLM生成响应10-13秒符合预期（网络延迟约500ms + AI推理约10秒）
+测试会话：e7ab6d7ca9dd（示例剧本·第一夜）
