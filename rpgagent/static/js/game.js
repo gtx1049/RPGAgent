@@ -29,6 +29,11 @@ const state = {
   // ── UI状态 ──────────────────
   awaitingInput: false,
   customActionMode: false,
+  // ── WS心跳与重连 ──────────────
+  heartbeatTimer: null,
+  heartbeatMissCount: 0,
+  reconnectAttempts: 0,
+  reconnectTimer: null,
 };
 
 // ── DOM refs ────────────────────────────────
@@ -357,7 +362,10 @@ function submitCustomAction() {
 // ── 发送玩家输入 ──────────────────────────────
 
 function sendPlayerInput(text) {
-  if (!state.connected) return;
+  if (!state.connected) {
+    appendSystem("当前未连接，请等待连接恢复后再操作。");
+    return;
+  }
   appendDivider();
   appendPlayer(text);
   renderOptions([]); // 清除GM选项
@@ -390,26 +398,82 @@ function renderOptions(options) {
 
 // ── WebSocket ────────────────────────────────
 
+// ── WS心跳与重连 ─────────────────────────────
+
+function startHeartbeat() {
+  stopHeartbeat();
+  state.heartbeatMissCount = 0;
+  state.heartbeatTimer = setInterval(() => {
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+    state.ws.send(JSON.stringify({ action: "ping" }));
+    state.heartbeatMissCount++;
+    if (state.heartbeatMissCount >= 3) {
+      // 3次心跳无响应，认为连接已断开
+      stopHeartbeat();
+      state.connected = false;
+      setWSStatus("disconnected");
+      appendSystem("连接超时，正在尝试重新连接…");
+      state.ws.close();
+    }
+  }, 5000);
+}
+
+function stopHeartbeat() {
+  if (state.heartbeatTimer) {
+    clearInterval(state.heartbeatTimer);
+    state.heartbeatTimer = null;
+  }
+}
+
+function attemptReconnect(sessionId) {
+  if (state.reconnectAttempts >= 3) {
+    appendSystem("连接已断开，请刷新页面重试。");
+    return;
+  }
+  const delay = Math.min(1000 * Math.pow(2, state.reconnectAttempts), 10000);
+  state.reconnectAttempts++;
+  state.reconnectTimer = setTimeout(() => {
+    if (state.sessionId === sessionId) {
+      connectWS(sessionId);
+    }
+  }, delay);
+}
+
 function connectWS(sessionId) {
+  // 清理已有定时器
+  stopHeartbeat();
+  if (state.reconnectTimer) {
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
+  }
   if (state.ws) state.ws.close();
   state.sessionId = sessionId;
   const ws = new WebSocket(`${WS_URL}/ws/${sessionId}`);
   state.ws = ws;
+  state.reconnectAttempts = 0;
 
   setWSStatus("connecting");
 
   ws.addEventListener("open", () => {
     state.connected = true;
+    state.heartbeatMissCount = 0;
     setWSStatus("connected");
+    startHeartbeat();
   });
 
   ws.addEventListener("close", () => {
     state.connected = false;
+    stopHeartbeat();
     setWSStatus("disconnected");
+    // 非主动断开，尝试重连
+    if (state.sessionId === sessionId) {
+      attemptReconnect(sessionId);
+    }
   });
 
   ws.addEventListener("error", () => {
     state.connected = false;
+    stopHeartbeat();
     setWSStatus("disconnected");
     appendSystem("连接中断，请刷新页面重试。");
   });
@@ -471,6 +535,11 @@ function handleMessage(msg) {
 
     case "scene_cg":
       if (msg.content) showCG(msg.content);
+      break;
+
+    case "pong":
+      // 心跳响应，重置miss计数
+      state.heartbeatMissCount = 0;
       break;
 
     case "error":
