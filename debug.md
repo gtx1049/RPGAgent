@@ -23,7 +23,7 @@
 |---|------|----------|------|
 | P2-1 | AP消耗异常（4次行动仅耗1点AP） | 2026-03-30 10:05 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/a5b1f4f) |
 | P2-2 | AP归零后按钮仍可点击 | 2026-03-30 12:00 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/a1ea2ab) |
-| P2-3 | GM叙事描述的数值未同步到游戏状态 | 2026-03-30 09:19 | 待修复 |
+| P2-3 | GM叙事描述的数值未同步到游戏状态 | 2026-03-30 13:40 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/9034f1e) |
 | P2-4 | action响应缺HP/AP/Turn状态字段 | 2026-03-30 00:19 | 待修复 |
 | P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-30 11:57 | 待实现 |
 | P2-6 | WebSocket无心跳保活机制 | 2026-03-30 20:03 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/68700e2) |
@@ -106,7 +106,7 @@
 
 ---
 
-### P2-3: GM叙事描述的数值未同步到游戏状态
+### P2-3: GM叙事描述的数值未同步到游戏状态 ✅ 已修复（9034f1e）
 
 **问题：** GM叙事返回战斗结果、战利品、体力消耗等数值变化，但实际游戏状态未更新
 
@@ -116,6 +116,15 @@
 - combat统计：battles_started=0, battles_won=0, total_damage_dealt=0
 
 **根因：** GM响应中的数值变化仅存在于叙事文本，不会触发实际状态变更
+
+**修复方案（2026-03-30）：**
+- `GMCommandParser` 新增 `extract_value_deltas()` 方法，从叙事文本中解析数值变化
+- 支持格式：`体力消耗：-10`、`HP减少：10`、`金币 +50`、`经验 +20`
+- `process_input()` 在解析GM_COMMAND后调用 `extract_value_deltas()`
+- `_execute_command()` 接收并应用数值变化到 `stats_sys`（体力/HP/金币/经验）
+- GM_COMMAND 中的显式字段优先于叙事解析（更可靠）
+
+**修复文件：** `rpgagent/core/game_master.py`
 
 ---
 
@@ -966,3 +975,25 @@
 
 测试方法：Node.js WebSocket客户端直连 ws://43.134.81.228:8080/ws/{session_id}
 测试会话ID：ae2bbe64a172
+
+## 测试反馈 2026-03-30 21:38
+测试项：8.1.4 响应式布局（移动端）- 移动端触控目标尺寸验证
+结果：问题仍存在（P3）
+
+详情：
+移动端viewport (390x844) 测试结果：
+
+**触控目标尺寸不达标（P3问题确认）：**
+- ☰ 面板按钮：25px高 × 60px宽 → 高度25px < 44px标准 ❌
+- 🔧 调试按钮：25px高 × 58px宽 → 高度25px < 44px标准 ❌
+- 预设行动按钮（例：👀环顾四周）：32px高 × 120px宽 → 高度32px < 44px标准 ❌
+
+**触控目标尺寸达标：**
+- 底部导航按钮（状态/技能/背包/日志）：55px高 × 97.5px宽 → 高度55px > 44px标准 ✅
+
+**交互问题（复测确认）：**
+- ☰ 面板按钮点击后，#sidebar.open 计数为0，CSS类未添加（P3 onclick处理器间歇性问题）
+
+**结论：** 移动端触控目标尺寸问题仍然存在，topbar按钮和行动按钮均低于44px最低触控标准。底部导航按钮尺寸良好。onclick处理器问题同第71轮复测结论一致。
+
+相关已记录问题：P3 (移动端触控尺寸 + JavaScript onclick间歇性)
