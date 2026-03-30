@@ -447,6 +447,18 @@ async def create_character(game_id: str, data: dict):
     char_file = chars_dir / f"{char_id}.json"
     if char_file.exists():
         raise HTTPException(status_code=409, detail=f"角色已存在：{char_id}")
+    # 默认 RPG 属性（与 Character 模型一致）
+    rpg_defaults = {
+        "hp": 10, "max_hp": 10,
+        "stamina": 10, "max_stamina": 10,
+        "action_power": 3, "max_action_power": 3,
+        "level": 1, "exp": 0,
+        "strength": 10, "dexterity": 10, "constitution": 10,
+        "intelligence": 10, "wisdom": 10, "charisma": 10,
+        "armor_class": 10, "attack_bonus": 0, "damage_bonus": 0,
+    }
+    # 先填充 RPG 默认值，再用 data 覆盖（保留用户已提供的字段）
+    rpg_data = {**rpg_defaults, **{k: data[k] for k in rpg_defaults if k in data}}
     char_data = {
         "id": char_id,
         "name": data.get("name", char_id),
@@ -455,6 +467,7 @@ async def create_character(game_id: str, data: dict):
         "personality": data.get("personality", ""),
         "visible": True,
         "extra": {},
+        **rpg_data,
     }
     char_file.write_text(json.dumps(char_data, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"ok": True, "id": char_id}
