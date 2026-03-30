@@ -39,7 +39,7 @@
 | P3-3 | 场景/角色/删除操作后无UI反馈 | 2026-03-30 13:10 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/563262b) |
 | P3-4 | 移动端侧边栏JS间歇性失灵 | 2026-03-30 10:25 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/0c7c7d7) - toggleMobileSidebar添加try-catch+addEventListener备份绑定 |
 | P3-5 | 队友系统前端完全缺失 | 2026-03-30 10:57 | 待实现 |
-| P3-6 | 体力接口缺stamina字段 | 2026-03-28 | 待确认 |
+| P3-6 | 体力接口缺stamina字段 | 2026-03-30 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/8695735) - status API返回stamina/max_stamina字段已验证
 | P3-7 | NPC关系系统缺损 | 2026-03-28 | 待确认 |
 | P3-8 | 编辑器/游戏无自动保存机制 | 2026-03-30 23:05 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/12a2617)（游戏侧120秒后台存档） |
 | P3-9 | 场景删除API路径勘误（旧路径404，实际路径可用） | 2026-03-30 12:38 | 需更新文档 |
@@ -108,7 +108,23 @@
 
 ---
 
-### P2-3: GM叙事描述的数值未同步到游戏状态 ✅ 已修复（9034f1e）
+### P2-3: GM叙事描述的数值未同步到游戏状态 ⚠️ 部分修复（9034f1e），仍存在
+
+**问题：** GM叙事返回战斗结果、战利品、体力消耗等数值变化，但实际游戏状态未更新
+
+**详情：**
+- GM叙事返回：`体力消耗：-10（大力吹气很累）`
+- 实际HP/stamina保持100/100不变
+- combat统计：battles_started=0, battles_won=0, total_damage_dealt=0
+
+**根因：** 当前剧本的GM响应不含 `value_changes` 显式字段，仅存在于叙事文本中。`extract_value_deltas()` 从叙事文本解析数值变化，但当前剧本GM叙事中不含"HP减少X"、"体力消耗：-X"等模式文本。战场奖励也未通过显式字段传递。
+
+**修复状态（2026-03-30）：**
+- `GMCommandParser.extract_value_deltas()` 方法已实现（commit 9034f1e）
+- 修复机制本身有效，但依赖剧本GM输出包含可解析的数值模式
+- 需配合剧本内容优化（GM输出显式 value_changes 字段）或增强数值解析
+
+**修复文件：** `rpgagent/core/game_master.py`
 
 **问题：** GM叙事返回战斗结果、战利品、体力消耗等数值变化，但实际游戏状态未更新
 
