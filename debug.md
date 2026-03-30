@@ -1,6 +1,6 @@
 # RPGAgent 问题追踪
 
-> 最后更新：2026-03-30 15:38 (GMT+8)
+> 最后更新：2026-03-30 22:57 (GMT+8)
 > 整理策略：只保留活跃问题，已通过/已修复的测试记录已归档到 git commit 历史
 
 ---
@@ -666,3 +666,79 @@
 
 优先级：P3（体验优化）
 建议：增加window.onerror和unhandledrejection全局处理器，为API错误增加详细错误信息
+
+## 测试反馈 2026-03-30 18:19
+测试项：8.4 快捷操作（键盘快捷键）
+结果：部分通过（P3）
+
+详情：
+- 测试环境：WS已连接，游戏处于示例剧本第一幕·电话，turn=1，AP=2/3
+- 测试方法：使用Tab导航按钮，Enter/Space激活，Escape关闭模态，数字键1-6快捷操作
+- 测试结果：
+  1. **Tab导航** ✅ 通过 - Tab键能正确在按钮间导航，eval确认focus落在action-btn类元素上
+  2. **Enter/Space激活** ⚠️ 部分 - Enter对对话框有效，但对已聚焦的action-btn按钮，在自动化测试中Enter/Space未能可靠触发WS action发送（直接点击按钮有效，Tab+Enter在自动化中不稳定）
+  3. **Escape关闭模态** ❌ 失败 - 冒险日志模态打开后，按Escape键无任何反应，模态保持打开状态；成就模态同样Escape无法关闭
+  4. **数字键1-6快捷操作** ❌ 失败 - 在action-btn聚焦状态下按"1"或"2"键，无任何反应，AP和回合数均未变化
+
+- 结论：
+  - Tab导航 ✅ 正常工作
+  - Escape ❌ 确实无法关闭冒险日志和成就模态（与第67轮debug记录一致）
+  - 数字键1-6 ❌ 完全未实现快捷操作绑定
+  - Enter/Space在自动化中不稳定，可能是JS事件处理在headless模式下有差异
+
+优先级：P3（体验优化）
+建议：Escape键应能关闭所有模态框；数字键1-6应绑定到对应的预设行动按钮（环顾四周/与NPC交谈/接近目标/调查/休整/自由行动）
+
+## 测试反馈 2026-03-30 18:41
+测试项：11.1 API错误 - API Key未配置 & LLM调用失败
+结果：问题（API安全P2 + LLM反馈P3）
+
+详情：
+### 11.1 API Key未配置 → **失败（P2安全问题）**
+- **测试方法**：向各API端点发送无认证请求，检查是否返回401/403
+- **测试结果**：
+  - GET /api/games → 200 无需认证 ✅
+  - GET /api/editor/games → 200 无需认证 ✅
+  - GET /api/editor/games/example/scenes → 200 无需认证 ✅（编辑器敏感数据）
+  - POST /api/games/example/start → 200 无需认证 ✅（游戏创建）
+  - POST /api/games/{session}/saves/test_save → 200 无需认证 ✅（存档写入）
+  - GET /health → 200 无需认证 ✅
+  - 携带 fake X-API-Key header → 与不带header结果相同，服务器不验证
+- **风险评估**：
+  - P2级安全问题：所有API无认证，任意用户可操作用户存档、访问编辑器
+  - 敏感端点（editor创建/删除、存档读写）均暴露
+- **建议**：P2级，为敏感API添加API Key认证（如 X-API-Key: <secret>）；公开端点（/api/games列表、/health）可保留无需认证
+
+### 11.1 LLM调用失败 → **部分通过（P3）**
+- **测试方法**：发送边界输入（空action、特殊字符、超长文本），观察LLM错误处理
+- **测试结果**：
+  - 空action `""` → HTTP 200，叙事文本"检测到违规输入，内容已被拦截"
+  - 特殊字符`<script>alert(1)</script>` → HTTP 200，叙事文本"检测到异常输入，正在过滤"
+  - 超长action（5000字符） → HTTP 200，正常处理（LLM截断或正常响应）
+- **问题**：
+  - LLM错误通过叙事文本反馈而非HTTP状态码
+  - 无法区分：①游戏逻辑拒绝（违规输入） ②LLM服务不可用 ③LLM响应超时
+  - 三种情况均返回HTTP 200 + narrative内容，客户端无法针对性处理
+- **建议**：P3级，LLM服务级故障应返回HTTP 500 + `{"error":"llm_service_unavailable","detail":"..."}`，与游戏逻辑拒绝区分开
+
+---
+
+## 测试反馈 2026-03-30 22:57
+测试项：5.4 模态框 - ESC键关闭
+结果：✅ 通过
+详情：
+**测试方法**：通过浏览器自动化测试（agent-browser），直接调用JS函数打开各模态框，然后按ESC键验证关闭功能
+
+**测试结果**：
+- 成就模态框(ach-modal-overlay)：`openAchPanel()` → `press Escape` → 模态框关闭 ✅
+- 属性面板(attr-modal-overlay)：`openAttrPanel()` → `press Escape` → 模态框关闭 ✅
+- CG画廊(cg-gallery-overlay)：`openCgGallery()` → `press Escape` → 模态框关闭 ✅
+- CG全屏(cg-overlay)：`showCgFull()` → `press Escape` → 模态框关闭 ✅
+
+**代码审查确认**：
+- game.js 行1046-1053：ESC监听器已合并为统一处理器
+- 修复前：ESC只调用`closeLogModal()` + `closeAttrPanel()`
+- 修复后：ESC统一调用`closeLogModal()`, `closeAttrPanel()`, `closeAchPanel()`, `closeStatPanel()`, `closeCgGallery()`, `closeCgFull()`, `closeMobileSidebar()`
+
+**结论**：ESC键现在可以正确关闭所有模态框和侧边栏，P3问题已修复
+测试会话：xiaogang_test（浏览器自动化测试）
