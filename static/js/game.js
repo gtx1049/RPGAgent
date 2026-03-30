@@ -404,28 +404,84 @@ function sendPlayerInput(text) {
 }
 
 // ── GM选项（由服务器下发）─────────────────────
+let optionsData = []; // 保存当前选项数据
 
 function renderOptions(options) {
-  // 清除旧的GM选项
-  optionsArea.innerHTML = '<div class="panel-title">选项</div>';
-  if (!options || options.length === 0) {
+  optionsData = options || [];
+  if (!optionsData || optionsData.length === 0) {
+    optionsArea.innerHTML = "";
     optionsArea.style.display = "none";
     return;
   }
+  
+  // 显示一个选项触发按钮，而非直接列出所有选项
+  optionsArea.innerHTML = `
+    <button class="gm-option-trigger" onclick="showOptionsModal()">
+      📋 查看 ${optionsData.length} 个选项
+    </button>
+  `;
   optionsArea.style.display = "block";
-  const list = document.createElement("div");
-  options.forEach(opt => {
-    const btn = document.createElement("button");
-    btn.className = "gm-option-btn";
-    const label = typeof opt === "string" ? opt : opt.label || opt;
-    btn.textContent = label;
-    btn.onclick = () => {
-      sendPlayerInput(label);
-    };
-    list.appendChild(btn);
-  });
-  optionsArea.appendChild(list);
 }
+
+function showOptionsModal() {
+  const optionsHTML = optionsData.map((opt, i) => {
+    const label = typeof opt === "string" ? opt : opt.label || opt;
+    return `<button class="gm-option-modal-btn" onclick="selectOption('${label.replace(/'/g, "\\'")}')">${label}</button>`;
+  }).join('');
+  
+  // 创建模态框
+  let modal = document.getElementById("options-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "options-modal";
+    modal.innerHTML = `
+      <div class="modal-overlay" onclick="closeOptionsModal()"></div>
+      <div class="options-modal-content">
+        <div class="options-modal-header">
+          <span>📋 剧情选项</span>
+          <button class="options-modal-close" onclick="closeOptionsModal()">✕</button>
+        </div>
+        <div class="options-modal-list" id="options-modal-list"></div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    
+    // 添加模态框样式
+    const style = document.createElement("style");
+    style.textContent = `
+      #options-modal { position: fixed; inset: 0; z-index: 1000; }
+      #options-modal .modal-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
+      #options-modal .options-modal-content { position: absolute; bottom: 0; left: 0; right: 0; background: var(--bg-secondary); border-radius: 16px 16px 0 0; max-height: 70vh; overflow-y: auto; }
+      #options-modal .options-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid var(--border); font-weight: bold; }
+      #options-modal .options-modal-close { background: none; border: none; color: var(--text-dim); font-size: 18px; cursor: pointer; }
+      #options-modal .options-modal-list { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+      #options-modal .gm-option-modal-btn { width: 100%; padding: 14px 16px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 15px; text-align: left; cursor: pointer; transition: all 0.15s; }
+      #options-modal .gm-option-modal-btn:hover { background: var(--bg-input); border-color: var(--accent); }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  document.getElementById("options-modal-list").innerHTML = optionsHTML;
+  modal.style.display = "block";
+}
+
+function closeOptionsModal() {
+  const modal = document.getElementById("options-modal");
+  if (modal) modal.style.display = "none";
+}
+
+function selectOption(label) {
+  closeOptionsModal();
+  sendPlayerInput(label);
+}
+
+// 旧按钮样式（触发按钮）
+const triggerStyle = document.createElement("style");
+triggerStyle.textContent = `
+  .gm-option-trigger { width: 100%; padding: 12px; background: var(--accent); border: none; border-radius: 8px; color: #fff; font-size: 15px; cursor: pointer; }
+  .gm-option-trigger:hover { opacity: 0.85; }
+`;
+document.head.appendChild(triggerStyle);
 
 // ── WebSocket ────────────────────────────────
 
