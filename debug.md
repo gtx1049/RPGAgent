@@ -1341,3 +1341,22 @@
 - 结论：GM叙事交互正常，但关系变化未写入游戏状态
 
 根因：GM未调用关系更新API，npc_relations字段从未被填充
+
+## 测试反馈 2026-03-31 19:38（第83轮）
+测试项：3.2 WebSocket `cg_generated` - CG生成消息类型
+结果：❌ 失败（P3：CG生成API全部返回404）
+详情：
+**测试方法**：通过REST API和WebSocket直接测试CG生成功能
+
+**REST API测试**：
+- `POST /api/scenes/scene_01/cg/generate` → `{"detail":"Not Found"}` ❌
+- `POST /api/games/{session_id}/cg/generate` → `{"detail":"Not Found"}` ❌
+- CG历史API正常：`GET /api/sessions/{id}/cg` → `{"count":0,"cg_list":[]}` ✅
+
+**WebSocket测试**：
+- 连接成功：收到 `scene_update` + `status_update` + `connected` (3条消息) ✅
+- 发送action后：超时未收到GM响应（可能session已过期）
+- 无任何 `cg_generated` 消息触发
+
+**根因**：CG生成功能后端完全未实现，所有相关API端点返回404
+**建议**：P3级，实现CG生成API端点和WebSocket cg_generated消息推送

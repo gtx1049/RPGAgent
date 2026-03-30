@@ -222,7 +222,12 @@
   - 建议：P3级，检查"第一步"和"幸存者"的成就条件触发逻辑
 - [x] `error` - 错误消息 → **通过（无效session）** [2026-03-30 00:38]
   - 无效session_id连接后收到 `{"type":"error","content":"会话不存在或已过期"}`
-- [ ] `cg_generated` - CG生成 → **无法测试（CG生成API未实现）** [2026-03-30 11:43]
+- [x] `cg_generated` - CG生成 → **❌ 失败（P3：CG生成API全部返回404）** [2026-03-31 19:38]
+  - REST API `POST /api/scenes/{scene_id}/cg/generate` → `{"detail":"Not Found"}` ❌
+  - REST API `POST /api/games/{session_id}/cg/generate` → `{"detail":"Not Found"}` ❌
+  - WebSocket测试：连接成功后发送action无`cg_generated`消息触发
+  - CG历史API正常：`GET /api/sessions/{id}/cg` → `{"count":0,"cg_list":[]}` ✅
+  - 结论：CG生成功能完全未实现，无法端到端测试CG画廊和cg_generated消息类型
 
 ### 3.3 连接稳定性
 - [x] 长时间连接保持 → **通过（P1已修复）** [2026-03-30 11:43]
