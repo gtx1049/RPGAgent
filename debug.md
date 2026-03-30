@@ -49,7 +49,7 @@
 | P3-12 | 行动前无confirm()确认对话框 | 2026-03-30 20:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/1d2221d) |
 | P3-13 | 编辑器场景创建+按钮无响应 | 2026-03-30 23:42 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/97141d2) - 页面加载时自动选中第一个剧本，+按钮立即可用 |
 | P3-14 | 市场"开始冒险"跳转后游戏未自动启动 | 2026-03-31 00:44 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/46c242f) - initSelectScreen检查?start=参数，自动启动对应剧本 |
-| P3-15 | 成就条件判断不准确 | 2026-03-31 18:57 | P3级 - "第一步"turn=1未解锁，"幸存者"1 action即解锁 |
+| P3-15 | 成就条件判断不准确 | 2026-03-31 19:22 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/772c353) - first_step min:2，survivor改为turn_count>=2 |
 
 ---
 
@@ -389,7 +389,7 @@
 
 ---
 
-### P3-15: 成就条件判断不准确
+### P3-15: 成就条件判断不准确 ✅ 已修复
 
 **问题：** 成就解锁机制已激活，但部分成就条件判断逻辑不准确
 
@@ -397,14 +397,18 @@
 - 测试session: 13e9bd376310 (示例剧本)
 - turn=0时6个成就全部锁定；发送"环顾四周" action后 turn=0→1
 - 修复后3个成就解锁：和平谈判者/幸存者/问心无愧（unlocked_count=0→3）
-- **仍有问题**：
-  1. "第一步"条件"完成第一章"，turn=1却未解锁（应为即时触发）
-  2. "幸存者"条件"完成任意章节"，1 action后(turn=1)即解锁（条件触发过早）
-  3. unlocked_at_turn显示为0而非1（时间戳问题）
+- **问题**：
+  1. "第一步"条件"完成第一章"，min=1导致1 action即触发（条件太宽松）
+  2. "幸存者"scene_ids=[]空数组，_check_criteria直接return True无条件触发
 
-**根因：** 成就条件判断逻辑在GM响应后执行，但部分条件阈值设置不准确
+**根因：**
+1. first_step: `turn_count>=1` 意味着第一回合就解锁，但"完成第一章"应需至少2回合
+2. survivor: `scene_ids:[]` 空数组，`if not required: return True` 导致无条件触发
 
-**建议：** P3级，检查"第一步"和"幸存者"的成就条件触发时机和阈值设置
+**修复（2026-03-31）：**
+- first_step: `turn_count` min: 1 → min: 2（第一章需完成至少2回合）
+- survivor: `scene_reached(scene_ids=[])` → `turn_count(min:2)`（需真正完成章节）
+- 修复文件：`rpgagent/systems/achievement_system.py`
 
 ---
 
