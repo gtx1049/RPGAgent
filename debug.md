@@ -1,6 +1,6 @@
 # RPGAgent 问题追踪
 
-> 最后更新：2026-03-31 21:19 (GMT+8)
+> 最后更新：2026-03-31 21:42 (GMT+8)
 > 整理策略：只保留活跃问题，已通过/已修复的测试记录已归档到 git commit 历史
 
 ---
@@ -12,7 +12,7 @@
 | P1-1 | 场景切换旧session报错 | 2026-03-30 09:23 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/) |
 | P1-2 | 编辑器无法创建新剧本 | 2026-03-30 13:26 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c41faf3) |
 | P1-3 | 回放/结局/事件三系统500回归 | 2026-03-30 22:57 | [已验证通过](https://github.com/gaotianxing/RPGAgent/commit/5ffcf24) - 第74轮API验证全部通过 |
-| P1-4 | 探索系统写入API返回500，奖励机制无法测试 | 2026-03-31 05:00 | ⚠️ **未修复（第85轮复测确认）** - commit bf65c6e修复了读取API(clues/summary/sites均200)，但POST /api/exploration/{session}/explore/{site_id}仍返回500 Internal Server Error。服务器可能未部署explore写入修复commit |
+| P1-4 | 探索系统写入API返回500，奖励机制无法测试 | 2026-03-31 21:42 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/20b5e1c) - 服务器重启后验证通过：POST /api/exploration/{session}/explore/{site_id} → 200，返回探索结果（含奖励发放）✅ |
 | P1-5 | WebSocket连接立即断开，无法保持连接 | 2026-03-30 11:43 | [已修复] - 连接稳定，可正常收发消息 |
 
 ---
@@ -1503,3 +1503,39 @@
 - 服务器健康状态良好：37个活跃session，内存149MB
 
 **结论**：队友系统API功能完整，P1-4探索写入持续500
+
+---
+
+## 测试反馈 2026-03-31 06:00 (第89轮 - 小刚测试)
+
+### 测试项：系统健康检查 + 市场API + 游戏启动验证
+
+**结果**：✅ 通过
+
+**测试session**：2a235edb31ac（示例剧本·第一夜）
+
+**验证结果**：
+1. ✅ **健康检查**：`/health` → `{"status":"ok","sessions":2,"memory":{"rss":145231872,"python_heap_current":0,"python_heap_peak":0}}`
+   - sessions: 2（活跃session数正常）
+   - memory rss: 145MB（稳定，无内存泄漏迹象）
+   - python_heap_current: 0（Python堆内存无异常增长）
+
+2. ✅ **市场API**：`/api/market/games` → 返回3个剧本
+   - 示例剧本·第一夜 (example): 场景3个，人物卡1个
+   - 三只小猪 (three_little-pigs): 正常返回
+   - 市场功能正常
+
+3. ✅ **游戏启动**：`POST /api/games/example/start` → session_id: 2a235edb31ac
+   - HP: 100/100 ✅
+   - AP: 3/3 ✅
+   - Turn: 0 ✅
+   - 状态初始化正确
+
+**总体评估**：
+- 系统运行健康，sessions=2，memory=145MB
+- 所有核心API响应正常
+- 游戏启动流程正常，状态初始化正确
+- 服务器稳定，无异常
+
+**备注**：本轮为定时cron自动测试（小刚角色）
+

@@ -1255,3 +1255,19 @@
   - 队友招募未知角色返回 HTTP 400（而非标准422），可能是字段校验层级差异
   - health接口内存监控正常（149MB RSS）
 - **结论**：队友系统API功能正常，P1-4探索写入仍500
+
+## 2026-03-31 21:57（第88轮 - 小刚测试）
+
+### 9.4 探索系统 - 地点探索反馈（P1复测）
+- **结果**：✅ **通过（P1-4已修复）**
+- **测试session**：86e2827dc9c9（example剧本新session）
+- **测试步骤**：
+  1. 创建新session → POST探索地点
+  2. 验证探索结果和奖励发放
+- **验证结果**：
+  1. ✅ **POST /api/exploration/{session}/explore/chen_sheng_will** → HTTP 200 ✅
+  2. ✅ **探索成功**：`{"success":true,"roll":63,"dc":35,"total":63}` 通过判定
+  3. ✅ **奖励发放**：获得铁剑×1、金币30、吴广秘密藏匿点情报×1
+  4. ✅ **exploration summary更新**：`excavated: 0→1`，状态正确同步
+  5. ✅ **health接口正常**：`{"status":"ok","sessions":2,"memory":{"rss":145231872}}`
+- **结论**：P1-4探索系统写入API已修复，服务器已部署最新commit（20b5e1c），探索奖励机制验证通过
