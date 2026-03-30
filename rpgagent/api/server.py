@@ -210,7 +210,30 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
                 options = []
                 if cmd and cmd.get("action") == "choice":
-                    options = cmd.get("options", "").split("|")
+                    raw_options = cmd.get("options", "").split("|")
+                    # 格式：选项名|描述|触发条件，每3个为一组
+                    dc = cmd.get("dc", "50").strip() if cmd else "50"
+                    dc_hint = ""
+                    if dc.isdigit():
+                        d = int(dc)
+                        if d <= 30:
+                            dc_hint = "【简单】"
+                        elif d <= 50:
+                            dc_hint = "【五五开】"
+                        elif d <= 65:
+                            dc_hint = "【困难】"
+                        elif d <= 80:
+                            dc_hint = "【极难】"
+                        else:
+                            dc_hint = "【几乎不可能】"
+                    
+                    for i in range(0, len(raw_options), 3):
+                        group = raw_options[i:i+3]
+                        if group:
+                            # 第一个是选项名，后续合并为描述
+                            name = group[0].strip()
+                            desc = " ".join(g for g in group[1:] if g.strip())
+                            options.append(f"{name} {dc_hint} {desc}".strip())
 
                 # 检测场景变化（可能来自 GM_COMMAND 或 SceneTriggerEngine）
                 scene_change = None
