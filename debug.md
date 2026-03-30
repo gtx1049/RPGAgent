@@ -1,6 +1,6 @@
 # RPGAgent 问题追踪
 
-> 最后更新：2026-03-31 19:06 (GMT+8)
+> 最后更新：2026-03-31 21:19 (GMT+8)
 > 整理策略：只保留活跃问题，已通过/已修复的测试记录已归档到 git commit 历史
 
 ---
@@ -1403,3 +1403,103 @@
 3. 考虑改用 addEventListener 替代 onclick 属性（更可靠的事件绑定方式）
 
 **状态：** ⚠️ 待真机验证（可能是测试方法问题，非实际bug）
+
+---
+
+## 测试反馈 2026-03-31 21:19（第86轮 - 小刚测试）
+
+### 测试项：9.4 探索系统 - 地点探索反馈（P1-4复测）
+
+**结果**：❌ **P1问题仍存在**
+
+**测试方法**：
+1. 创建新session（2cb4e29d627e）
+2. GET /api/exploration/{session}/sites → 200，返回6个探索地点 ✅
+3. POST /api/exploration/{session}/explore/chen_sheng_will → **500 Internal Server Error** ❌
+
+**验证结果**：
+- ✅ GET sites: 200，返回6个地点（陈胜遗书/吴广秘藏/秦军遗弃兵器等）
+- ❌ POST explore: 500 Internal Server Error
+
+**根因**：后端exploration_system.py第333行修复（commit 20b5e1c）未部署到服务器。debug.md记录该commit修复了 `stats_sys.get(key, 10)` 应为 `stats_sys.get(key) or 10` 的问题，但服务器实际运行的代码仍有问题。
+
+**结论**：P1-4仍未修复，服务器未部署explore写入修复commit
+
+---
+
+### 测试项：成就解锁机制（P3-15复测）
+
+**结果**：✅ **通过（条件逻辑已修正）**
+
+**测试session**：adba9340f84e（example剧本新session）
+
+**验证结果**：
+- 初始：0/6成就解锁
+- 1 action后（turn 0→1）：3/6成就解锁
+  - ✅ 和平谈判者（peaceful_negotiator）：解锁
+  - ✅ 幸存者（survivor）：解锁  
+  - ✅ 问心无愧（debt_free）：解锁
+  - ✅ 第一步（first_step）：仍锁定（条件"完成第一章"，turn=1不满足，需>=2）
+  - 腰缠万贯/技能大师：仍锁定（未达成条件）
+
+**结论**：P3-15成就条件修正有效，first_step需2回合才解锁符合"完成第一章"语义
+
+---
+
+### 测试项：3.2 CG生成API（P3原失败项复测）
+
+**结果**：❌ **仍为404（P3未修复）**
+
+**验证**：
+- `POST /api/scenes/scene_01/cg/generate` → `{"detail":"Not Found"}` ❌
+- `GET /api/sessions/{id}/cg` → `{"count":0,"cg_list":[]}` ✅
+
+**结论**：CG生成功能完全未实现，P3问题持续
+
+---
+
+### 测试项：6.4 编辑器功能 - 撤销/重做（P3-2复测）
+
+**结果**：✅ **通过**
+
+**验证结果**：
+1. ✅ 撤销按钮(↩)存在：初始disabled
+2. ✅ 重做按钮(↪)存在：初始disabled
+3. ✅ 编辑后撤销启用：输入内容后撤销变为enabled
+4. ✅ 撤销后重做启用：点击撤销后重做变为enabled
+
+**结论**：P3-2编辑器撤销/重做功能正常，commit 5343e5d 已部署生效
+
+---
+
+### 测试项：队友系统前端（P3-5复测 - JS层验证）
+
+**结果**：✅ **通过**
+
+**验证**：
+1. ✅ `switchBottomTab` 函数存在且为function类型
+2. ✅ 调用`switchBottomTab('teammates')`后，`#teammates-panel` DOM元素存在
+
+**结论**：P3-5队友面板函数正常（完整UI需在游戏启动后验证）
+
+---
+
+### 测试项：队友系统API深度验证（第87轮）
+
+**结果**：✅ **通过**
+
+**测试session**：34ac2e6b6b68（example剧本）
+
+**验证结果**：
+1. ✅ **teammate recruit 未知角色**：返回 `{"detail":"未知角色：zhu_dage"}`，HTTP 400（非标准422但错误提示清晰）
+2. ✅ **teammate available**：`[]`（example剧本无可招募队友，符合预期）
+3. ✅ **teammate snapshot**：`{"profiles":{},"active":{}}`（空状态正确）
+4. ✅ **achievements**：0/6解锁，新session正确
+5. ✅ **health**：`{"status":"ok","sessions":37,"memory":{"rss":149041152}}`（内存149MB正常）
+6. ❌ **exploration POST**：`POST /api/exploration/{id}/explore/chen_sheng_will` → HTTP 500（P1-4仍未修复）
+
+**新发现**：
+- 队友招募未知角色返回 HTTP 400（可能为字段校验层级问题）
+- 服务器健康状态良好：37个活跃session，内存149MB
+
+**结论**：队友系统API功能完整，P1-4探索写入持续500
