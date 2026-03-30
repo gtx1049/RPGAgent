@@ -53,7 +53,8 @@ class AchievementSystem:
             "name": "第一步",
             "description": "完成第一章",
             "icon": "👣",
-            "criteria": {"type": "turn_count", "min": 1},
+            # min=2: 第一章意味着至少完成1个完整回合(第0回合→第1回合→第2回合才算完成第一章)
+            "criteria": {"type": "turn_count", "min": 2},
             "hidden": False,
         },
         {
@@ -69,7 +70,8 @@ class AchievementSystem:
             "name": "幸存者",
             "description": "完成任意章节",
             "icon": "🏅",
-            "criteria": {"type": "scene_reached", "scene_ids": []},
+            # 空 scene_ids 会被无条件触发，改为 turn_count>=2 确保真正完成至少一个章节
+            "criteria": {"type": "turn_count", "min": 2},
             "hidden": False,
         },
         {
