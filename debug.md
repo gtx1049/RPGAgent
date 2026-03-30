@@ -364,3 +364,32 @@
 
 **备注**：测试的是REST API层面的session隔离，WebSocket层的多session并发（WS连接数上限、心跳保活）因WS P1阻塞无法测试。
 测试会话：3f6afe7c595c（示例剧本·第一夜）, 6f02dcd1c515（三只小猪）, c63b75e81e12（秦末·大泽乡）
+
+## 测试反馈 2026-03-30 13:45
+测试项：10.1 响应时间 - WebSocket延迟 / 页面渲染时间
+结果：部分通过
+详情：
+**WebSocket延迟测试**：
+- WS连接可建立，收到 scene_update 初始消息（RTT<1ms，本地网络极快）
+- WS消息处理不稳定：发送action后收到 status_update/connected，但连接在2-3条消息后超时断开
+- ping/pong心跳机制行为异常：发送ping后服务器返回 status_update 而非 pong
+- RTT<1ms（网络层极快），但连接稳定性仍是问题（P1阻塞未完全修复）
+
+**HTTP API响应时间**：
+- GET /: 42ms（极快）
+- GET /api/games: 4ms（极快）
+- POST /api/games/{id}/start: 41ms（快）
+- GET /api/games/{session}/status: 2ms（极快）
+- GET /api/games/{session}/debug: 8ms（极快）
+- GET /api/sessions/{session}/stats: 30ms（快）
+- GET /api/sessions/{session}/achievements: 6ms（极快）
+- GET /api/games/{session}/saves: 9ms（快）
+
+**页面渲染时间**：
+- 首页 /: 31ms（HTML 13269 bytes）
+- 编辑器 /editor: 6ms（HTML 29955 bytes）
+- 市场 /market: 25ms（HTML 13530 bytes）
+
+**剧本删除测试**：DELETE /api/editor/games 返回 405 Method Not Allowed，编辑器无法删除剧本（与剧本创建阻塞同类问题）
+
+优先级：P3（WS延迟测量受P1 WS稳定性阻塞影响，HTTP/页面性能优秀）
