@@ -339,3 +339,28 @@
 - ✅ 所有基础查询API均在50ms内响应，性能良好
 - ✅ LLM生成响应10-13秒符合预期（网络延迟约500ms + AI推理约10秒）
 测试会话：e7ab6d7ca9dd（示例剧本·第一夜）
+
+---
+
+## 测试反馈 2026-03-30 13:19
+测试项：3.3.3 多session并发
+结果：✅ 通过
+详情：
+**测试方法**：
+1. 创建Session A（示例剧本·第一夜，玩家名"小刚测试A"）→ session_id: 3f6afe7c595c
+2. 创建Session B（三只小猪，玩家名"小刚测试B"）→ session_id: 6f02dcd1c515
+3. 创建Session C（秦末·大泽乡，玩家名"小刚测试C"）→ session_id: c63b75e81e12
+4. 验证初始状态：三个session均 Turn=0, AP=3/3, HP=100/100
+5. Session A执行action "环顾四周" → A: Turn 0→1, AP 3→2
+6. 验证Session B/C未被影响（仍为 Turn=0, AP=3/3）
+7. Session B执行action "走向草屋" → B: Turn 0→1, AP 3→2
+8. 再次验证Session A未被动（Turn=1, AP=2/3保持）
+
+**结论**：
+- ✅ 多session并发正常：3个session同时运行，各自状态独立
+- ✅ Session隔离有效：action在A不影响B/C，B的action不影响A/C
+- ✅ 存档系统独立：各session拥有独立autosave（autosave_{session_id}）
+- ✅ health端点显示当前12个活跃session，系统具备基本并发支持
+
+**备注**：测试的是REST API层面的session隔离，WebSocket层的多session并发（WS连接数上限、心跳保活）因WS P1阻塞无法测试。
+测试会话：3f6afe7c595c（示例剧本·第一夜）, 6f02dcd1c515（三只小猪）, c63b75e81e12（秦末·大泽乡）

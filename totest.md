@@ -209,7 +209,11 @@
   - 无法保持任何有意义的会话
 - [x] 断线重连机制 → **无法测试（P1阻塞）** [2026-03-30 00:38]
   - 服务器主动关闭，无重连机会
-- [x] 多session并发 → **未测试** [2026-03-30 00:38]
+- [x] 多session并发 → **通过** [2026-03-30 13:19]
+  - 同时运行3个并发session（示例剧本/三只小猪/秦末），各session状态独立
+  - Session A执行action后turn 0→1, AP 3→2；Session B/C不受影响（仍为0/AP 3）
+  - 各session拥有独立autosave，存档不混淆
+  - health显示当前12个活跃session，系统具备基本多session支持
 
 ---
 
@@ -790,7 +794,19 @@
   - 页面完全加载：1350ms
   - DOM解析耗时：809ms
   - 资源数量：5个
-- [ ] API响应时间
+- [x] API响应时间 → **通过** [2026-03-30 12:57]
+  - GET / → 3.6ms（极快）
+  - GET /api/games → 5ms（极快）
+  - POST /api/games/{id}/start → 43ms（快）
+  - GET /api/games/{session}/status → 14ms（快）
+  - GET /api/games/{session}/debug → 14ms（快）
+  - GET /api/sessions/{session}/stats → 41ms（快）
+  - GET /api/sessions/{session}/stats/overview → 5ms（极快）
+  - GET /api/sessions/{session}/achievements → 3ms（极快）
+  - GET /api/games/{session}/saves → 10ms（快）
+  - POST /api/games/action → **10-13秒（很慢，LLM生成）**，500ms网络开销+10秒AI响应
+  - ⚠️ [P3] stats/achievements/overview使用`/api/sessions/`而非`/api/games/`前缀，路径不一致
+  - ⚠️ [P3] action API在连续调用时偶发500（第3次测试返回500）
 - [ ] WebSocket延迟
 - [ ] 页面渲染时间
 
