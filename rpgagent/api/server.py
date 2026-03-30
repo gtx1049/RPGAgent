@@ -34,6 +34,9 @@ _static_dir = _project_root.parent / "static"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print(f"[RPGAgent] 服务器启动中...")
+    # 启动后台定时自动存档任务（每120秒对所有活跃会话存档）
+    manager = get_manager()
+    await manager._start_auto_save_task()
     yield
     print(f"[RPGAgent] 服务器关闭")
 
