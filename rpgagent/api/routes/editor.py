@@ -65,6 +65,26 @@ class CharacterData(BaseModel):
     description: str = ""
     personality: str = ""
     visible: bool = True
+    # RPG 数值属性
+    hp: int = 10
+    max_hp: int = 10
+    stamina: int = 10
+    max_stamina: int = 10
+    action_power: int = 3
+    max_action_power: int = 3
+    level: int = 1
+    exp: int = 0
+    # 六属性（龙与地下城风格）
+    strength: int = 10
+    dexterity: int = 10
+    constitution: int = 10
+    intelligence: int = 10
+    wisdom: int = 10
+    charisma: int = 10
+    # 战斗属性
+    armor_class: int = 10
+    attack_bonus: int = 0
+    damage_bonus: int = 0
     # 扩展字段（供编辑器自由填充）
     extra: dict = {}
 

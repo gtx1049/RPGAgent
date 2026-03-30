@@ -461,7 +461,11 @@
   - 场景标题和内容均可编辑，修改可反映在输入框
   - ⚠️ [P3] 预览按钮点击无任何可见效果
   - ⚠️ [P3] 保存按钮点击无任何反馈（成功/失败均无提示）
-- [ ] 场景删除 → **❌ 阻塞（API `DELETE /api/editor/scenes/{game_id}/{scene_id}` 未实现，返回404）** [2026-03-30 08:02]
+- [x] 场景删除 → **✅ 通过（路径勘误：实际路径为 `/api/editor/games/{game_id}/scenes/{scene_id}` 而非 `/api/editor/scenes/{game_id}/{scene_id}`）** [2026-03-30 12:38]
+  - DELETE /api/editor/games/example/scenes/scene_01 → 200 `{"ok":true}` ✓
+  - DELETE /api/editor/games/example/scenes/scene_02 → 200 `{"ok":true}` ✓
+  - 场景列表验证：删除后返回空数组 `[]`，确认删除持久化 ✓
+  - ⚠️ [P3] 编辑器UI无删除反馈（删除成功/失败均无提示）；⚠️ [P3] 注意：测试过程中误删了示例剧本的2个场景，演示环境需谨慎操作
 - [x] 场景内容预览 → **失败** [2026-03-29 20:38]
   - 预览按钮(@e12)点击后无任何UI变化
   - 控制台无报错，但无任何可见效果
@@ -507,7 +511,12 @@
   - editor.html 中无"撤销"或"重做"字样
   - 无编辑器状态历史记录机制（无 history stack）
   - ⚠️ [P3] 建议：场景/角色编辑添加撤销/重做功能（可基于 textarea change 事件维护历史栈）
-- [ ] 自动保存
+- [x] 自动保存 → **失败（P3）** [2026-03-30 12:19]
+  - **编辑器自动保存**：editor.html 中无任何 `setInterval`/`setTimeout` 自动保存机制，无 autoSave 关键字，无 `/api/editor/autosave` 端点（404）
+  - **游戏自动存档**：创建session时自动生成 autosave（turn_count=0），但游戏过程中 **不自动更新**
+  - 验证：执行 action 后 turn=1，但 `GET /api/games/{session}/saves/autosave` 返回 `turn_count=0`（未更新）
+  - autosave 仅在 session 创建时生成一次，之后游戏状态变化不同步存档
+  - 建议：P3级，为编辑器添加定时自动保存（每60秒），为游戏添加回合自动存档（每N回合）
 
 ---
 
