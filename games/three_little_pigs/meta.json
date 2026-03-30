@@ -40,11 +40,12 @@
     }
   ],
   "hidden_value_actions": {
-    "huff_and_puff":    {"hunger": 10, "reputation": 5},
-    "trick_pig":        {"hunger": -5, "reputation": 10},
-    "threaten_pig":     {"hunger": 5, "reputation": 8},
+    "huff_and_puff":    {"hunger": 10, "reputation": 5, "relation_delta": {"pig_elder": -8, "pig_middle": -5, "pig_youngest": -5}},
+    "trick_pig":        {"hunger": -5, "reputation": 10, "relation_delta": {"pig_elder": -5, "pig_middle": -5, "pig_youngest": -5}},
+    "threaten_pig":     {"hunger": 5, "reputation": 8, "relation_delta": {"pig_elder": -15, "pig_middle": -12, "pig_youngest": -12}},
     "give_up":          {"hunger": 15, "reputation": -5},
-    "eat_pig":          {"hunger": -30},
-    "run_away":         {"reputation": 15}
+    "eat_pig":          {"hunger": -30, "relation_delta": {"pig_elder": -50, "pig_middle": -50, "pig_youngest": -50}},
+    "run_away":         {"reputation": 15},
+    "talk_to_npc":      {"relation_delta": {"pig_elder": 3, "pig_middle": 3, "pig_youngest": 3}}
   }
 }

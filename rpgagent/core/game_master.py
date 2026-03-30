@@ -451,6 +451,8 @@ class GameMaster:
                 cmd["action_tag"] = "eat_pig"
             elif any(k in combined_text for k in ["逃跑", "run_away", "跑"]):
                 cmd["action_tag"] = "run_away"
+            elif any(k in combined_text for k in ["交谈", "说话", "打招呼", "问", "答", "聊", "对话"]):
+                cmd["action_tag"] = "talk_to_npc"
 
         # 执行指令
         if cmd:
