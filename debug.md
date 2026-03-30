@@ -1,6 +1,6 @@
 # RPGAgent 问题追踪
 
-> 最后更新：2026-03-31 01:40 (GMT+8)
+> 最后更新：2026-03-31 09:57 (GMT+8)
 > 整理策略：只保留活跃问题，已通过/已修复的测试记录已归档到 git commit 历史
 
 ---
@@ -27,6 +27,7 @@
 | P2-4 | action响应缺HP/AP/Turn状态字段 | 2026-03-30 00:19 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/df3eca5) |
 | P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-30 22:23 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/dc82f3f) |
 | P2-6 | WebSocket无心跳保活机制 | 2026-03-30 20:03 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/68700e2) |
+| P2-7 | 成就解锁机制完全不工作 | 2026-03-31 09:57 | 待修复 |
 
 ---
 
@@ -196,6 +197,27 @@
 1. 在 connectWS() 的 open 事件中启动 setInterval，每30秒发送 `{"action":"ping"}`
 2. 在 handleMessage() 中添加 pong case 分支处理服务端响应
 3. pong 超时（如10秒内未收到）可触发重连逻辑
+
+---
+
+### P2-7: 成就解锁机制完全不工作
+
+**问题：** 完成行动后（turn 0→1），"第一步"成就未解锁，所有6个成就始终为锁定状态
+
+**详情：**
+- 测试session: f9571f5a3dc0 (示例剧本)
+- turn=0时：`/api/sessions/{id}/achievements` 返回6个成就，全部 unlocked=false
+- 发送"环顾四周" action后：turn=0→1，GM叙事正常返回
+- 再次查询 achievements API：**unlocked_count=0，6个成就仍全部锁定**
+- "第一步"成就条件为"完成第一章"，turn=1已满足但未解锁
+- stats API也显示 `unlocked: 0, unlock_rate: 0.0, recently_unlocked: []`
+
+**根因：** GM响应（action）后未触发成就解锁逻辑，成就状态未更新
+
+**建议：** P2级，在action响应后增加成就条件检查逻辑：
+1. 根据action结果更新成就进度
+2. 检查"第一步"等即时成就是否满足条件
+3. 满足条件时更新achievements状态并返回unlocked信息
 
 ---
 

@@ -1,6 +1,6 @@
 # RPGAgent 待测试功能清单
 
-> 最后更新：2026-03-31 01:38
+> 最后更新：2026-03-31 09:57
 > 项目地址：http://43.134.81.228:8080/
 
 ---
@@ -213,7 +213,13 @@
   - `options`消息在所有`narrative`消息之后发送，格式为数组
   - REST API `/api/games/action`返回的选项在`command.options`字段（管道符分隔字符串）
   - WebSocket的`options`消息更结构化，前端更易解析
-- [ ] `achievement_unlock` - 成就解锁 → **无法测试（需触发成就）** [2026-03-30 11:43]
+- [x] `achievement_unlock` - 成就解锁 → **❌ 失败（P2）** [2026-03-31 09:57]
+  - 创建新session (f9571f5a3dc0)，turn=0，所有成就锁定
+  - 发送"环顾四周" action后 turn=0→1，action响应正常
+  - 再次查询 achievements API：**所有6个成就仍为锁定状态**（unlocked_count=0）
+  - "第一步"成就条件为"完成第一章"，turn=1已满足但未解锁
+  - **根因**：GM响应（action）后未触发成就解锁逻辑，成就状态未更新
+  - 建议：P2级，action响应后应检查成就条件并更新解锁状态
 - [x] `error` - 错误消息 → **通过（无效session）** [2026-03-30 00:38]
   - 无效session_id连接后收到 `{"type":"error","content":"会话不存在或已过期"}`
 - [ ] `cg_generated` - CG生成 → **无法测试（CG生成API未实现）** [2026-03-30 11:43]
@@ -1032,3 +1038,11 @@
   - example剧本"环顾四周" → HTTP 500（同一session重复action可能触发）❌
   - three_little_pigs剧本"吹倒草屋" → HTTP 200 ✅
   - 结论：REST API action偶发500，建议使用WebSocket替代
+
+## 2026-03-31 09:57（第78轮）
+- 3.2 `achievement_unlock` - 成就解锁 → **❌ 失败（P2）** [2026-03-31 09:57]
+  - 测试：创建新session (f9571f5a3dc0)，发送action触发turn 0→1
+  - "第一步"成就条件为"完成第一章"，turn=1已满足
+  - 但achievements API返回全部6个成就仍为锁定状态（unlocked_count=0）
+  - **根因**：GM action响应后未触发成就解锁逻辑
+  - 建议：P2级，在action响应后增加成就条件检查和状态更新
