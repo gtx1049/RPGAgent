@@ -354,16 +354,20 @@ function executeAction(action) {
     return;
   }
 
+  if (action.cost > 0 && !confirm(`消耗${action.cost}点行动力「${text}」，是否继续？`)) return;
+
   sendPlayerInput(text);
 }
 
 // ── 技能使用 ─────────────────────────────────
 
 function useSkill(skill) {
-  if (state.ap < (skill.rank || 1)) {
-    appendSystem(`【行动力不足】「${skill.name}」需要 ${skill.rank || 1} 点行动力，当前剩余 ${state.ap} 点。`);
+  const cost = skill.rank || 1;
+  if (state.ap < cost) {
+    appendSystem(`【行动力不足】「${skill.name}」需要 ${cost} 点行动力，当前剩余 ${state.ap} 点。`);
     return;
   }
+  if (!confirm(`消耗${cost}点行动力使用「${skill.name}」，是否继续？`)) return;
   sendPlayerInput(`使用技能：${skill.name}`);
 }
 
@@ -389,6 +393,7 @@ function cancelCustomAction() {
 function submitCustomAction() {
   const text = $("custom-input").value.trim();
   if (!text) return;
+  if (!confirm(`执行自由行动「${text.substring(0, 20)}${text.length > 20 ? '…' : ''}」，是否继续？`)) return;
   cancelCustomAction();
   sendPlayerInput(text);
 }
