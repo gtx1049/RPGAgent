@@ -5739,3 +5739,28 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 - 实现场景删除API端点
 - 添加前端删除按钮（当前编辑器界面未发现删除场景的入口）
 
+
+---
+
+## 测试反馈 2026-03-30 08:19
+
+**测试项**：9.2 战斗/决策系统 - 后果即时性（行动后即时反馈）
+
+**结果**：部分通过（P2）
+
+**详情**：
+- REST API `/api/games/action` 响应时间约10秒（LLM生成延迟，可接受）
+- ✅ 响应包含 `narrative`（GM叙事）、`hidden_value_changes`、`relation_changes`、`scene_change`
+- ❌ [P2] **行动响应不返回HP/AP/Turn状态**：REST API `/api/games/action` 响应的顶层字段为 `session_id/narrative/options/hidden_value_changes/relation_changes/scene_change/command/scene_cg`，**缺少 `hp/action_power/turn` 等状态字段**。玩家行动后无法从响应本身得知状态变化，必须额外调用 `/api/games/{session_id}/status` 查询
+- ❌ [P2] **WS断开时操作静默吞没**：WS未连接时 `sendPlayerInput()` 检测到 `!state.connected` 后直接 return，玩家点击按钮后没有任何反馈（无错误提示、无按钮禁用），操作被静默吞掉
+- ❌ [P2] **行动后无即时UI状态更新**：GM叙事显示后，AP/HP/回合数等状态没有即时刷新动画或通知，玩家需手动打开属性面板才能确认状态变化（如AP是否被消耗）
+- ❌ [P2] **AP耗尽后按钮仍可交互**：AP归零后，行动按钮仍为 enabled 状态（无 disabled class），点击无反应但视觉上无禁用手势
+
+**根因分析**：
+1. REST API设计问题：action响应缺少完整状态快照（仅返回变化元数据 `hidden_value_changes`，而非完整状态）
+2. WS P1阻塞（连接立即断开）导致 `stats_update` 实时推送不可用，无法弥补REST API的状态快照缺失
+3. 前端 `executeAction()` 收到响应后仅更新叙事内容，未实现状态变化动画或即时反馈
+
+**优先级建议**：P2
+- 行动后即时反馈是RPG核心体验，缺少状态感知会让玩家困惑
+- 最优解：WS正常后实现 `stats_update` 实时推送；次优解：REST API action响应增加 `stats_snapshot` 字段
