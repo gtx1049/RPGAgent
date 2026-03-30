@@ -410,7 +410,10 @@
 - [x] CG全屏查看 → **失败（P3）** [2026-03-30 06:19]
   - **Bug**：showCgFull()和openCgGallery()添加open class但不移除内联style="display:none"，CSS .open{display:flex}被内联样式覆盖导致CG全屏/画廊无法显示
   - 修复：在showCgFull()和openCgGallery()中添加overlay.style.display = ''移除内联样式
-- [ ] 日志详情查看
+- [x] 日志详情查看 → **通过** [2026-03-30 11:19]
+  - 日志面板正确打开（标题"📜 冒险日志"）；左侧列表+右侧内容区布局正确；点击日志条目后详情正确显示；关闭按钮(×)功能正常
+  - API验证：`GET /api/logs/{id}` 200返回列表；`GET /api/logs/{id}/latest` 返回"尚无冒险日志"（新session符合预期）
+  - P3：日志无时间戳/回合标记；ESC键无法关闭（与其他模态框一致）
 - [x] ESC键关闭 → **失败（P3）** [2026-03-30 03:38]
   - 代码审查发现：game.js 中注册了两个独立的 ESC keydown 监听器
   - 监听器1（行989-992）：ESC → `closeLogModal()` + `closeAttrPanel()`
@@ -710,9 +713,21 @@
   - ⚠️ [P3] 队友系统无可用NPC招募（三只小猪剧本无队友）
 
 ### 9.4 探索系统
-- [ ] 线索收集体验
-- [ ] 地点探索反馈
-- [ ] 奖励机制
+- [x] 线索收集体验 → **❌ 阻塞（P1）** [2026-03-30 11:38]
+  - `/api/exploration/{session}/clues` → 404 Not Found
+  - `/api/exploration/{session}/summary` → 404 Not Found
+  - `/api/exploration/{session}/sites` → 404 Not Found
+  - `POST /api/exploration/{session}/explore/{site_id}` → 404 Not Found
+  - 探索系统API全部未实现，无法进行任何探索操作
+- [x] 地点探索反馈 → **❌ 阻塞（P1）** [2026-03-30 11:38]
+  - 所有探索API返回404，与线索收集体验同根因
+  - 游戏内GM叙事提供"任务面板"含3条线索（来源：工作室/网络/博客），但系统层面无探索机制
+- [x] 奖励机制 → **❌ 阻塞（P1）** [2026-03-30 11:38]
+  - 探索系统API全部404（见9.4探索系统），奖励机制无法通过系统API验证
+  - 游戏内奖励观察：gold始终=0，exp始终未返回；成就系统在turn=0和turn=1时正确解锁（和平谈判者/幸存者/问心无愧/第一步），但无金币/经验/物品等实质性奖励
+  - `hidden_value_changes`始终为空对象`{}`，GM行动响应未触发任何可记录的值变化
+  - ⚠️ [P2] GM叙事层面的战斗奖励（体力消耗-10、战利品描述）未同步到实际游戏状态（P2-3根因）
+  - 建议：实现探索系统API（sites/clues/summary/explore端点），建立完整的奖励触发机制
 
 ### 9.5 队友系统
 - [x] 队友招募体验 → **部分通过（P3）** [2026-03-30 10:57]
