@@ -114,6 +114,8 @@ textarea#content-editor:focus{outline:none}
     <div id="editor-toolbar">
       <input id="scene-title-input" placeholder="场景标题（仅显示用）" value="">
       <button class="tool" id="preview-toggle">👁 预览</button>
+      <button class="tool" id="undo-btn" title="撤销 (Ctrl+Z)" disabled>↩ 撤销</button>
+      <button class="tool" id="redo-btn" title="重做 (Ctrl+Y)" disabled>↪ 重做</button>
       <button class="tool" id="save-btn">💾 保存</button>
       <span id="save-status">未保存</span>
     </div>
@@ -184,6 +186,10 @@ let currentItem = null;
 let isPreview = false;
 let metaData = {};
 let saveTimer = null;
+let undoStack = [];
+let redoStack = [];
+const MAX_UNDO = 50;
+let isUndoRedo = false;
 
 // ── 初始化 ─────────────────────────────────────────
 
@@ -336,6 +342,7 @@ async function loadCharList(list) {
 
 async function selectScene(id) {
   currentItem = id;
+  undoStack = []; redoStack = []; updateUndoRedoButtons();
   document.querySelectorAll('.item').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.item').forEach(el => {
     if (el.querySelector('.label').textContent === id ||
@@ -369,6 +376,7 @@ async function selectScene(id) {
 
 async function selectChar(id) {
   currentItem = id;
+  undoStack = []; redoStack = []; updateUndoRedoButtons();
   Array.from(document.getElementById('item-list').children).forEach(el => {
     el.classList.toggle('active', el.querySelector('.del-btn') &&
       el.querySelector('.del-btn').onclick.toString().includes(id));
@@ -404,6 +412,54 @@ function showMetaEditor() {
   document.getElementById('m-first-scene').value = m.first_scene || 'act_01';
   document.getElementById('sb-item').textContent = '剧本配置';
 }
+
+// ── 撤销/重做 ──────────────────────────────────────
+
+function pushUndoState() {
+  if (isUndoRedo) return;
+  const ta = document.getElementById('content-editor');
+  if (!ta) return;
+  undoStack.push(ta.value);
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  redoStack = [];
+  updateUndoRedoButtons();
+}
+
+function updateUndoRedoButtons() {
+  const undoBtn = document.getElementById('undo-btn');
+  const redoBtn = document.getElementById('redo-btn');
+  if (undoBtn) undoBtn.disabled = undoStack.length === 0;
+  if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+}
+
+function undo() {
+  if (undoStack.length === 0) return;
+  const ta = document.getElementById('content-editor');
+  redoStack.push(ta.value);
+  ta.value = undoStack.pop();
+  isUndoRedo = true;
+  markUnsaved();
+  updatePreview();
+  document.getElementById('sb-words').textContent = ta.value.length + ' 字';
+  updateUndoRedoButtons();
+  setTimeout(() => { isUndoRedo = false; }, 100);
+}
+
+function redo() {
+  if (redoStack.length === 0) return;
+  const ta = document.getElementById('content-editor');
+  undoStack.push(ta.value);
+  ta.value = redoStack.pop();
+  isUndoRedo = true;
+  markUnsaved();
+  updatePreview();
+  document.getElementById('sb-words').textContent = ta.value.length + ' 字';
+  updateUndoRedoButtons();
+  setTimeout(() => { isUndoRedo = false; }, 100);
+}
+
+document.getElementById('undo-btn').onclick = undo;
+document.getElementById('redo-btn').onclick = redo;
 
 // ── 保存 ───────────────────────────────────────────
 
@@ -486,6 +542,7 @@ function showToast(msg, type = 'success') {
 function setupEditor() {
   const ta = document.getElementById('content-editor');
   ta.addEventListener('input', () => {
+    pushUndoState();
     markUnsaved();
     updatePreview();
     clearTimeout(saveTimer);
@@ -656,6 +713,14 @@ function setupShortcuts() {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault();
       saveCurrent();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      undo();
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+      e.preventDefault();
+      redo();
     }
   });
 }
