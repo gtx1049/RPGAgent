@@ -39,7 +39,7 @@
 | P3-2 | 编辑器无撤销/重做功能 | 2026-03-30 09:19 | 待实现 |
 | P3-3 | 场景/角色/删除操作后无UI反馈 | 2026-03-30 13:10 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/563262b) |
 | P3-4 | 移动端侧边栏JS间歇性失灵 | 2026-03-30 10:25 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/0c7c7d7) - toggleMobileSidebar添加try-catch+addEventListener备份绑定 |
-| P3-5 | 队友系统前端完全缺失 | 2026-03-30 10:57 | 待实现 |
+| P3-5 | 队友系统前端完全缺失 | 2026-03-31 19:41 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/9316620) - 队友面板(bottom-nav入口)、loadTeammates()获取已招募+可招募列表 |
 | P3-6 | 体力接口缺stamina字段 | 2026-03-30 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/8695735) - status API返回stamina/max_stamina字段已验证
 | P3-7 | NPC关系系统缺损 | 2026-03-31 02:19 | 体验问题（P3）- GM叙事层面NPC交互正常，但npc_relations状态不更新 |
 | P3-8 | 编辑器/游戏无自动保存机制 | 2026-03-30 23:05 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/12a2617)（游戏侧120秒后台存档） |
@@ -282,16 +282,19 @@
 
 ---
 
-### P3-5: 队友系统前端完全缺失
+### P3-5: 队友系统前端完全缺失 ✅ 已修复
 
 **问题：** 队友系统后端API完善但前端完全缺失
 
-**详情：**
-- bnav底部导航无队友管理按钮
-- 所有剧本的available均返回空数组（无可招募NPC）
-- GM叙事中无招募队友的途径提示
+**修复（2026-03-31）：**
+- 新增 👥 队友面板到 sidebar（index.html）
+- 新增 bnav-teammates 按钮到底部导航（index.html）
+- 新增 `loadTeammates()` 函数获取并渲染已招募队友和可招募NPC（game.js）
+- `switchBottomTab` 支持 teammates 标签切换
 
-**建议：** 在bnav增加"👥队友"入口；在剧本中配置可招募NPC
+**修复文件：** `static/index.html`、`static/js/game.js`
+
+**待完善：** available返回空数组（剧本需配置recruitable=True的NPC）；招募/解散功能UI未实现（后端API已完备）
 
 ---
 
