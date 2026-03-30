@@ -1072,3 +1072,22 @@
   - POST `/api/exploration/{session}/explore/chen_sheng_will` → **500 Internal Server Error** ❌
   - **结论**：读取API已修复（commit bf65c6e），但探索写入API仍返回500，探索奖励机制无法验证
   - 建议：P1级，修复explore端点500错误
+
+## 2026-03-31 19:19（第82轮）
+- 系统整体健康检查 → **通过** [2026-03-31 19:19]
+  - `/health` → `{"status":"ok","sessions":25,"memory":{"rss":149041152,...}}` ✅
+- 3.2 CG生成API → **仍为404（P3未修复）** [2026-03-31 19:19]
+  - `POST /api/scenes/scene_01/cg/generate` → `{"detail":"Not Found"}` ❌
+  - `GET /api/sessions/{id}/cg` → `{"count":0,"cg_list":[]}` ✅
+  - CG生成功能完全未实现，无法端到端测试CG画廊
+- REST API action稳定性 → **通过** [2026-03-31 19:19]
+  - POST `/api/games/action` → HTTP 200，turn 0→1，AP 3→2 ✅
+  - GM叙事响应完整，骰子判定显示正确
+- 成就解锁（复测）→ **部分通过（P3残留）** [2026-03-31 19:19]
+  - example剧本新session，1个action后：3/6成就解锁（和平谈判者/幸存者/问心无愧）
+  - "第一步"条件"完成第一章"，turn=1未解锁 → P3条件逻辑问题
+  - "幸存者"1 action即解锁，条件"完成任意章节"不符 → P3条件逻辑问题
+- 9.4 探索系统POST（复测）→ **仍为500（P1未完全修复）** [2026-03-31 19:19]
+  - qinmo_dazexiang新session → `POST /api/exploration/{id}/explore/chen_sheng_will` → **500 Internal Server Error** ❌
+  - 读取API正常但写入仍失败，探索奖励机制无法验证
+  - P1-4 debug.md标记为"已修复"但服务器实际仍500，疑服务器未部署最新commit
