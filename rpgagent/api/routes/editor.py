@@ -51,6 +51,13 @@ def _ensure_dir(path: Path) -> None:
 # ─── 请求/响应模型 ───────────────────────────────────
 
 
+class CreateGameRequest(BaseModel):
+    id: str
+    name: str
+    author: str = ""
+    summary: str = ""
+
+
 class SceneMeta(BaseModel):
     id: str
     title: str
@@ -145,6 +152,61 @@ async def list_games():
                         "path": str(gdir),
                     })
     return games
+
+
+# ─── 新建剧本 ───────────────────────────────────────
+
+
+@router.post("/games")
+async def create_game(data: CreateGameRequest):
+    """创建新剧本（建立目录结构和初始文件）"""
+    game_id = data.id.strip()
+    if not game_id:
+        raise HTTPException(status_code=400, detail="剧本 ID 不能为空")
+    if not game_id.replace("_", "").replace("-", "").isalnum():
+        raise HTTPException(status_code=400, detail="剧本 ID 只能包含字母、数字、下划线和连字符")
+
+    candidates = [
+        Path(__file__).parent.parent.parent.parent / "games" / game_id,
+        Path.home() / ".config" / "rpgagent" / "games" / game_id,
+    ]
+    for p in candidates:
+        if p.exists():
+            raise HTTPException(status_code=409, detail=f"剧本已存在：{game_id}")
+
+    # 使用第一个可用目录
+    base = candidates[0]
+    _ensure_dir(base)
+    _ensure_dir(base / "scenes")
+    _ensure_dir(base / "characters")
+
+    # 写入 meta.json
+    meta = {
+        "id": game_id,
+        "name": data.name or game_id,
+        "version": "1.0.0",
+        "author": data.author,
+        "summary": data.summary,
+        "tags": [],
+        "engine_version": "0.2",
+        "first_scene": "scene_01",
+        "systems_enabled": {},
+        "hidden_values": [],
+        "hidden_value_actions": {},
+    }
+    (base / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # 写入 setting.md
+    (base / "setting.md").write_text(f"# {data.name or game_id}\n\n剧本设定……\n", encoding="utf-8")
+
+    # 写入默认首个场景
+    first_scene = "scene_01"
+    (base / "scenes" / f"{first_scene}.md").write_text(
+        f"---\ntitle: 第一幕\n---\n\n# {first_scene}\n\n场景内容……\n",
+        encoding="utf-8",
+    )
+
+    return {"ok": True, "id": game_id, "path": str(base)}
 
 
 # ─── 剧本结构概览 ───────────────────────────────────
