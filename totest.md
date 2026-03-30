@@ -430,9 +430,12 @@
   - ⚠️ [P3] CG生成API未实现（/api/scenes/{id}/cg/generate 404），新session CG历史为空，无法端到端验证
   - ✅ ESC键可关闭画廊（已修复，见5.4 ESC键关闭）
   - ⚠️ [P3] 移动端底部导航无CG入口
-- [x] CG全屏查看 → **失败（P3）** [2026-03-30 06:19]
-  - **Bug**：showCgFull()和openCgGallery()添加open class但不移除内联style="display:none"，CSS .open{display:flex}被内联样式覆盖导致CG全屏/画廊无法显示
-  - 修复：在showCgFull()和openCgGallery()中添加overlay.style.display = ''移除内联样式
+- [x] CG全屏查看 → **通过** [2026-03-30 14:38]
+  - ✅ openCgGallery()调用后：inline style被清除(style=""")，class添加"open"，display变为flex（正常显示）
+  - ✅ showCgFull()调用后：同样正确清除inline style，display变为flex
+  - ✅ 画廊有关闭按钮(×)，点击后display变为none；全屏有关闭按钮(关闭)
+  - ✅ ESC键可关闭画廊和全屏
+  - ⚠️ [P3] 点击遮罩层背景不会关闭画廊（无此功能，非阻塞）
 - [x] 日志详情查看 → **通过** [2026-03-30 11:19]
   - 日志面板正确打开（标题"📜 冒险日志"）；左侧列表+右侧内容区布局正确；点击日志条目后详情正确显示；关闭按钮(×)功能正常
   - API验证：`GET /api/logs/{id}` 200返回列表；`GET /api/logs/{id}/latest` 返回"尚无冒险日志"（新session符合预期）
