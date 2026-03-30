@@ -106,7 +106,27 @@ async def editor_page():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "sessions": len(get_manager().list_active_sessions())}
+    import tracemalloc, resource, sys
+    # 内存使用（RSS = 常驻内存，trakmalloc.current/peak = Python堆）
+    try:
+        cur, peak = tracemalloc.get_traced_memory()
+        rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # Linux ru_maxrss 单位是 KB（Unix），macOS 是 bytes
+        if sys.platform == "darwin":
+            rss_bytes = rss
+        else:
+            rss_bytes = rss * 1024
+    except Exception:
+        cur = peak = rss_bytes = None
+    return {
+        "status": "ok",
+        "sessions": len(get_manager().list_active_sessions()),
+        "memory": {
+            "rss": rss_bytes,
+            "python_heap_current": cur,
+            "python_heap_peak": peak,
+        },
+    }
 
 
 # ─── WebSocket 实时叙事流 ──────────────────────────────
