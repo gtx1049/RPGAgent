@@ -1,6 +1,6 @@
 # RPGAgent 问题追踪
 
-> 最后更新：2026-03-31 09:57 (GMT+8)
+> 最后更新：2026-03-31 19:06 (GMT+8)
 > 整理策略：只保留活跃问题，已通过/已修复的测试记录已归档到 git commit 历史
 
 ---
@@ -12,7 +12,7 @@
 | P1-1 | 场景切换旧session报错 | 2026-03-30 09:23 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/) |
 | P1-2 | 编辑器无法创建新剧本 | 2026-03-30 13:26 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c41faf3) |
 | P1-3 | 回放/结局/事件三系统500回归 | 2026-03-30 22:57 | [已验证通过](https://github.com/gaotianxing/RPGAgent/commit/5ffcf24) - 第74轮API验证全部通过 |
-| P1-4 | 探索系统API全部404，奖励机制无法测试 | 2026-03-31 02:38 | [部分修复](https://github.com/gaotianxing/RPGAgent/commit/bf65c6e) - GET端点已修复，POST /explore/{site_id} 返回500 |
+| P1-4 | 探索系统API全部404，奖励机制无法测试 | 2026-03-31 19:06 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/20b5e1c) - POST /explore 500根因：StatsSystem.get()不接受默认值参数，已修正为`or 10`默认值处理 |
 | P1-5 | WebSocket连接立即断开，无法保持连接 | 2026-03-30 11:43 | [已修复] - 连接稳定，可正常收发消息 |
 
 ---
@@ -439,26 +439,17 @@
 
 ---
 
-### P1-4: 探索系统API全部404，奖励机制无法测试
+### P1-4: 探索系统API全部404，奖励机制无法测试 ✅ 已修复
 
-**问题：** 探索系统所有API端点返回404，奖励机制完全无法通过系统验证
+**问题：** 探索系统所有API端点返回404，POST /explore 返回500
 
-**详情：**
-- `GET /api/exploration/{session}/sites` → HTTP 404，`{"detail":"Not Found"}`
-- `GET /api/exploration/{session}/clues` → HTTP 404
-- `GET /api/exploration/{session}/summary` → HTTP 404
-- `POST /api/exploration/{session}/explore/{site_id}` → HTTP 404
+**修复历史：**
+- bf65c6e（2026-03-30）：注册exploration router，修复所有GET端点404
+- 20b5e1c（2026-03-31）：修复POST /explore 500 —— `exploration_system.py`第333行调用`stats_sys.get(key, 10)`，但StatsSystem.get()只接受key参数不含默认值，改为`stats_sys.get(key) or 10`
 
-**奖励机制观察：**
-- gold始终=0，无任何金币获得途径
-- stats API的overview中exp字段不返回（字段缺失）
-- GM叙事描述的战斗奖励（如"体力消耗-10"）未同步到实际游戏状态
-- `hidden_value_changes`始终为空对象`{}`，GM响应未触发值变化记录
-- 成就系统在turn=0/1时正确解锁（和平谈判者/幸存者/问心无愧/第一步），但无配套的数值奖励
+**根因：** `exploration_system.py`第333行 `attr_val = stats_sys.get(site.attribute_key, 10)` 应为 `attr_val = stats_sys.get(site.attribute_key) or 10`
 
-**测试会话：** 2414d4c49b46（示例剧本·第一夜）
-
-**建议：** 实现完整的探索系统API（sites/clues/summary/explore端点），建立奖励触发机制（gold/exp/item）
+**修复文件：** `rpgagent/systems/exploration_system.py`
 
 ---
 
