@@ -25,7 +25,7 @@
 | P2-2 | AP归零后按钮仍可点击 | 2026-03-30 12:00 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/a1ea2ab) |
 | P2-3 | GM叙事描述的数值未同步到游戏状态 | 2026-03-30 13:40 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/9034f1e) |
 | P2-4 | action响应缺HP/AP/Turn状态字段 | 2026-03-30 00:19 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/df3eca5) |
-| P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-31 07:19 | ⚠️ **标记为已修复但实际未生效** - commit dc82f3f声称已添加RPG属性字段，但实测/editor角色表单仍只有5个叙事字段（ID/名称/类型/简介/性格），无STR/DEX/CON/INT/WIS/CHA/HP/等级/技能/装备槽位 |
+| P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-31 07:24 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/4942dba) - 前端角色表单新增折叠RPG属性面板（HP/MaxHP/ActionPower/Level/Exp/Stamina + STR/DEX/CON/INT/WIS/CHA），loadCharacter/saveCharacter均已支持RPG字段 |
 | P2-6 | WebSocket无心跳保活机制 | 2026-03-30 20:03 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/68700e2) |
 | P2-7 | 成就解锁机制完全不工作 | 2026-03-31 09:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c739d74)，机制激活但条件逻辑残留P3问题 |
 
@@ -160,32 +160,17 @@
 
 ---
 
-### P2-5: 编辑器角色系统缺少RPG数值属性 ⚠️ 修复未生效
+### P2-5: 编辑器角色系统缺少RPG数值属性 ✅ 已修复
 
 **问题：** 角色编辑器仅支持叙事属性（ID/名称/类型/简介/性格），缺少RPG游戏机制核心属性
 
-**修复尝试：** commit dc82f3f (2026-03-30 22:23) 声称已修复，但2026-03-31实测编辑器角色表单仍只有5个字段，无RPG属性
+**根因：** editor.html 的角色表单仅设计了叙事字段，未规划RPG属性体系。dc82f3f 在后端 create_character 添加了RPG默认值，但前端表单无RPG输入控件，用户无法实际设置。
 
-**实测确认（第91轮 2026-03-31 07:19）：**
-- ✅ 角色表单存在，类型下拉框正常（NPC/敌人/队友）
-- ❌ 仍只有5个字段：ID、名称、类型、简短描述、性格特点/说话风格
-- ❌ 无STR/DEX/CON/INT/WIS/CHA、HP/MP、等级、技能、装备槽位
-- 结论：修复未部署或修复方向不对
-
-**详情：**
-- 当前角色表单字段：ID、名称、类型(NPC/敌人/队友)、简介、性格/行为
-- 缺失的RPG核心属性：STR/DEX/CON/INT/WIS/CHA、HP/MP、等级(Lv)、技能(Skills)、装备(Equipment)
-- 以"猪大哥"为例：仅有叙事描述"贪吃、懒惰、喜欢偷懒"，无任何数值属性
-- 队友/敌人类型角色无战斗属性，无法参与战斗系统
-
-**根因：** editor.html 的角色表单仅设计了叙事字段，未规划RPG属性体系
-
-**建议：** P2级，在角色表单中增加RPG属性标签页或属性面板，包含：
-- 六属性（STR/DEX/CON/INT/WIS/CHA）及衍生战斗属性（AC/攻击/伤害）
-- HP/MP及最大值
-- 等级与经验值
-- 技能列表与技能点
-- 装备槽位（武器/副手/护甲/饰品）
+**修复（2026-03-31 commit 4942dba）：**
+- editor.html 角色表单新增折叠RPG属性面板（点击"📊 RPG数值属性 ▸"展开）
+- RPG字段：HP / 最大HP / 行动力 / 等级 / 经验 / 体力 + STR/DEX/CON/INT/WIS/CHA
+- `toggleRpgStats()` 控制展开/折叠；`loadCharacter()` 加载时填充RPG字段；`saveCharacter()` 保存时包含RPG字段
+- 修复文件：`static/editor.html`
 
 ---
 
