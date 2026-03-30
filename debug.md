@@ -41,7 +41,7 @@
 | P3-5 | 队友系统前端完全缺失 | 2026-03-30 10:57 | 待实现 |
 | P3-6 | 体力接口缺stamina字段 | 2026-03-28 | 待确认 |
 | P3-7 | NPC关系系统缺损 | 2026-03-28 | 待确认 |
-| P3-8 | 编辑器/游戏无自动保存机制 | 2026-03-30 12:19 | 待实现 |
+| P3-8 | 编辑器/游戏无自动保存机制 | 2026-03-30 23:05 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/12a2617)（游戏侧120秒后台存档） |
 | P3-9 | 场景删除API路径勘误（旧路径404，实际路径可用） | 2026-03-30 12:38 | 需更新文档 |
 | P3-10 | API路径不一致（sessions/games前缀混用） | 2026-03-30 12:57 | 待规范 |
 | P3-11 | /health接口无内存监控信息 | 2026-03-30 15:38 | [已修复](https://github.com/gtx1049/RPGAgent/commit/1ee96e4) |
@@ -240,16 +240,21 @@
 
 ---
 
-### P3-8: 编辑器/游戏无自动保存机制
+### P3-8: 编辑器/游戏无自动保存机制 ✅ 已修复（游戏侧，12a2617）
 
 **问题：** 编辑器无定时自动保存，游戏自动存档不同步游戏进程
 
 **详情：**
-- 编辑器：editor.html 无任何 `setInterval`/`setTimeout` 自动保存，`/api/editor/autosave` → 404
-- 游戏：session 创建时生成 autosave（turn_count=0），执行 action 后 turn=1 但 autosave turn_count 仍为0
-- autosave 仅在 session 初始化时创建一次，之后不自动更新
+- ~~编辑器：editor.html 无任何 `setInterval`/`setTimeout` 自动保存，`/api/editor/autosave` → 404~~（编辑器侧仍待实现）
+- 游戏：session 创建时生成 autosave，但 `_start_auto_save_task()` 从未被调用，后台存档任务从未启动
+- autosave 仅在 session 初始化时创建一次（turn=0），游戏过程不自动更新
 
-**建议：** P3级，编辑器增加每60秒自动保存，游戏每N回合自动更新 autosave
+**修复（2026-03-30）：**
+- `server.py` lifespan 启动时调用 `await manager._start_auto_save_task()`
+- 所有活跃会话每120秒自动存档，不再仅依赖每5回合触发
+- 编辑器侧 autosave 仍待实现（editor.html 无 setInterval，`/api/editor/autosave` → 404）
+
+**修复文件：** `rpgagent/api/server.py`
 
 ---
 
