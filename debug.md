@@ -25,7 +25,7 @@
 | P2-2 | AP归零后按钮仍可点击 | 2026-03-30 12:00 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/a1ea2ab) |
 | P2-3 | GM叙事描述的数值未同步到游戏状态 | 2026-03-30 13:40 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/9034f1e) |
 | P2-4 | action响应缺HP/AP/Turn状态字段 | 2026-03-30 00:19 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/df3eca5) |
-| P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-30 11:57 | 待实现 |
+| P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-30 22:23 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/dc82f3f) |
 | P2-6 | WebSocket无心跳保活机制 | 2026-03-30 20:03 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/68700e2) |
 
 ---
