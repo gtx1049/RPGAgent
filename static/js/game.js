@@ -1159,6 +1159,20 @@ async function startGame(gameId, playerName) {
 
 async function initSelectScreen() {
   const games = await loadGameList();
+
+  // 检查 ?start=xxx URL参数，自动启动对应剧本（从市场页面跳转）
+  const urlParams = new URLSearchParams(location.search);
+  const autoStartId = urlParams.get("start");
+  if (autoStartId) {
+    // 清除URL参数，不刷新页面
+    history.replaceState(null, "", location.pathname);
+    const found = games.find(g => g.id === autoStartId);
+    if (found) {
+      launchGame(autoStartId, "冒险者");
+      return;
+    }
+  }
+
   const container = $("game-list");
   if (!games || games.length === 0) {
     container.innerHTML = `<div class="game-card" style="cursor:default">
