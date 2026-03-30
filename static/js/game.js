@@ -50,6 +50,45 @@ const apDots       = [ $("ap-1"), $("ap-2"), $("ap-3") ];
 // ── 叙事输出 ────────────────────────────────
 
 let narrativeBuffer = "";
+let newContentEl = null;
+
+// 检测用户是否在阅读历史（不在底部）
+function isAtBottom() {
+  return narrativeEl.scrollHeight - narrativeEl.scrollTop - narrativeEl.clientHeight < 50;
+}
+
+// 叙事区滚动监听：用户在底部时自动清除"新内容"提示
+narrativeEl.addEventListener('scroll', () => {
+  if (isAtBottom() && newContentEl) {
+    newContentEl.remove();
+    newContentEl = null;
+  }
+});
+
+// 显示"↓ 新内容"提示，用户点击滚动到底部
+function showNewContentIndicator() {
+  if (newContentEl) return;
+  const el = document.createElement('div');
+  el.className = 'new-content-indicator';
+  el.textContent = '↓ 新内容';
+  el.style.cssText = 'position:sticky;bottom:8px;left:50%;transform:translateX(-50%);background:var(--gold);color:#000;padding:4px 12px;border-radius:12px;font-size:13px;cursor:pointer;z-index:10;display:inline-block;margin:0 auto;width:fit-content;';
+  el.onclick = () => {
+    narrativeEl.scrollTop = narrativeEl.scrollHeight;
+    el.remove();
+    newContentEl = null;
+  };
+  narrativeEl.appendChild(el);
+  newContentEl = el;
+}
+
+// 仅在用户处于底部时自动滚动
+function autoScroll() {
+  if (isAtBottom()) {
+    narrativeEl.scrollTop = narrativeEl.scrollHeight;
+  } else {
+    showNewContentIndicator();
+  }
+}
 
 function appendGM(text, className = "gm-text") {
   const div = document.createElement("div");
@@ -78,14 +117,14 @@ function appendGM(text, className = "gm-text") {
         if (tagEnd !== -1) {
           i = tagEnd + 1;
           tmpDiv.innerHTML = html.substring(0, i);
-          narrativeEl.scrollTop = narrativeEl.scrollHeight;
+          autoScroll();
           setTimeout(run, 0);
           return;
         }
       }
       i++;
       tmpDiv.innerHTML = html.substring(0, i);
-      narrativeEl.scrollTop = narrativeEl.scrollHeight;
+      autoScroll();
       setTimeout(run, SPEED);
     }
   };
@@ -97,7 +136,7 @@ function appendPlayer(text) {
   div.className = "player-input";
   div.textContent = `> ${text}`;
   narrativeEl.appendChild(div);
-  narrativeEl.scrollTop = narrativeEl.scrollHeight;
+  autoScroll();
 }
 
 function appendDivider() {
@@ -105,6 +144,7 @@ function appendDivider() {
   div.className = "divider";
   div.textContent = "───";
   narrativeEl.appendChild(div);
+  autoScroll();
 }
 
 function appendSystem(text) {
@@ -112,7 +152,7 @@ function appendSystem(text) {
   div.className = "system-msg";
   div.textContent = text;
   narrativeEl.appendChild(div);
-  narrativeEl.scrollTop = narrativeEl.scrollHeight;
+  autoScroll();
 }
 
 function clearNarrative() {
