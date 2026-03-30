@@ -1100,3 +1100,18 @@
 - `GET /api/events` → `{"detail":"当前剧本未配置世界事件"}`（非500）✅
 - `POST /api/events/evaluate` → 正确提示无配置（非500）✅
 结论：回放/结局/事件三系统API已完全恢复，不再返回500错误。commit 5ffcf24修复已验证生效。
+
+## 测试反馈 2026-03-30 23:14
+测试项：2.11 `GET /api/replay/{session_id}/export` - 导出回放
+结果：通过
+详情：
+- 启动新游戏 session `6fd6b7de33bc`，发送2个 action（turn=2）
+- `POST /api/replay/start` → 200 `{"message":"开始录制","session_id":"6fd6b7de33bc"...}` ✅
+- 发送 action 触发 replay 数据记录
+- `POST /api/replay/stop` → 200 `{"message":"录制已结束","total_turns":1}` ✅（仅记录了录制期间的1个action）
+- `GET /api/replay/6fd6b7de33bc/export` → 200，返回 markdown 格式回放
+  - 包含：`# scene_01` 标题、游戏信息、开始/结束时间、总回合数
+  - 回合详情：场景、时间戳、玩家输入、骰子判定结果
+  - 格式：`## 第 3 回合\n**场景**：scene_01\n**→ 玩家**：player_input\n🎲 **判定结果**...`
+  - ⚠️ 注意：导出显示"第3回合"与实际 session turn=2 不一致，可能是 replay 使用独立回合计数器
+结论：回放导出 API 功能正常，markdown 格式输出可用。

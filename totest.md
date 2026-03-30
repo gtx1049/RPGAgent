@@ -139,7 +139,10 @@
   - 新session无行动记录，返回空数组（符合预期）✅
 - [x] `GET /api/replay/{session_id}/summary` - 获取回放摘要 → **通过** [2026-03-30 22:57]
   - 返回 `{"session_id":"xxx","game_id":"example","act_title":"scene_01","started_at":"...","ended_at":"...","final_ending":"","total_turns":0,"is_active":false,"turns_summary":[]}` ✅
-- [x] `GET /api/replay/{session_id}/export` - 导出回放 → **待测**
+- [x] `GET /api/replay/{session_id}/export` - 导出回放 → **通过** [2026-03-30 23:14]
+  - 返回 markdown 格式回放内容，包含游戏信息、时间戳、回合数据、玩家输入、骰子判定结果
+  - 示例输出：`# scene_01\n**游戏**：example\n**总回合数**：1\n## 第 3 回合\n**场景**：scene_01\n**→ 玩家**：player_input\n🎲 **判定结果**...\n`
+  - ⚠️ 注意：导出显示"第3回合"与实际 turn=2 不一致，可能是回放系统使用独立回合计数器
 
 ### 2.12 结局系统 (`/api/endings`)
 - [x] `GET /api/endings` - 列出结局 → **通过** [2026-03-30 22:57]
