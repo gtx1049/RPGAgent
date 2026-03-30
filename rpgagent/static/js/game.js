@@ -284,6 +284,7 @@ function renderActionButtons() {
   specialBtn.className = "action-btn special-btn";
   specialBtn.textContent = "✏️ 自由行动";
   specialBtn.title = "自由描述你的行动";
+  specialBtn.disabled = ap < 1; // AP不足时禁用（自由行动消耗1AP）
   specialBtn.onclick = showCustomActionBox;
   container.appendChild(specialBtn);
 }
