@@ -66,6 +66,7 @@ app.include_router(stats.router, prefix="/api")
 app.include_router(endings.router, prefix="/api")
 app.include_router(events.router, prefix="/api")
 app.include_router(replay.router, prefix="/api")
+app.include_router(exploration.router, prefix="/api")
 app.include_router(editor.router, prefix="/api")
 app.include_router(compression.router, prefix="/api")
 
