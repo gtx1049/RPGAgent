@@ -36,7 +36,7 @@
 | # | 问题 | 最后确认 | 状态 |
 |---|------|----------|------|
 | P3-1 | 新叙事自动定位打断阅读 | 2026-03-31 00:09 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/) - autoScroll()+isAtBottom()检测，用户阅读历史时不打断 |
-| P3-2 | 编辑器无撤销/重做功能 | 2026-03-30 09:19 | 待实现 |
+| P3-2 | 编辑器无撤销/重做功能 | 2026-03-31 20:08 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/5343e5d) - 工具栏添加↩撤销/↪重做按钮，支持Ctrl+Z/Y快捷键，最多50步历史 |
 | P3-3 | 场景/角色/删除操作后无UI反馈 | 2026-03-30 13:10 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/563262b) |
 | P3-4 | 移动端侧边栏JS间歇性失灵 | 2026-03-30 10:25 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/0c7c7d7) - toggleMobileSidebar添加try-catch+addEventListener备份绑定 |
 | P3-5 | 队友系统前端完全缺失 | 2026-03-31 19:41 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/9316620) - 队友面板(bottom-nav入口)、loadTeammates()获取已招募+可招募列表 |
@@ -241,15 +241,18 @@
 
 ---
 
-### P3-2: 编辑器无撤销/重做功能
+### P3-2: 编辑器无撤销/重做功能 ✅ 已修复（5343e5d）
 
 **问题：** 编辑器工具栏仅有"预览"和"保存"按钮，无撤销/重做按钮
 
-**详情：**
-- editor.js 中无 undo/redo 相关代码
-- editor.html 中无"撤销"或"重做"字样
-- 无键盘快捷键 Ctrl+Z/Ctrl+Y 监听
-- 无历史记录栈
+**修复（2026-03-31）：**
+- 工具栏新增 ↩撤销 和 ↪重做 按钮
+- 实现 undo/redo 核心逻辑：undoStack/redoStack 历史栈，最多50步
+- Ctrl+Z 撤销，Ctrl+Y 重做（支持Shift+Ctrl+Z）
+- 切换场景/角色时自动清空历史栈
+- 撤销/重做时同步更新预览和字数统计
+
+**修复文件：** `static/editor.html`
 
 ---
 
@@ -1363,3 +1366,34 @@
 
 **根因**：CG生成功能后端完全未实现，所有相关API端点返回404
 **建议**：P3级，实现CG生成API端点和WebSocket cg_generated消息推送
+
+---
+
+### P3-16: 移动端侧边栏toggle失效（潜在回归）
+
+**问题：** iPhone 14 viewport (390x844) 下点击 ☰ 面板 按钮，#sidebar.open class 未添加，sidebar保持关闭
+
+**发现时间：** 2026-03-31 19:57 (第83轮测试)
+
+**详情：**
+- CDP click (`agent-browser click @e3`) 点击后，`get count "#sidebar.open"` 返回 0
+- 直接 mouse 事件 (`mouse move + down + up`) 也不能触发 toggleMobileSidebar()
+- #sidebar 元素存在 (count=1)，位置正确 (x=390, width=300,  offscreen)
+- 其他按钮（冒险日志等）同样失效
+- console errors 为空 → JavaScript 引擎正常
+
+**与历史测试对比：**
+- 第74轮手动测试（2026-03-30 16:38）：移动端测试成功，点击冒险日志/成就按钮打开模态框 ✅
+- 第83轮自动化测试（2026-03-31 19:57）：CDP click 无法触发 JavaScript handler ❌
+
+**根因分析：**
+- game.js 使用 `onclick="toggleMobileSidebar()"` 而非 addEventListener
+- CDP Input.dispatchMouseEvent 与真实用户 click 事件有差异（event.isTrusted 属性）
+- JavaScript 代码本身可能正常，但 CDP 事件派发方式触发不了
+
+**建议：**
+1. P3级，在真实移动设备或真实浏览器环境中复测验证
+2. 如确认问题存在，检查 onclick 属性是否正确绑定到 DOM 元素
+3. 考虑改用 addEventListener 替代 onclick 属性（更可靠的事件绑定方式）
+
+**状态：** ⚠️ 待真机验证（可能是测试方法问题，非实际bug）
