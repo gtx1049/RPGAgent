@@ -323,6 +323,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         "content": scene_change,
                     })
 
+                # 成就解锁通知（P2-7 修复）
+                if session.gm.session.flags.get("_achievement_unlocked"):
+                    achievement_narrative = session.gm.session.flags.pop("_achievement_unlocked")
+                    await websocket.send_json({
+                        "type": "achievement_unlock",
+                        "content": achievement_narrative,
+                    })
+
                 # 新 CG 生成时通知前端
                 if session.gm.session.scene_cg_generated and session.gm.session.scene_cg_path:
                     cg_filename = os.path.basename(session.gm.session.scene_cg_path)

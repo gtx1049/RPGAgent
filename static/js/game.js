@@ -663,6 +663,16 @@ function handleMessage(msg) {
       sceneTitleEl.textContent = msg.content;
       break;
 
+    case "achievement_unlock":
+      // 成就解锁通知（P2-7 修复）
+      if (msg.content) {
+        appendGM(`<span class="achievement-unlock-msg">${msg.content}</span>`);
+        autoScroll();
+        // 刷新成就计数
+        loadAchievements();
+      }
+      break;
+
     case "scene_cg":
       // 新 CG 生成，追加到叙事区并弹出提示
       if (msg.content) {
