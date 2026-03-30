@@ -785,21 +785,19 @@
   - ⚠️ [P3] 队友系统无可用NPC招募（三只小猪剧本无队友）
 
 ### 9.4 探索系统
-- [x] 线索收集体验 → **❌ 阻塞（P1）** [2026-03-30 11:38]
-  - `/api/exploration/{session}/clues` → 404 Not Found
-  - `/api/exploration/{session}/summary` → 404 Not Found
-  - `/api/exploration/{session}/sites` → 404 Not Found
-  - `POST /api/exploration/{session}/explore/{site_id}` → 404 Not Found
-  - 探索系统API全部未实现，无法进行任何探索操作
-- [x] 地点探索反馈 → **❌ 阻塞（P1）** [2026-03-30 11:38]
-  - 所有探索API返回404，与线索收集体验同根因
-  - 游戏内GM叙事提供"任务面板"含3条线索（来源：工作室/网络/博客），但系统层面无探索机制
-- [x] 奖励机制 → **❌ 阻塞（P1）** [2026-03-30 11:38]
-  - 探索系统API全部404（见9.4探索系统），奖励机制无法通过系统API验证
-  - 游戏内奖励观察：gold始终=0，exp始终未返回；成就系统在turn=0和turn=1时正确解锁（和平谈判者/幸存者/问心无愧/第一步），但无金币/经验/物品等实质性奖励
-  - `hidden_value_changes`始终为空对象`{}`，GM行动响应未触发任何可记录的值变化
-  - ⚠️ [P2] GM叙事层面的战斗奖励（体力消耗-10、战利品描述）未同步到实际游戏状态（P2-3根因）
-  - 建议：实现探索系统API（sites/clues/summary/explore端点），建立完整的奖励触发机制
+- [x] 线索收集体验 → **✅ 部分通过** [2026-03-31 02:38]
+  - `/api/exploration/{session}/clues` → 200，返回 `[]`（空数组，符合新session预期）
+  - `/api/exploration/{session}/summary` → 200，返回 `{"total_sites":6,"excavated":0,"discovered_with_clues":0,"still_hidden":6,"player_clues_count":0}`
+  - `/api/exploration/{session}/sites` → 200，返回6个地点列表（含陈胜遗书/吴广秘藏等历史剧本内容）
+  - ✅ 读取API已修复（commit bf65c6e 注册探索系统路由）
+- [x] 地点探索反馈 → **❌ 失败（P1）** [2026-03-31 02:38]
+  - `POST /api/exploration/{session}/explore/chen_sheng_will` → **500 Internal Server Error**
+  - 探索写入API仍返回500，无法实际进行地点探索
+  - 根因：后端探索逻辑未完整实现
+- [x] 奖励机制 → **❌ 部分阻塞（P1）** [2026-03-31 02:38]
+  - 探索系统API（读取）已可用，但写入(explore)返回500，奖励触发机制无法验证
+  - 游戏内GM叙事层面的战斗奖励（体力消耗-10、战利品描述）未同步到实际游戏状态（见P2-3）
+  - 建议：P1级，修复explore端点500错误，建立完整的奖励触发机制
 
 ### 9.5 队友系统
 - [x] 队友招募体验 → **部分通过（P3）** [2026-03-30 10:57]
@@ -1056,3 +1054,13 @@
   - 但achievements API返回全部6个成就仍为锁定状态（unlocked_count=0）
   - **根因**：GM action响应后未触发成就解锁逻辑
   - 建议：P2级，在action响应后增加成就条件检查和状态更新
+
+## 2026-03-31 02:38（第80轮）
+- 9.4 探索系统 → **❌ 部分修复（P1）** [2026-03-31 02:38]
+  - 测试：创建新session (7595f1562a0c)，验证探索系统API状态
+  - GET `/api/exploration/{session}/clues` → 200 `[]` ✅
+  - GET `/api/exploration/{session}/summary` → 200 `{"total_sites":6,"excavated":0,...}` ✅
+  - GET `/api/exploration/{session}/sites` → 200，返回6个地点（陈胜遗书/吴广秘藏等）✅
+  - POST `/api/exploration/{session}/explore/chen_sheng_will` → **500 Internal Server Error** ❌
+  - **结论**：读取API已修复（commit bf65c6e），但探索写入API仍返回500，探索奖励机制无法验证
+  - 建议：P1级，修复explore端点500错误
