@@ -79,7 +79,9 @@ body {
 
 #narrative {
   flex: 1;
+  min-height: 0; /* 确保flex子元素正确计算溢出 */
   padding: 20px;
+  padding-bottom: max(20px, calc(var(--bottom-nav-h) + 10px)); /* 底部留出空间 */
   overflow-y: auto;
   line-height: 1.9;
   font-size: 15px;
@@ -636,20 +638,23 @@ body {
   #narrative {
     font-size: 14px;
     padding: 14px 12px;
+    padding-bottom: max(14px, calc(var(--bottom-nav-h) + 10px));
     line-height: 1.8;
+    min-height: 0;
+    flex: 1;
   }
 
   #options-area {
     padding: 8px 12px;
+    margin-bottom: 0;
   }
 
   #action-panel {
     padding: 8px 12px;
-    position: sticky;
-    bottom: var(--bottom-nav-h);
     background: var(--bg-secondary);
     border-top: 1px solid var(--border);
     z-index: 10;
+    flex-shrink: 0;
   }
 
   #action-buttons {
