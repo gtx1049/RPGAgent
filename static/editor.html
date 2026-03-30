@@ -142,6 +142,27 @@ textarea#content-editor:focus{outline:none}
       </div>
       <div class="form-group"><label>简介</label><textarea id="f-desc" placeholder="简短描述……"></textarea></div>
       <div class="form-group"><label>性格/行为</label><textarea id="f-personality" placeholder="性格特点、说话风格……"></textarea></div>
+      <div class="form-group" style="margin-top:10px">
+        <label style="cursor:pointer" onclick="toggleRpgStats()">📊 RPG数值属性 ▸</label>
+        <div id="rpg-stats" style="display:none;margin-top:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+            <div class="form-group"><label style="font-size:11px">HP</label><input id="f-hp" type="number" value="10" min="0"></div>
+            <div class="form-group"><label style="font-size:11px">最大HP</label><input id="f-max-hp" type="number" value="10" min="0"></div>
+            <div class="form-group"><label style="font-size:11px">行动力</label><input id="f-action-power" type="number" value="3" min="0"></div>
+            <div class="form-group"><label style="font-size:11px">等级</label><input id="f-level" type="number" value="1" min="0"></div>
+            <div class="form-group"><label style="font-size:11px">经验</label><input id="f-exp" type="number" value="0" min="0"></div>
+            <div class="form-group"><label style="font-size:11px">体力</label><input id="f-stamina" type="number" value="10" min="0"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:6px">
+            <div class="form-group"><label style="font-size:10px">STR</label><input id="f-strength" type="number" value="10" min="0"></div>
+            <div class="form-group"><label style="font-size:10px">DEX</label><input id="f-dexterity" type="number" value="10" min="0"></div>
+            <div class="form-group"><label style="font-size:10px">CON</label><input id="f-constitution" type="number" value="10" min="0"></div>
+            <div class="form-group"><label style="font-size:10px">INT</label><input id="f-intelligence" type="number" value="10" min="0"></div>
+            <div class="form-group"><label style="font-size:10px">WIS</label><input id="f-wisdom" type="number" value="10" min="0"></div>
+            <div class="form-group"><label style="font-size:10px">CHA</label><input id="f-charisma" type="number" value="10" min="0"></div>
+          </div>
+        </div>
+      </div>
       <button id="char-save-btn">保存角色</button>
     </div>
     <div id="right-meta">
@@ -389,6 +410,22 @@ async function selectChar(id) {
     document.getElementById('f-role').value = data.role || 'npc';
     document.getElementById('f-desc').value = data.description || '';
     document.getElementById('f-personality').value = data.personality || '';
+    document.getElementById('f-hp').value = data.hp || 10;
+    document.getElementById('f-max-hp').value = data.max_hp || 10;
+    document.getElementById('f-action-power').value = data.action_power || 3;
+    document.getElementById('f-level').value = data.level || 1;
+    document.getElementById('f-exp').value = data.exp || 0;
+    document.getElementById('f-stamina').value = data.stamina || 10;
+    document.getElementById('f-strength').value = data.strength || 10;
+    document.getElementById('f-dexterity').value = data.dexterity || 10;
+    document.getElementById('f-constitution').value = data.constitution || 10;
+    document.getElementById('f-intelligence').value = data.intelligence || 10;
+    document.getElementById('f-wisdom').value = data.wisdom || 10;
+    document.getElementById('f-charisma').value = data.charisma || 10;
+    // collapse RPG stats by default when loading
+    const rpgEl = document.getElementById('rpg-stats');
+    rpgEl.style.display = 'none';
+    rpgEl.previousElementSibling.querySelector('label').textContent = '📊 RPG数值属性 ▸';
   } catch (e) { console.error(e); }
   document.getElementById('right').classList.add('active');
   document.getElementById('right-meta').classList.remove('active');
@@ -483,6 +520,18 @@ async function saveCurrent() {
       personality: document.getElementById('f-personality').value,
       visible: true,
       extra: {},
+      hp: parseInt(document.getElementById('f-hp').value) || 10,
+      max_hp: parseInt(document.getElementById('f-max-hp').value) || 10,
+      action_power: parseInt(document.getElementById('f-action-power').value) || 3,
+      level: parseInt(document.getElementById('f-level').value) || 1,
+      exp: parseInt(document.getElementById('f-exp').value) || 0,
+      stamina: parseInt(document.getElementById('f-stamina').value) || 10,
+      strength: parseInt(document.getElementById('f-strength').value) || 10,
+      dexterity: parseInt(document.getElementById('f-dexterity').value) || 10,
+      constitution: parseInt(document.getElementById('f-constitution').value) || 10,
+      intelligence: parseInt(document.getElementById('f-intelligence').value) || 10,
+      wisdom: parseInt(document.getElementById('f-wisdom').value) || 10,
+      charisma: parseInt(document.getElementById('f-charisma').value) || 10,
     };
     const res = await fetch(`${API}/games/${currentGame}/characters/${currentItem}`, {
       method: 'PUT',
@@ -535,6 +584,20 @@ function showToast(msg, type = 'success') {
   clearTimeout(toastTimer);
   el.classList.add('show');
   toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ── RPG属性折叠 ─────────────────────────────────────
+
+function toggleRpgStats() {
+  const el = document.getElementById('rpg-stats');
+  const label = el.previousElementSibling.querySelector('label');
+  if (el.style.display === 'none') {
+    el.style.display = 'block';
+    label.textContent = '📊 RPG数值属性 ▾';
+  } else {
+    el.style.display = 'none';
+    label.textContent = '📊 RPG数值属性 ▸';
+  }
 }
 
 // ── 自动保存 ───────────────────────────────────────
