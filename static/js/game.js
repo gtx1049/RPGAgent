@@ -1133,6 +1133,11 @@ document.addEventListener("DOMContentLoaded", () => {
       closeMobileSidebar();
     }
   });
+  // 移动端侧边栏按钮：addEventListener 备份绑定（解决 onclick 间歇性失灵）
+  const sidebarToggleBtn = $("sidebar-toggle-btn");
+  if (sidebarToggleBtn) {
+    sidebarToggleBtn.addEventListener("click", toggleMobileSidebar);
+  }
   // 初始渲染行动按钮
   renderActionButtons();
 });
@@ -1434,16 +1439,23 @@ function closeCgFull() {
 // ── 移动端侧边栏抽屉 ─────────────────────────────
 
 function toggleMobileSidebar() {
-  const sidebar = $("sidebar");
-  const overlay = $("sidebar-overlay");
-  if (!sidebar) return;
-  const isOpen = sidebar.classList.contains("open");
-  if (isOpen) {
-    sidebar.classList.remove("open");
-    if (overlay) overlay.classList.remove("visible");
-  } else {
-    sidebar.classList.add("open");
-    if (overlay) overlay.classList.add("visible");
+  try {
+    const sidebar = $("sidebar");
+    const overlay = $("sidebar-overlay");
+    if (!sidebar) {
+      console.warn("[toggleMobileSidebar] sidebar element not found");
+      return;
+    }
+    const isOpen = sidebar.classList.contains("open");
+    if (isOpen) {
+      sidebar.classList.remove("open");
+      if (overlay) overlay.classList.remove("visible");
+    } else {
+      sidebar.classList.add("open");
+      if (overlay) overlay.classList.add("visible");
+    }
+  } catch (err) {
+    console.error("[toggleMobileSidebar] error:", err);
   }
 }
 
