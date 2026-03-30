@@ -1204,6 +1204,7 @@ function renderDebugPanel(data) {
 async function openCgGallery() {
   const overlay = $("cg-gallery-overlay");
   if (!overlay) return;
+  overlay.style.display = "";
   overlay.classList.add("open");
   await fetchAndRenderCgGallery();
 }
@@ -1256,6 +1257,7 @@ function showCgFull(url) {
   const img = $("cg-display-img");
   if (!overlay || !img) return;
   img.src = url;
+  overlay.style.display = "";
   overlay.classList.add("open");
   const label = $("cg-scene-label");
   if (label) {
