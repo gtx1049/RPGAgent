@@ -12,7 +12,7 @@
 | P1-1 | 场景切换旧session报错 | 2026-03-30 09:23 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/) |
 | P1-2 | 编辑器无法创建新剧本 | 2026-03-30 13:26 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c41faf3) |
 | P1-3 | 回放/结局/事件三系统500回归 | 2026-03-30 22:57 | [已验证通过](https://github.com/gaotianxing/RPGAgent/commit/5ffcf24) - 第74轮API验证全部通过 |
-| P1-4 | 探索系统API全部404，奖励机制无法测试 | 2026-03-31 19:19 | ⚠️ **服务器未部署最新修复** - debug.md标记为已修复(commit 20b5e1c)，但实际测试qinmo新session的POST /explore仍返回500 Internal Server Error |
+| P1-4 | 探索系统写入API返回500，奖励机制无法测试 | 2026-03-31 20:38 | ⚠️ **未修复** - commit bf65c6e修复了读取API，但POST /api/exploration/{session}/explore/{site_id}仍返回500 Internal Server Error |
 | P1-5 | WebSocket连接立即断开，无法保持连接 | 2026-03-30 11:43 | [已修复] - 连接稳定，可正常收发消息 |
 
 ---

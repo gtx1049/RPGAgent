@@ -1150,3 +1150,19 @@
      - `/api/teammates/{id}/active` → `[]` ✅
      - `/api/teammates/{id}/snapshot` → `{"profiles":{},"active":{}}` ✅
 - **结论**：P3-5 队友系统前端修复验证通过，commit 9316620 已正确部署并生效
+
+## 2026-03-31 20:38（第85轮 - 小刚测试）
+
+### 9.4 探索系统 - 地点探索反馈（P1复测）
+- **结果**：❌ **P1问题仍存在**
+- **测试session**：b9b6774fab7b（example剧本新session）
+- **测试步骤**：
+  1. 创建新session → 获取探索地点列表
+  2. 尝试POST探索地点
+- **验证结果**：
+  1. ✅ **GET /api/exploration/{session}/sites** → 200，返回6个探索地点（陈胜遗书/吴广秘藏/秦军遗弃兵器等）
+  2. ✅ **GET /api/exploration/{session}/summary** → 200，返回 `{"total_sites":6,"excavated":0,...}`
+  3. ✅ **GET /api/exploration/{session}/clues** → 200，返回 `[]`
+  4. ❌ **POST /api/exploration/{session}/explore/chen_sheng_will** → **500 Internal Server Error**
+- **根因**：后端探索写入逻辑未完整实现（读取API commit bf65c6e已修复，写入API仍失败）
+- **结论**：P1-4问题持续，探索奖励机制无法验证
