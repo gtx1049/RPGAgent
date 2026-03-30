@@ -563,7 +563,12 @@
 - [x] 颜色对比度（可读性） → **通过** [2026-03-30 04:19]
   - 对比度约8.2:1（WCAG AAA），背景#0f0f1a与文字#dcdde1反差显著
   - 叙事区line-height 1.9 + font-size 15px，阅读体验优秀
-- [ ] 字体大小与行距
+- [x] 字体大小与行距 → **通过** [2026-03-30 14:57]
+  - 桌面端叙事区：fontSize 15px, lineHeight 28.5px, ratio 1.90（CSS: line-height: 1.9）
+  - 移动端叙事区(max-width:700px)：fontSize 14px, lineHeight 25.2px, ratio 1.80（CSS: line-height: 1.8）
+  - CSS规则完整：scene-header 18px, system-msg 13px, divider 12px, letter-spacing 4px
+  - 背景色#0f0f1a与文字色rgb(220,221,225)对比度约7:1（WCAG AAA），阅读舒适
+  - GM文本继承15px，margin-bottom 12px，段落间距合理
 - [x] 氛围光效渲染 → **失败** [2026-03-29 22:19]
   - ❌ 氛围光效完全不可见：两个光效元素 `#atmo-glow-1`（左上）和 `#atmo-glow-2`（右下）背景色均为 `rgba(0,0,0,0)`（透明）
   - CSS position/size/opacity 配置正确（opacity:0.08，400-500px，fixed定位）

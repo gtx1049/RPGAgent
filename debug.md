@@ -1,6 +1,6 @@
 # RPGAgent 问题追踪
 
-> 最后更新：2026-03-30 11:57 (GMT+8)
+> 最后更新：2026-03-30 14:57 (GMT+8)
 > 整理策略：只保留活跃问题，已通过/已修复的测试记录已归档到 git commit 历史
 
 ---
@@ -420,4 +420,35 @@
 - 与第66轮确认的AP消耗停滞P1问题同根因（第4次行动AP不降反升是新发现）
 
 **优先级**：P1（AP异常恢复破坏游戏平衡性），P2（stamina消耗机制缺失）
+
+## 测试反馈 2026-03-30 14:57
+测试项：8.1 视觉体验 - 字体大小与行距
+结果：通过
+详情：
+**测试方法**：通过浏览器自动化获取叙事区(#narrative)计算样式，对比CSS规则和媒体查询。
+
+**测试结果**：
+| 元素 | 桌面端 | 移动端(max-width:700px) |
+|------|--------|------------------------|
+| 叙事区字体大小 | 15px | 14px |
+| 叙事区行高 | 28.5px (ratio 1.90) | 25.2px (ratio 1.80) |
+| 场景标题 | 18px | - |
+| 系统消息 | 13px | - |
+| 分隔线 | 12px, letter-spacing 4px | - |
+
+**验证**：
+- ✅ 桌面端line-height CSS值1.9与计算值28.5px/15px=1.90完全一致
+- ✅ 移动端line-height CSS值1.8与计算值25.2px/14px=1.80完全一致
+- ✅ 背景色#0f0f1a与文字色rgb(220,221,225)对比度约7:1（WCAG AAA）
+- ✅ GM文本(.gm-text)继承15px，margin-bottom 12px，段落间距合理
+- ✅ GM叙事(.scene-header)场景标题18px金色，视觉层级清晰
+
+**CSS规则验证**（通过DOM CSSOM提取）：
+- `#narrative`: line-height: 1.9; font-size: 继承
+- `#narrative .scene-header`: font-size: 18px; color: var(--gold)
+- `#narrative .system-msg`: font-size: 13px
+- `#narrative .divider`: font-size: 12px; letter-spacing: 4px
+- `@media (max-width: 700px) #narrative`: font-size: 14px; line-height: 1.8
+
+**结论**：字体大小与行距设置规范，CSS与实际渲染一致，通过验证。
 
