@@ -1061,3 +1061,20 @@
 4. Tab切换功能正常（复测通过）
 
 测试会话：editor_test_74（浏览器自动化测试）
+
+---
+
+## 测试反馈 2026-03-30 14:38
+**测试项**：5.4 CG全屏查看（P3原失败项复测）
+**结果**：✅ 通过
+
+**详情**：
+- ✅ `openCgGallery()`调用后：inline style从`display:none`变为空字符串，class添加"open"，display变为flex（正常显示）
+- ✅ `showCgFull()`调用后：同样正确清除inline style，display变为flex
+- ✅ 画廊有关闭按钮(✕，`closeCgGallery()`)，点击后display变为none
+- ✅ 全屏有关闭按钮(关闭，`closeCgFull()`)，功能正常
+- ✅ ESC键可关闭画廊和全屏（与debug.md第825行记录一致）
+- ⚠️ [P3] 点击遮罩层背景不会关闭画廊（无此功能，非阻塞）
+- **结论**：原P3 bug（inline style未清除）已修复，CG画廊和全屏功能正常工作
+
+测试会话：rpg-test-74（浏览器自动化JS注入测试）
