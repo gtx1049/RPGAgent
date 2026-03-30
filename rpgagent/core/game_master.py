@@ -487,20 +487,33 @@ class GameMaster:
         triggered_scene = self.scene_trigger_engine.check_and_fire(self.session.current_scene_id)
         if triggered_scene:
             self.session.update_state(scene_id=triggered_scene)
-            self.current_scene = self.game_loader.get_scene(triggered_scene)
-            # 将触发场景通知注入叙事上下文（供 DM 感知）
-            self.session.flags[f"_triggered_scene"] = triggered_scene
-            # 自动生成新场景 CG（Phase 2 集成）
-            self._auto_generate_scene_cg(trigger_reason="scene_trigger")
+            new_scene = self.game_loader.get_scene(triggered_scene)
+            if new_scene:
+                self.current_scene = new_scene
+                # 将触发场景通知注入叙事上下文（供 DM 感知）
+                self.session.flags[f"_triggered_scene"] = triggered_scene
+                # 自动生成新场景 CG（Phase 2 集成）
+                self._auto_generate_scene_cg(trigger_reason="scene_trigger")
+            else:
+                # 目标场景不存在，记录警告并保留当前场景
+                import logging
+                logging.warning(f"[场景切换] 触发器跳转失败：场景 '{triggered_scene}' 不存在，保留当前场景 '{self.current_scene.id if self.current_scene else '未知'}'")
+                self.session.update_state(scene_id=self.current_scene.id if self.current_scene else triggered_scene)
 
         # 立即触发器检查（进入场景后立即执行）
         immediate_scenes = self.scene_trigger_engine.check_immediate(self.session.current_scene_id)
         for imm_scene in immediate_scenes:
             self.session.update_state(scene_id=imm_scene)
-            self.current_scene = self.game_loader.get_scene(imm_scene)
-            self.session.flags[f"_triggered_scene"] = imm_scene
-            # 自动生成新场景 CG（Phase 2 集成）
-            self._auto_generate_scene_cg(trigger_reason="immediate_trigger")
+            new_scene = self.game_loader.get_scene(imm_scene)
+            if new_scene:
+                self.current_scene = new_scene
+                self.session.flags[f"_triggered_scene"] = imm_scene
+                # 自动生成新场景 CG（Phase 2 集成）
+                self._auto_generate_scene_cg(trigger_reason="immediate_trigger")
+            else:
+                import logging
+                logging.warning(f"[场景切换] 立即跳转失败：场景 '{imm_scene}' 不存在，保留当前场景 '{self.current_scene.id if self.current_scene else '未知'}'")
+                self.session.update_state(scene_id=self.current_scene.id if self.current_scene else imm_scene)
 
         # ── 剧情回放：记录本回合 ─────────────────────────────────
         if self.replay_sys and self.replay_sys.is_recording():
@@ -602,7 +615,14 @@ class GameMaster:
         next_scene = cmd.get("next_scene")
         if next_scene:
             self.session.update_state(scene_id=next_scene)
-            self.current_scene = self.game_loader.get_scene(next_scene)
+            new_scene = self.game_loader.get_scene(next_scene)
+            if new_scene:
+                self.current_scene = new_scene
+            else:
+                # 目标场景不存在，记录警告并保留当前场景
+                import logging
+                logging.warning(f"[场景切换] GM指令跳转失败：场景 '{next_scene}' 不存在，保留当前场景 '{self.current_scene.id if self.current_scene else '未知'}'")
+                self.session.update_state(scene_id=self.current_scene.id if self.current_scene else next_scene)
 
         # 道德债务指令
         if "moral_debt_delta" in cmd:
