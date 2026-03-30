@@ -53,6 +53,46 @@ class GMCommandParser:
             flags=re.DOTALL,
         ).strip()
 
+    # ── 数值变化提取（从叙事文本中解析体力/HP/金币/经验变化）─────────
+    # 支持格式：体力消耗：-10 / HP减少：10 / 金币 +50 / 经验 +20
+    _VALUE_PATTERNS = [
+        # 体力消耗/下降/减去（值>0表示消耗，取负）
+        (re.compile(r"体力消耗[：:]\s*([+-]?\d+)"), "stamina", True),
+        (re.compile(r"体力下降[：:]\s*([+-]?\d+)"), "stamina", True),
+        (re.compile(r"体力-[：:]\s*(\d+)"), "stamina", True),
+        # 体力恢复/增加（正值）
+        (re.compile(r"体力恢复[：:]\s*([+-]?\d+)"), "stamina", False),
+        (re.compile(r"体力\+\s*(\d+)"), "stamina", False),
+        # HP减少/扣除/受到（值>0表示受伤，取负）
+        (re.compile(r"HP减少[：:]\s*(\d+)"), "hp", True),
+        (re.compile(r"HP扣除[：:]\s*(\d+)"), "hp", True),
+        (re.compile(r"HP[：:]\s*-(?:\s*)(\d+)"), "hp", True),
+        (re.compile(r"受到\s*\d+\s*点伤害"), "hp", True),
+        # HP恢复/治疗（正值）
+        (re.compile(r"HP恢复[：:]\s*([+-]?\d+)"), "hp", False),
+        (re.compile(r"HP\+\s*(\d+)"), "hp", False),
+        # 金币变化
+        (re.compile(r"金币\s*([+-]?\d+)"), "gold", False),
+        # 经验变化
+        (re.compile(r"经验\s*([+-]?\d+)"), "exp", False),
+        (re.compile(r"经验值\s*([+-]?\d+)"), "exp", False),
+    ]
+
+    @staticmethod
+    def extract_value_deltas(narrative: str) -> Dict[str, int]:
+        """从叙事文本中提取数值变化，返回 {field: delta} 字典"""
+        deltas: Dict[str, int] = {}
+        for pattern, field, is_cost in GMCommandParser._VALUE_PATTERNS:
+            m = pattern.search(narrative)
+            if m:
+                raw = int(m.group(1))
+                if is_cost:
+                    delta = -abs(raw)
+                else:
+                    delta = raw if raw >= 0 else -abs(raw)
+                deltas[field] = deltas.get(field, 0) + delta
+        return deltas
+
 
 class GameMaster:
     """
@@ -393,6 +433,8 @@ class GameMaster:
         # 解析 GM_COMMAND
         cmd = GMCommandParser.parse(llm_output)
         narrative = GMCommandParser.extract_narrative(llm_output)
+        # 从叙事文本中提取数值变化（体力消耗/HP变化/金币/经验）
+        narrative_deltas = GMCommandParser.extract_value_deltas(narrative)
 
         # 当 GM_COMMAND 中没有 action_tag 时，通过关键词推断（弥补 LLM 不遵循指令的问题）
         if cmd and "action_tag" not in cmd:
@@ -434,7 +476,7 @@ class GameMaster:
                 except (ValueError, KeyError) as e:
                     narrative = narrative + f"\n⚠️ 骰点解析失败：{e}\n"
 
-            self._execute_command(cmd, player_input)
+            self._execute_command(cmd, player_input, narrative_deltas)
 
         # ── 昼夜循环推进 ───────────────────────────────────────
         # 每个行动后推进一档时间（午夜后跨天）
@@ -550,8 +592,8 @@ class GameMaster:
 
         return narrative, cmd
 
-    def _execute_command(self, cmd: Dict[str, Any], player_input: str = ""):
-        """执行 GM_COMMAND 指令"""
+    def _execute_command(self, cmd: Dict[str, Any], player_input: str = "", narrative_deltas: Optional[Dict[str, int]] = None) -> Dict[str, int]:
+        """执行 GM_COMMAND 指令，返回隐藏数值变化量（vid → delta）"""
         action = cmd.get("action", "narrative")
 
         # ── 行动力消耗 ───────────────────────────
@@ -564,6 +606,29 @@ class GameMaster:
                     self.session.add_history("system", "【行动力耗尽】你感到力不从心，只能勉强观察周围环境。")
                     self.session.flags["_ap_exhausted"] = True
                     return
+
+        # ── 叙事数值同步：将GM叙事中描述的体力/HP/金币/经验变化应用到游戏状态 ──
+        # cmd 中的显式 delta 优先于叙事解析（cmd 来自 LLM 的结构化指令，更可靠）
+        merged_deltas: Dict[str, int] = dict(narrative_deltas) if narrative_deltas else {}
+        for field in ("stamina", "hp", "gold", "exp"):
+            if field in cmd:
+                try:
+                    explicit = int(cmd[field])
+                    merged_deltas[field] = explicit
+                except ValueError:
+                    pass
+        # 应用合并后的数值变化
+        for field, delta in merged_deltas.items():
+            if delta == 0:
+                continue
+            if field == "stamina":
+                self.stats_sys.modify("stamina", delta)
+            elif field == "hp":
+                self.stats_sys.modify("hp", delta)
+            elif field == "gold":
+                self.stats_sys.modify("gold", delta)
+            elif field == "exp":
+                self.stats_sys.modify("exp", delta)
 
         # ── 隐藏数值系统：通过 action_tag 触发数值变化 ──
         if self.hidden_value_sys and "action_tag" in cmd:
