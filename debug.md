@@ -24,7 +24,7 @@
 | P2-1 | AP消耗异常（4次行动仅耗1点AP） | 2026-03-30 10:05 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/a5b1f4f) |
 | P2-2 | AP归零后按钮仍可点击 | 2026-03-30 12:00 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/a1ea2ab) |
 | P2-3 | GM叙事描述的数值未同步到游戏状态 | 2026-03-30 13:40 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/9034f1e) |
-| P2-4 | action响应缺HP/AP/Turn状态字段 | 2026-03-30 00:19 | 待修复 |
+| P2-4 | action响应缺HP/AP/Turn状态字段 | 2026-03-30 00:19 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/df3eca5) |
 | P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-30 11:57 | 待实现 |
 | P2-6 | WebSocket无心跳保活机制 | 2026-03-30 20:03 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/68700e2) |
 
@@ -128,14 +128,15 @@
 
 ---
 
-### P2-4: action响应缺状态字段
+### P2-4: action响应缺状态字段 ✅ 已修复（df3eca5）
 
 **问题：** `POST /api/games/action` 响应不返回HP/AP/Turn等状态字段
 
 **详情：**
-- 响应只包含narrative/choices/session_id
-- WS静默失败导致前端无法接收实时更新
-- REST API响应约10秒
+- 修复：games.py 的 `player_action` 端点在返回 `ActionResponse` 时附加完整状态字段
+- `ActionResponse` 新增 hp/max_hp/stamina/max_stamina/action_power/max_action_power/turn 字段
+- `stats_sys.get_snapshot()` 获取当前状态并填充到响应中
+- 修复文件：`rpgagent/api/routes/games.py`、`rpgagent/api/models.py`
 
 ---
 
@@ -997,3 +998,36 @@
 **结论：** 移动端触控目标尺寸问题仍然存在，topbar按钮和行动按钮均低于44px最低触控标准。底部导航按钮尺寸良好。onclick处理器问题同第71轮复测结论一致。
 
 相关已记录问题：P3 (移动端触控尺寸 + JavaScript onclick间歇性)
+
+## 测试反馈 2026-03-30 21:57
+
+### WebSocket连接稳定性复测 ✅ 通过
+**测试项**: 3.1 WebSocket连接 + 3.2消息类型
+**Session**: 79e070dfd338 (示例剧本·第一夜)
+
+**结果**: ✅ 全部通过
+- WS连接建立成功，收到 scene_update + status_update + connected (3条初始消息)
+- 发送"环顾四周" action 后约10秒收到完整GM叙事（13条消息）
+- 状态正确更新：HP 100/100, AP 3→2, turn 0→1
+- scene_change 消息正确触发
+
+**验证项**:
+| 验证点 | 结果 |
+|--------|------|
+| WS握手101协议切换 | ✅ |
+| session_id有效连接 | ✅ |
+| scene_update消息 | ✅ |
+| status_update消息 | ✅ |
+| narrative消息(分片) | ✅ (收到6段GM叙事) |
+| options消息 | ✅ |
+| action响应时间 | ✅ (~10秒) |
+| AP消耗正确 | ✅ (3→2) |
+| turn递增正确 | ✅ (0→1) |
+
+**服务端状态**: sessions=237, 系统运行稳定
+
+### /health内存字段验证 ⚠️ P3-11未部署
+**观察时间**: 2026-03-30 21:57
+**现象**: `/health` 返回 `{"status":"ok","sessions":238}` 无memory字段
+**说明**: debug.md记录commit 1ee96e4已修复P3-11，但服务器(43.134.81.228:8080)运行版本未包含此字段
+**建议**: 确认服务器部署的代码版本，或该commit指向的gtx1049 fork未同步到主服务器
