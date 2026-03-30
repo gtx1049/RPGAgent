@@ -44,7 +44,7 @@
 | P3-7 | NPC关系系统缺损 | 2026-03-31 07:08 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/e5e8a21) - 剧本hidden_value_actions补充relation_delta配置，game_master.py新增talk_to_npc关键词推断 |
 | P3-8 | 编辑器/游戏无自动保存机制 | 2026-03-30 23:05 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/12a2617)（游戏侧120秒后台存档） |
 | P3-9 | 场景删除API路径勘误（旧路径404，实际路径可用） | 2026-03-30 12:38 | ✅ 已关闭 - commit 21fe6b1 |
-| P3-10 | API路径不一致（sessions/games前缀混用） | 2026-03-31 07:38 | ⚠️ 未修复 - 存档用`/api/games/{id}/saves`，统计/成就用`/api/sessions/{id}/*`，前端需区分调用 |
+| P3-10 | API路径不一致（sessions/games前缀混用） | 2026-03-31 07:38 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/fc2648c) - games router新增`/{session_id}/achievements`别名路由，`/api/games/{id}/achievements`和`/api/sessions/{id}/achievements`均可访问 |
 | P3-11 | /health接口无内存监控信息 | 2026-03-30 15:38 | [已修复](https://github.com/gtx1049/RPGAgent/commit/1ee96e4) |
 | P3-12 | 行动前无confirm()确认对话框 | 2026-03-30 20:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/1d2221d) |
 | P3-13 | 编辑器场景创建+按钮无响应 | 2026-03-30 23:42 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/97141d2) - 页面加载时自动选中第一个剧本，+按钮立即可用 |
@@ -351,19 +351,25 @@
 
 ---
 
-### P3-10: API路径不一致
+### P3-10: API路径不一致 ✅ 已修复
 
 **问题：** 统计/成就类API使用`/api/sessions/{id}`前缀，而状态/debug类API使用`/api/games/{id}`前缀
+
+**修复（2026-03-31 commit fc2648c）：**
+- `games.py` router 新增 `/{session_id}/achievements` 和 `/{session_id}/achievements/unlocked` 别名路由
+- 现在 `/api/games/{id}/achievements` 和 `/api/sessions/{id}/achievements` 均可用
+- 最小侵入式修复，不改变现有 `/api/sessions/` 路由
 
 **详情：**
 - `/api/games/{id}/status` ✓
 - `/api/games/{id}/debug` ✓
 - `/api/games/{id}/saves` ✓
-- `/api/sessions/{id}/stats` ✓（注意是sessions不是games）
-- `/api/sessions/{id}/achievements` ✓（注意是sessions不是games）
-- `/api/sessions/{id}/stats/overview` ✓（注意是sessions不是games）
+- `/api/games/{id}/achievements` ✓（新增别名）
+- `/api/sessions/{id}/stats` ✓
+- `/api/sessions/{id}/achievements` ✓
+- `/api/sessions/{id}/stats/overview` ✓
 
-**建议**：P3级，统一API路径规范，或在文档中明确区分两类端点的差异
+**建议**：如需进一步统一，可逐步将 stats 端点也加别名到 games router
 
 ---
 
@@ -1684,12 +1690,12 @@
 - **游戏状态**：使用 `/api/games/{id}/status|debug`
 - 同一 session_id 资源，API路径前缀不统一（games vs sessions），前端调用需区分记忆
 
-**优先级**：P3（体验问题，不影响功能，但增加认知负担）
+**修复（2026-03-31 commit fc2648c）：**
+- `games.py` router 新增 `/{session_id}/achievements` 别名路由
+- `/api/games/{id}/achievements` 现在返回 200（与 `/api/sessions/{id}/achievements` 等效）
+- 最小侵入式修复，保持 `/api/sessions/` 路由不变
 
-**建议**：
-1. 统一所有 session 相关 API 为 `/api/games/{session_id}/*` 前缀
-2. 或统一为 `/api/sessions/{session_id}/*` 前缀
-3. 在文档中明确标注路径规范，避免后续开发继续混用
+**优先级**：P3（体验问题，不影响功能，但增加认知负担）
 
 ---
 
