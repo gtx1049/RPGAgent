@@ -27,7 +27,7 @@
 | P2-4 | action响应缺HP/AP/Turn状态字段 | 2026-03-30 00:19 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/df3eca5) |
 | P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-30 22:23 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/dc82f3f) |
 | P2-6 | WebSocket无心跳保活机制 | 2026-03-30 20:03 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/68700e2) |
-| P2-7 | 成就解锁机制完全不工作 | 2026-03-31 09:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c739d74) |
+| P2-7 | 成就解锁机制完全不工作 | 2026-03-31 09:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c739d74)，机制激活但条件逻辑残留P3问题 |
 
 ---
 
@@ -49,6 +49,7 @@
 | P3-12 | 行动前无confirm()确认对话框 | 2026-03-30 20:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/1d2221d) |
 | P3-13 | 编辑器场景创建+按钮无响应 | 2026-03-30 23:42 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/97141d2) - 页面加载时自动选中第一个剧本，+按钮立即可用 |
 | P3-14 | 市场"开始冒险"跳转后游戏未自动启动 | 2026-03-31 00:44 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/46c242f) - initSelectScreen检查?start=参数，自动启动对应剧本 |
+| P3-15 | 成就条件判断不准确 | 2026-03-31 18:57 | P3级 - "第一步"turn=1未解锁，"幸存者"1 action即解锁 |
 
 ---
 
@@ -200,7 +201,7 @@
 
 ---
 
-### P2-7: 成就解锁机制完全不工作 ✅ 已修复（c739d74）
+### P2-7: 成就解锁机制完全不工作 ✅ 已修复（P3残留问题）
 
 **问题：** 完成行动后（turn 0→1），"第一步"成就未解锁，所有6个成就始终为锁定状态
 
@@ -210,14 +211,14 @@
 - 发送"环顾四周" action后：turn=0→1，GM叙事正常返回
 - 再次查询 achievements API：**unlocked_count=0，6个成就仍全部锁定**
 - "第一步"成就条件为"完成第一章"，turn=1已满足但未解锁
-- stats API也显示 `unlocked: 0, unlock_rate: 0.0, recently_unlocked: []`
 
-**根因：** GM响应（action）后未触发成就解锁逻辑，成就状态未更新
+**修复验证（第81轮）：** c739d74 commit后
+- 测试session: 13e9bd376310 (示例剧本)
+- 修复前：6个成就全部锁定（unlocked_count=0）
+- 修复后：3个成就解锁（和平谈判者/幸存者/问心无愧），unlocked_count=3
+- **仍有问题**：(1)"第一步"条件"完成第一章"，turn=1却未解锁 (2)"幸存者"1 action即解锁，条件"完成任意章节"不符
 
-**建议：** P2级，在action响应后增加成就条件检查逻辑：
-1. 根据action结果更新成就进度
-2. 检查"第一步"等即时成就是否满足条件
-3. 满足条件时更新achievements状态并返回unlocked信息
+**结论：** 成就解锁机制已激活（WS层修复有效），但具体成就条件判断逻辑仍需微调 → P3级
 
 ---
 
@@ -385,6 +386,25 @@
 - 编辑器(editor.html)对删除场景/角色有confirm()，但游戏主界面(game.js)无任何操作确认
 
 **修复**：executeAction/useSkill/submitCustomAction三处均已添加confirm()确认，付费行动显示"消耗X点行动力「行动名」，是否继续？"，用户取消则不执行。
+
+---
+
+### P3-15: 成就条件判断不准确
+
+**问题：** 成就解锁机制已激活，但部分成就条件判断逻辑不准确
+
+**详情：**
+- 测试session: 13e9bd376310 (示例剧本)
+- turn=0时6个成就全部锁定；发送"环顾四周" action后 turn=0→1
+- 修复后3个成就解锁：和平谈判者/幸存者/问心无愧（unlocked_count=0→3）
+- **仍有问题**：
+  1. "第一步"条件"完成第一章"，turn=1却未解锁（应为即时触发）
+  2. "幸存者"条件"完成任意章节"，1 action后(turn=1)即解锁（条件触发过早）
+  3. unlocked_at_turn显示为0而非1（时间戳问题）
+
+**根因：** 成就条件判断逻辑在GM响应后执行，但部分条件阈值设置不准确
+
+**建议：** P3级，检查"第一步"和"幸存者"的成就条件触发时机和阈值设置
 
 ---
 
