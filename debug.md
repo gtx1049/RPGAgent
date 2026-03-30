@@ -45,7 +45,7 @@
 | P3-9 | 场景删除API路径勘误（旧路径404，实际路径可用） | 2026-03-30 12:38 | 需更新文档 |
 | P3-10 | API路径不一致（sessions/games前缀混用） | 2026-03-30 12:57 | 待规范 |
 | P3-11 | /health接口无内存监控信息 | 2026-03-30 15:38 | [已修复](https://github.com/gtx1049/RPGAgent/commit/1ee96e4) |
-| P3-12 | 行动前无confirm()确认对话框 | 2026-03-30 20:57 | P3体验问题 |
+| P3-12 | 行动前无confirm()确认对话框 | 2026-03-30 20:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/1d2221d) |
 
 ---
 
@@ -273,7 +273,7 @@
 
 ---
 
-### P3-12: 行动前无confirm()确认对话框
+### P3-12: 行动前无confirm()确认对话框 ✅ 已修复（1d2221d）
 
 **问题：** 所有预设行动按钮和自由行动点击后直接执行，无确认对话框
 
@@ -284,7 +284,7 @@
 - 唯一检查：AP不足时 executeAction() 中的数值检查拦截，非确认机制
 - 编辑器(editor.html)对删除场景/角色有confirm()，但游戏主界面(game.js)无任何操作确认
 
-**建议**：P3级，为高风险操作（如消耗AP的行动）添加confirm()确认对话框；WS断开时操作应有错误提示而非静默吞掉
+**修复**：executeAction/useSkill/submitCustomAction三处均已添加confirm()确认，付费行动显示"消耗X点行动力「行动名」，是否继续？"，用户取消则不执行。
 
 ---
 
@@ -949,3 +949,20 @@
 - console无错误日志，onclick 处理器静默失效
 - 复测结论与第63轮一致（P3编辑器交互问题未修复）
 - 建议：排查 editor.js 中 + 按钮的 onclick 绑定；可能是事件委托问题或 dialog 渲染逻辑缺失
+
+## 测试反馈 2026-03-30 21:19
+测试项：3.2 WebSocket `options` 消息类型验证
+结果：通过
+详情：
+- ✅ **WebSocket独立options消息确认存在**：
+  - 连接后发送action约10秒内，依次收到：多个`narrative`(done=false) → 最终`narrative`(done=true) → **`options`** → `status_update`
+  - `options`消息格式：`{"type":"options","options":["拿起信封查看","翻阅白板上的卷宗","打开衣柜检查","走到窗边查看街道","尝试回拨那个未知号码"]}`
+  - `options`为字符串数组，前端可直接解析
+- ✅ **REST API选项格式不同**：
+  - `/api/games/action` 返回选项在 `command.options` 字段（管道符分隔）
+  - 格式示例：`"起身出门前往海滨路13号|现在就去调查|无特殊条件|记下地址，次日白天再去|..."`
+- ✅ **结论**：WebSocket的`options`消息是独立的消息类型，在所有narrative消息之后发送；REST API将选项嵌入`command.options`字符串中
+- totest.md已更新：选项列表从"部分通过（待确认）"标记为"通过"
+
+测试方法：Node.js WebSocket客户端直连 ws://43.134.81.228:8080/ws/{session_id}
+测试会话ID：ae2bbe64a172
