@@ -27,7 +27,7 @@
 | P2-4 | action响应缺HP/AP/Turn状态字段 | 2026-03-30 00:19 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/df3eca5) |
 | P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-30 22:23 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/dc82f3f) |
 | P2-6 | WebSocket无心跳保活机制 | 2026-03-30 20:03 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/68700e2) |
-| P2-7 | 成就解锁机制完全不工作 | 2026-03-31 09:57 | 待修复 |
+| P2-7 | 成就解锁机制完全不工作 | 2026-03-31 09:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c739d74) |
 
 ---
 
@@ -200,7 +200,7 @@
 
 ---
 
-### P2-7: 成就解锁机制完全不工作
+### P2-7: 成就解锁机制完全不工作 ✅ 已修复（c739d74）
 
 **问题：** 完成行动后（turn 0→1），"第一步"成就未解锁，所有6个成就始终为锁定状态
 
