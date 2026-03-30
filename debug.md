@@ -25,7 +25,7 @@
 | P2-2 | AP归零后按钮仍可点击 | 2026-03-30 12:00 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/a1ea2ab) |
 | P2-3 | GM叙事描述的数值未同步到游戏状态 | 2026-03-30 13:40 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/9034f1e) |
 | P2-4 | action响应缺HP/AP/Turn状态字段 | 2026-03-30 00:19 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/df3eca5) |
-| P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-30 22:23 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/dc82f3f) |
+| P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-31 07:19 | ⚠️ **标记为已修复但实际未生效** - commit dc82f3f声称已添加RPG属性字段，但实测/editor角色表单仍只有5个叙事字段（ID/名称/类型/简介/性格），无STR/DEX/CON/INT/WIS/CHA/HP/等级/技能/装备槽位 |
 | P2-6 | WebSocket无心跳保活机制 | 2026-03-30 20:03 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/68700e2) |
 | P2-7 | 成就解锁机制完全不工作 | 2026-03-31 09:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c739d74)，机制激活但条件逻辑残留P3问题 |
 
@@ -160,9 +160,17 @@
 
 ---
 
-### P2-5: 编辑器角色系统缺少RPG数值属性
+### P2-5: 编辑器角色系统缺少RPG数值属性 ⚠️ 修复未生效
 
 **问题：** 角色编辑器仅支持叙事属性（ID/名称/类型/简介/性格），缺少RPG游戏机制核心属性
+
+**修复尝试：** commit dc82f3f (2026-03-30 22:23) 声称已修复，但2026-03-31实测编辑器角色表单仍只有5个字段，无RPG属性
+
+**实测确认（第91轮 2026-03-31 07:19）：**
+- ✅ 角色表单存在，类型下拉框正常（NPC/敌人/队友）
+- ❌ 仍只有5个字段：ID、名称、类型、简短描述、性格特点/说话风格
+- ❌ 无STR/DEX/CON/INT/WIS/CHA、HP/MP、等级、技能、装备槽位
+- 结论：修复未部署或修复方向不对
 
 **详情：**
 - 当前角色表单字段：ID、名称、类型(NPC/敌人/队友)、简介、性格/行为
