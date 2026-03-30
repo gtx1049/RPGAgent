@@ -569,6 +569,7 @@ function handleMessage(msg) {
         if (e.action_power !== undefined) {
           updateAP(e.action_power, e.max_action_power);
           $("attr-ap").textContent = `${e.action_power ?? 0} / ${e.max_action_power ?? 0}`;
+          renderActionButtons(); // AP变化后重绘按钮（AP=0时禁用所有付费行动）
         }
         if (e.moral_debt_level !== undefined) updateMoral(e.moral_debt_level, e.moral_debt_value);
         if (e.turn !== undefined) updateTurn(e.turn);
