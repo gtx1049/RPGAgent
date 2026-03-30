@@ -330,7 +330,7 @@ class ExplorationSystem:
 
         # 属性加成
         if stats_sys and site.attribute_key:
-            attr_val = stats_sys.get(site.attribute_key, 10)
+            attr_val = stats_sys.get(site.attribute_key) or 10
             modifier += (attr_val - 10) // 2
 
         # 技能加成
