@@ -41,7 +41,7 @@
 | P3-4 | 移动端侧边栏JS间歇性失灵 | 2026-03-30 10:25 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/0c7c7d7) - toggleMobileSidebar添加try-catch+addEventListener备份绑定 |
 | P3-5 | 队友系统前端完全缺失 | 2026-03-30 10:57 | 待实现 |
 | P3-6 | 体力接口缺stamina字段 | 2026-03-30 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/8695735) - status API返回stamina/max_stamina字段已验证
-| P3-7 | NPC关系系统缺损 | 2026-03-28 | 待确认 |
+| P3-7 | NPC关系系统缺损 | 2026-03-31 02:19 | 体验问题（P3）- GM叙事层面NPC交互正常，但npc_relations状态不更新 |
 | P3-8 | 编辑器/游戏无自动保存机制 | 2026-03-30 23:05 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/12a2617)（游戏侧120秒后台存档） |
 | P3-9 | 场景删除API路径勘误（旧路径404，实际路径可用） | 2026-03-30 12:38 | ✅ 已关闭 - commit 21fe6b1 |
 | P3-10 | API路径不一致（sessions/games前缀混用） | 2026-03-30 12:57 | 待规范 |
@@ -291,6 +291,24 @@
 - GM叙事中无招募队友的途径提示
 
 **建议：** 在bnav增加"👥队友"入口；在剧本中配置可招募NPC
+
+---
+
+### P3-7: NPC关系系统缺损
+
+**问题：** NPC交互在GM叙事层面正常，但关系状态不记录
+
+**详情：**
+- GM叙事层面NPC交互完全正常：三只小猪剧本中"与NPC交谈"产生完整对话（猪大哥回应），"吹倒草屋"产生完整战斗叙事（猪大哥逃跑尖叫）
+- `GET /api/sessions/{session}/stats` 返回 `npc_relations: {total_npcs: 0, allies: 0, neutral: 0, hostile: 0}`
+- `GET /api/games/{session}/debug` 返回 `npc_relations: {}`（空对象）
+- 执行"与NPC交谈"(turn 0→1)和"吹倒草屋"(turn 1→2)后，npc_relations仍全为0
+- hidden_values 包含 hunger/reputation 但不含NPC关系数据
+- 三只小猪剧本虽无可招募队友（teammates API返回空），但有叙事NPC（猪大哥）
+
+**根因：** GM在叙事响应中未调用关系更新API，npc_relations字段从未被写入
+
+**建议：** P3级体验问题 - NPC关系系统存在但未激活；可在GM响应中增加关系更新逻辑（友好/中立/敌对）
 
 ---
 
@@ -1292,3 +1310,19 @@
 - ✅ 再次点击预览按钮可关闭预览面板，切换功能正常
 - ⚠️ 注意：snapshot -i仅显示交互元素，预览面板（非交互div）不会出现在树中；需通过JavaScript eval或screenshot确认预览状态
 结论：场景内容预览功能正常，早期测试的"无可见效果"可能是Accessibility tree检测不到非交互元素导致的误判。
+
+## 测试反馈 2026-03-31 02:19（第79轮）
+测试项：P3-7 NPC关系系统
+结果：❌ 确认问题（体验P3）
+详情：
+**NPC交互叙事层面正常：**
+- ✅ "与NPC交谈" → 猪大哥完整对话回应（"你、你是谁？大灰狼？"）
+- ✅ "吹倒草屋" → 完整战斗叙事（草屋倒塌、猪大哥逃跑尖叫）
+
+**关系状态不更新（确认问题）：**
+- ❌ 执行action前后，`npc_relations` 始终为 `{total_npcs: 0, allies: 0, neutral: 0, hostile: 0}`
+- ❌ debug API 返回 `npc_relations: {}`（空对象）
+- ❌ hidden_values 包含 hunger/reputation，但无NPC关系数据
+- 结论：GM叙事交互正常，但关系变化未写入游戏状态
+
+根因：GM未调用关系更新API，npc_relations字段从未被填充
