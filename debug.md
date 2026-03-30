@@ -11,7 +11,7 @@
 |---|------|----------|------|
 | P1-1 | 场景切换旧session报错 | 2026-03-30 09:23 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/) |
 | P1-2 | 编辑器无法创建新剧本 | 2026-03-30 13:26 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c41faf3) |
-| P1-3 | 回放/结局/事件三系统500回归 | 2026-03-30 03:07 | 待确认 |
+| P1-3 | 回放/结局/事件三系统500回归 | 2026-03-30 03:07 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/5ffcf24) |
 | P1-4 | 探索系统API全部404，奖励机制无法测试 | 2026-03-30 11:38 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/f3c12a1) |
 
 ---
