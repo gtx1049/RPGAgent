@@ -353,15 +353,8 @@ class GameMaster:
             return "[系统] 检测到违规输入，内容已被拦截。请换一种表达。", None
         player_input = sanitized
 
-        # ── 行动力检查 ──────────────────────────────
-        # 如果行动力为0，说明上一轮已耗尽，自动刷新
-        new_turn = False
         # 重置 CG 生成标记（新回合/新场景开始）
         self.session.scene_cg_generated = False
-        if self.stats_sys.get("action_power") <= 0:
-            self.stats_sys.refresh_ap()
-            self.session.add_history("system", "【回合开始】行动力已刷新。")
-            new_turn = True
 
         scene = self.get_current_scene()
         if not scene:
@@ -442,15 +435,6 @@ class GameMaster:
                     narrative = narrative + f"\n⚠️ 骰点解析失败：{e}\n"
 
             self._execute_command(cmd, player_input)
-
-        # ── 隐藏数值每回合衰减 ──────────────────────────────────
-        # 在新回合开始时（AP 刷新后）应用衰减
-        # 衰减不触发 trigger_scene，因为是系统自动处理而非玩家主动行为
-        if new_turn and self.hidden_value_sys:
-            decay_results = self.hidden_value_sys.tick_all(self.session.turn_count)
-            if decay_results:
-                # 可在 session.flags 中记录衰减日志（供叙事参考，但不直接展示给玩家）
-                self.session.flags["_hv_decay"] = decay_results
 
         # ── 昼夜循环推进 ───────────────────────────────────────
         # 每个行动后推进一档时间（午夜后跨天）
@@ -938,6 +922,10 @@ class GameMaster:
         if cmd.get("rest", "").strip().lower() in ("1", "true", "yes", "overnight"):
             self.day_night_sys.rest()
             self.stats_sys.refresh_ap()
+            if self.hidden_value_sys:
+                decay_results = self.hidden_value_sys.tick_all(self.session.turn_count)
+                if decay_results:
+                    self.session.flags["_hv_decay"] = decay_results
             self.session.add_history(
                 "system",
                 f"【过夜休息】第{self.day_night_sys.get_day()}天开始了，行动力已恢复。"
