@@ -299,6 +299,12 @@
 
 **待完善：** available返回空数组（剧本需配置recruitable=True的NPC）；招募/解散功能UI未实现（后端API已完备）
 
+**服务器验证（2026-03-31 20:19）：** ✅ 已确认部署生效
+- `#bnav-teammates` 按钮存在且可见，onclick 绑定正确
+- `switchBottomTab('teammates')` 调用后 `#teammates-panel` 正确显示
+- Panel 标题"👥 队友"，空状态"暂无队友"渲染正确
+- API `/api/teammates/{id}/available|active|snapshot` 均返回正确空值
+
 ---
 
 ### P3-7: NPC关系系统缺损

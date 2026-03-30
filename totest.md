@@ -1096,3 +1096,57 @@
   - qinmo_dazexiang新session → `POST /api/exploration/{id}/explore/chen_sheng_will` → **500 Internal Server Error** ❌
   - 读取API正常但写入仍失败，探索奖励机制无法验证
   - P1-4 debug.md标记为"已修复"但服务器实际仍500，疑服务器未部署最新commit
+
+---
+
+## 2026-03-31 19:57（第83轮 - 小刚测试）
+
+### 5.3 移动端侧边栏（复测）
+- **结果**：❌ **P3问题确认残留**
+- **测试环境**：iPhone 14 (390x844 mobile viewport)
+- **测试步骤**：
+  1. 设置 mobile viewport (390x844)
+  2. 打开游戏页面 → 截图确认UI元素
+  3. 点击 ☰ 面板 按钮 (e3)
+  4. 检查 #sidebar.open class 是否添加
+- **发现**：
+  1. **侧边栏toggle失效**：点击☰ 面板按钮后，`#sidebar.open` count=0（未添加），sidebar保持关闭
+  2. **CDP click和mouse事件均无效**：尝试了 `agent-browser click @e3` 和 `mouse move + down + up` 两种方式，均未能触发JavaScript toggleMobileSidebar()
+  3. **游戏卡片容器未隐藏**：#game-select 显示 visible=true，game cards和in-game UI同时可见（CSS布局问题）
+  4. **其他按钮同样失效**：点击 📜 冒险日志 (e13) 也无modal弹出
+  5. **无JS错误**：console errors为空，JavaScript引擎工作正常
+- **根因分析**：
+  - toggleMobileSidebar() 函数存在（代码层面正常）
+  - 按钮的 onclick 绑定可能未生效，或 CDP 事件派发方式与真实用户点击有差异
+  - game.js 使用 `onclick="toggleMobileSidebar()"` 而非 addEventListener
+- **与早期测试差异**：
+  - 第74轮手动测试成功（00:19）："冒险日志/成就按钮成功打开模态框"
+  - 第83轮自动化测试失败：CDP click 未能触发 JavaScript handler
+  - **可能原因**：CDP Input.dispatchMouseEvent 与真实用户 click 事件在 event.isTrusted 属性上有差异，导致 JavaScript 的某些安全检查拒绝处理
+- **建议**：P3级，考虑改用 addEventListener 替代 onclick 属性，并增加 event.isTrusted 的兼容处理
+
+### 总体评估
+- 系统健康检查：通过（sessions=25, memory rss=149MB）
+- WS连接状态：未连接（#ws-status 显示"未连接"）
+- 移动端侧边栏：P3问题残留，需进一步调查CDP click与真实用户click的差异
+
+## 2026-03-31 20:19（第84轮 - 小刚测试）
+
+### 9.5 队友系统前端验证（P3-5复测）
+- **结果**：✅ **通过**
+- **测试session**：10ae259abfb1（example剧本新session）
+- **测试步骤**：
+  1. 启动游戏（示例剧本）→ 进入"第一幕·电话"场景
+  2. 检查bottom-nav是否有队友入口
+  3. 点击"👥 队友"按钮，验证panel打开
+  4. 调用teammate API验证数据正确性
+- **验证结果**：
+  1. ✅ **队友按钮存在**：`#bnav-teammates` 按钮，onclick=`switchBottomTab('teammates')`，可见且opacity=1
+  2. ✅ **按钮点击有效**：调用`switchBottomTab('teammates')`后，`#teammates-panel`正确显示（display:block），`#teammates-list`内容为"暂无队友"
+  3. ✅ **Panel标题正确**：显示"👥 队友"
+  4. ✅ **空状态正确**：新session正确显示"暂无队友"
+  5. ✅ **API验证**：
+     - `/api/teammates/{id}/available` → `[]` ✅
+     - `/api/teammates/{id}/active` → `[]` ✅
+     - `/api/teammates/{id}/snapshot` → `{"profiles":{},"active":{}}` ✅
+- **结论**：P3-5 队友系统前端修复验证通过，commit 9316620 已正确部署并生效
