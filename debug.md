@@ -11,8 +11,9 @@
 |---|------|----------|------|
 | P1-1 | 场景切换旧session报错 | 2026-03-30 09:23 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/) |
 | P1-2 | 编辑器无法创建新剧本 | 2026-03-30 13:26 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c41faf3) |
-| P1-3 | 回放/结局/事件三系统500回归 | 2026-03-30 03:07 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/5ffcf24) |
+| P1-3 | 回放/结局/事件三系统500回归 | 2026-03-30 11:43 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/5ffcf24) - 验证通过 |
 | P1-4 | 探索系统API全部404，奖励机制无法测试 | 2026-03-30 11:38 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/f3c12a1) |
+| P1-5 | WebSocket连接立即断开，无法保持连接 | 2026-03-30 11:43 | [已修复] - 连接稳定，可正常收发消息 |
 
 ---
 
@@ -21,7 +22,7 @@
 | # | 问题 | 最后确认 | 状态 |
 |---|------|----------|------|
 | P2-1 | AP消耗异常（4次行动仅耗1点AP） | 2026-03-30 10:05 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/a5b1f4f) |
-| P2-2 | AP归零后按钮仍可点击 | 2026-03-30 00:19 | 待修复 |
+| P2-2 | AP归零后按钮仍可点击 | 2026-03-30 12:00 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/a1ea2ab) |
 | P2-3 | GM叙事描述的数值未同步到游戏状态 | 2026-03-30 09:19 | 待修复 |
 | P2-4 | action响应缺HP/AP/Turn状态字段 | 2026-03-30 00:19 | 待修复 |
 | P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-30 11:57 | 待实现 |
@@ -304,6 +305,28 @@
 
 ---
 
+### P1-5: WebSocket连接立即断开，无法保持连接 ✅ 已修复
+
+**问题：** WebSocket连接建立后仅收到1条 `scene_update` 消息，服务器立即关闭连接，无法进行任何后续交互
+
+**详情：**
+- ws://43.134.81.228:8080/ws/{session_id} 握手成功，但服务器在首次消息后立即断开
+- 多次测试（3个不同session）均收到1条scene_update后服务器主动断开
+- 连接生存时间<1秒，无法发送action或接收响应
+- 无法测试 `stats_update`、`narrative`、`options`、`achievement_unlock`、`cg_generated` 等消息类型
+
+**根因分析：**
+- WebSocket消息处理逻辑存在问题，服务器在发送初始场景后立即关闭连接
+
+**修复验证（2026-03-30 11:43）：**
+- ✅ WebSocket握手成功，返回101协议切换
+- ✅ 连接建立后收到 `scene_update` + `status_update` + `connected`（3条消息）
+- ✅ 连接保持开放，可发送action并接收GM响应
+- ✅ 发送 `{"action":"player_input","content":"..."}` 格式的action后约10秒收到GM narrative响应
+- ⚠️ 需注意：action格式必须为 `{action: "player_input", content: text}`（不是 `{type: ...}`）
+
+---
+
 ## 测试反馈 2026-03-30 11:57
 测试项：6.3 角色管理 - 角色属性配置
 结果：⚠️ 部分通过（P2）
@@ -318,6 +341,25 @@
   - 队友/敌人类型角色无战斗属性，无法参与战斗系统
 建议：P2级，为角色系统增加完整RPG属性体系（等级/属性点/技能树/装备槽位）
 测试会话：xiaogang_editor_63（三只小猪剧本·猪大哥角色）
+
+---
+
+## 测试反馈 2026-03-30 19:43
+测试项：3.1 WebSocket连接 + 3.2 WebSocket消息类型
+结果：✅ 通过（P1已修复）
+详情：
+- ✅ WebSocket握手成功（ws://43.134.81.228:8080/ws/{session_id}）
+- ✅ 连接后收到3条初始消息：`scene_update`（场景内容）、`status_update`（状态）、`connected`
+- ✅ 连接保持开放（测试20秒以上仍可收发消息）
+- ✅ 发送action格式 `{"action":"player_input","content":"..."}` 后约10秒收到GM narrative响应
+- ✅ 收到9条narrative消息后收到status_update确认行动已处理
+- ✅ session状态验证：turn 0→1, AP 3→2，action处理正确
+- ✅ `/api/replay` → `{"is_recording":false,"message":"当前无活跃录制"}`（非500）
+- ✅ `/api/endings` → `{"detail":"当前剧本未配置多结局系统"}`（非500）
+- ✅ `/api/events` → `{"detail":"当前剧本未配置世界事件"}`（非500）
+- ⚠️ 注意：action消息格式必须是 `{action: "player_input", content: text}`，不是 `{type: ...}`
+- ⚠️ 待测试：心跳保活机制、断线重连、`achievement_unlock`（需触发成就）、`cg_generated`（CG生成未实现）
+测试会话：aa6abb60ea4d, b50cf75fd1ab（示例剧本）
 
 ---
 
@@ -779,4 +821,59 @@
 - 回合数/行动力状态同步正确
 
 **结论**：游戏核心功能正常运行，WS连接稳定，各面板功能正确，行动系统响应正常
+测试会话：xiaogang_test（浏览器自动化测试）
+
+---
+
+## 测试反馈 2026-03-30 19:57
+测试项：3.3 断线重连机制
+结果：❌ 失败（P1-P2）
+详情：
+**测试方法**：通过浏览器自动化（agent-browser）访问 http://43.134.81.228:8080/，检查WS断开后的重连行为
+
+**测试环境**：
+- WS状态：未连接（disconnected）
+- 回合数：第 0 回合
+- 游戏已启动但WS未连接
+
+**测试结果**：
+1. **无自动重连机制** ❌
+   - WS断开后，页面停留在"未连接"状态
+   - 无任何自动重连尝试（无setTimeout/setInterval重连逻辑）
+
+2. **刷新后仍断开** ❌
+   - 执行 `agent-browser reload` 后，WS状态仍为"未连接"
+   - 需手动重新启动游戏才能恢复WS连接
+
+3. **操作静默失败** ❌ P1
+   - WS断开时点击"环顾四周"按钮：
+     - 回合数保持不变（第 0 回合）
+     - 叙事区无任何消息
+     - 无错误提示反馈
+   - 代码：`sendPlayerInput()` 检测到 `!state.connected` 后直接 return
+
+4. **close事件无系统提示** ❌ P2
+   - error事件有系统提示："连接中断，请刷新页面重试。"
+   - close事件仅更新状态徽章，未在叙事区显示任何消息
+   - 代码（game.js:501-504）：close事件只调用 `setWSStatus("disconnected")`
+
+5. **无重连UI入口** ❌ P2
+   - 无"重新连接"按钮
+   - 无"正在重连..."状态
+   - 仅靠系统消息提示刷新页面
+
+**代码审查**：
+- `connectWS(sessionId)` 函数（game.js:488）：仅在游戏启动时调用一次
+- WebSocket close事件处理器（game.js:501-504）：无重连逻辑
+- `sendPlayerInput()` 函数：检测到未连接后静默返回
+
+**根因分析**：
+- WS重连机制完全缺失，是系统级P1问题
+- 用户在游戏过程中遭遇断线（如网络波动）后，无法继续游戏
+- 只能通过刷新页面并重新开始游戏来恢复
+
+**优先级建议**：
+- **P1**：实现WS自动重连机制（指数退避重连，如首次1秒→2秒→4秒→8秒→最大30秒）
+- **P2**：close事件也应显示系统提示"连接中断，请刷新页面重试。"
+- **P2**：增加"重新连接"按钮，作为重连失败后的兜底方案
 测试会话：xiaogang_test（浏览器自动化测试）
