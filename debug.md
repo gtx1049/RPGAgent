@@ -5977,3 +5977,77 @@ replay/events/endings 路由 → game_manager.get_active_gm() → AttributeError
 - 页面元素完整渲染：3个剧本卡片、底部导航、游戏界面UI均正常显示
 
 **注：** 此测试使用 browser agent 测量，相比之前 curl 测量的56ms更准确反映真实用户体验（包含DNS解析、TCP连接、TLS握手、资源下载、DOM解析等完整过程）
+
+## 测试反馈 2026-03-30 10:25 (GMT+8)
+
+**测试角色：** 小刚（资深RPG玩家）
+**测试项：** 5.3 移动端侧边栏
+**测试地址：** http://43.134.81.228:8080/
+
+### 结果：部分通过（P3：JavaScript间歇性失灵）
+
+### 详情：
+
+**测试方法：**
+1. 设置移动端viewport（390x844）
+2. 检查侧边栏HTML结构、CSS样式、onclick绑定
+3. 点击"☰ 面板"按钮，验证sidebar.open类是否添加
+4. 检查遮罩层（#sidebar-overlay.visible）是否正确显示
+
+**CSS验证（代码审查）：**
+- ✅ `#sidebar { transform: translateX(100%); }` - 初始隐藏
+- ✅ `#sidebar.open { transform: translateX(0); }` - 展开动画
+- ✅ `#sidebar-overlay { opacity: 0; pointer-events: none; }` → `.visible { opacity: 1; pointer-events: all; }`
+- ✅ 过渡动画：`transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)`
+
+**HTML验证：**
+- ✅ `#sidebar-toggle-btn` 存在，`onclick="toggleMobileSidebar()"`
+- ✅ `#sidebar-overlay` 存在，`onclick="closeMobileSidebar()"`
+- ✅ 侧边栏内按钮（冒险日志/成就/属性面板/统计）onclick绑定正确
+
+**功能测试：**
+| 测试项 | 结果 | 说明 |
+|--------|------|------|
+| viewport设置 | ✅ 通过 | 390x844正确应用 |
+| ☰ 面板按钮可见 | ✅ 通过 | 移动端正确显示 |
+| 底部导航显示 | ✅ 通过 | 状态/技能/背包/日志4个按钮 |
+| 侧边栏toggle | ⚠️ 间歇 | 早期测试通过，后期失败 |
+| 冒险日志按钮 | ⚠️ 间歇 | 早期测试打开模态框，后期无响应 |
+| 成就按钮 | ⚠️ 间歇 | 早期测试打开模态框，后期无响应 |
+
+**问题分析：**
+1. JavaScript onclick处理器间歇性不触发 - CDP点击事件可能未正确触发`toggleMobileSidebar()`函数
+2. 早期测试（browser agent初始启动时）功能正常，多次测试后出现失灵
+3. 可能原因：浏览器自动化环境问题 或 JavaScript事件绑定时序问题
+
+**优先级：** P3（体验优化）
+
+**建议：**
+1. P3：为按钮点击添加console.log调试日志，排查CDP点击与实际用户点击的行为差异
+2. P3：考虑增加`document.ready`之外的`DOMContentLoaded`事件监听，确保所有元素已加载
+3. P3：添加按钮点击失败时的降级处理（如检测到CDP环境时使用不同的交互方式）
+
+## 测试反馈 2026-03-30 10:57
+测试项：9.5 队友系统（队友招募体验/队友忠诚度影响/队友行动效果）
+结果：部分通过（P3）
+
+详情：
+- **API基础功能**（通过）：teammates系统7个API端点全部可访问且返回合理响应
+  - available/active/snapshot均返回空数组（无可招募NPC）
+  - recruit对无效角色返回清晰错误"未知角色:xxx"
+  - dismiss对不存在角色返回误导性成功（应返回错误）
+  - loyalty对不存在角色返回loyalty=0（应返回错误）
+  - act返回空actions（无活跃队友）
+
+- **核心问题**（P3）：队友系统后端API完善但前端完全缺失
+  1. **无UI入口**：bnav底部导航无队友管理按钮，无法从游戏界面访问队友系统
+  2. **无可招募NPC**：所有剧本（示例剧本/三只小猪/秦末大泽乡）的available均返回空数组，剧本未配置队友NPC
+  3. **无招募引导**：GM叙事中无招募队友的途径提示，玩家不知道可以通过什么方式招募
+  4. **dismiss/loyalty API边界问题**：可对不存在角色执行操作并返回误导性成功响应
+
+- **小刚RPG专家建议**（P3）：
+  1. 建议在bnav底部导航增加"👥队友"入口（类似成就/统计入口）
+  2. 建议在剧本中配置可招募NPC（如三只小猪中的猪小弟可作为可选队友）
+  3. 建议GM在特定场景提供招募提示（如"你可以尝试说服XXX加入"）
+  4. 建议dismiss/loyalty API对不存在角色返回404而非成功
+  5. 建议实现"队友行动回合"机制：在玩家行动后询问是否让队友行动
