@@ -1,6 +1,6 @@
 # RPGAgent 问题追踪
 
-> 最后更新：2026-03-31 00:09 (GMT+8)
+> 最后更新：2026-03-31 01:40 (GMT+8)
 > 整理策略：只保留活跃问题，已通过/已修复的测试记录已归档到 git commit 历史
 
 ---
@@ -42,7 +42,7 @@
 | P3-6 | 体力接口缺stamina字段 | 2026-03-30 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/8695735) - status API返回stamina/max_stamina字段已验证
 | P3-7 | NPC关系系统缺损 | 2026-03-28 | 待确认 |
 | P3-8 | 编辑器/游戏无自动保存机制 | 2026-03-30 23:05 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/12a2617)（游戏侧120秒后台存档） |
-| P3-9 | 场景删除API路径勘误（旧路径404，实际路径可用） | 2026-03-30 12:38 | 需更新文档 |
+| P3-9 | 场景删除API路径勘误（旧路径404，实际路径可用） | 2026-03-30 12:38 | ✅ 已关闭 - commit 21fe6b1 |
 | P3-10 | API路径不一致（sessions/games前缀混用） | 2026-03-30 12:57 | 待规范 |
 | P3-11 | /health接口无内存监控信息 | 2026-03-30 15:38 | [已修复](https://github.com/gtx1049/RPGAgent/commit/1ee96e4) |
 | P3-12 | 行动前无confirm()确认对话框 | 2026-03-30 20:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/1d2221d) |
@@ -287,6 +287,19 @@
 - 编辑器侧 autosave 仍待实现（editor.html 无 setInterval，`/api/editor/autosave` → 404）
 
 **修复文件：** `rpgagent/api/server.py`
+
+---
+
+### P3-9: 场景删除API路径勘误 ✅ 已关闭（21fe6b1）
+
+**问题：** totest.md 误报场景删除API返回404，实际路径可用
+
+**详情：**
+- 旧（误报）路径：`DELETE /api/editor/scenes/{game_id}/{scene_id}` → 404（此路径不存在）
+- 正确路径：`DELETE /api/editor/games/{game_id}/scenes/{scene_id}` → 200 成功
+- 根因：测试文档(totest.md)记录的路径格式错误，实际API路由正常工作
+
+**处置：** 路径已确认，totest.md已更新(commit 21fe6b1)，此为文档勘误非API bug
 
 ---
 
