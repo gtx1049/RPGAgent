@@ -496,10 +496,12 @@ function connectWS(sessionId) {
   ws.addEventListener("open", () => {
     state.connected = true;
     setWSStatus("connected");
+    startHeartbeat();
   });
 
   ws.addEventListener("close", () => {
     state.connected = false;
+    stopHeartbeat();
     setWSStatus("disconnected");
   });
 
@@ -526,6 +528,34 @@ function setWSStatus(status) {
     connecting: "连接中…",
     disconnected: "未连接",
   }[status] || status;
+}
+
+// ── 心跳保活 ────────────────────────────────
+
+function startHeartbeat() {
+  stopHeartbeat();
+  _missedPongs = 0;
+  _heartbeatTimer = setInterval(() => {
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+    state.ws.send(JSON.stringify({ action: "ping" }));
+    _missedPongs++;
+    // 连续3次未收到pong，判定断开
+    if (_missedPongs >= MAX_MISSED_PONGS) {
+      stopHeartbeat();
+      state.connected = false;
+      setWSStatus("disconnected");
+      appendSystem("连接超时，请刷新页面重试。");
+      if (state.ws) state.ws.close();
+    }
+  }, HEARTBEAT_INTERVAL);
+}
+
+function stopHeartbeat() {
+  if (_heartbeatTimer) {
+    clearInterval(_heartbeatTimer);
+    _heartbeatTimer = null;
+  }
+  _missedPongs = 0;
 }
 
 // ── 消息处理 ────────────────────────────────
@@ -600,6 +630,10 @@ function handleMessage(msg) {
     case "error":
       appendSystem(`错误：${msg.content}`);
       renderActionButtons();
+      break;
+
+    case "pong":
+      _missedPongs = 0; // 收到pong，重置计数
       break;
   }
 }
@@ -1164,6 +1198,10 @@ async function launchGame(gameId, playerName) {
 // ── 调试模式 ────────────────────────────────────────
 
 let _debugRefreshTimer = null;
+let _heartbeatTimer = null;
+let _missedPongs = 0;
+const HEARTBEAT_INTERVAL = 30000; // 30秒
+const MAX_MISSED_PONGS = 3;
 
 function toggleDebugMode() {
   window._debugMode = !window._debugMode;
