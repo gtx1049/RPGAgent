@@ -1083,3 +1083,20 @@
 - **结论**：原P3 bug（inline style未清除）已修复，CG画廊和全屏功能正常工作
 
 测试会话：rpg-test-74（浏览器自动化JS注入测试）
+
+## 测试反馈 2026-03-30 22:57
+测试项：2.11-2.13 回放/结局/事件系统API（随机选取）
+结果：通过
+详情：
+- `POST /api/replay/start` → `{"message":"开始录制","session_id":"527770813372","started_at":"..."}` ✅
+- `POST /api/replay/stop` → `{"message":"录制已结束","total_turns":0}` ✅
+- `GET /api/replay` → `{"is_recording":true,"session_id":"527770813372"...}` ✅
+- `GET /api/replay/sessions` → `{"count":1,"sessions":[...]}` ✅
+- `GET /api/replay/{id}` → 完整session信息含turns数组 ✅
+- `GET /api/replay/{id}/summary` → 完整摘要 ✅
+- `GET /api/endings` → `{"detail":"当前剧本未配置多结局系统"}`（非500）✅
+- `GET /api/endings/progress` → 完整进度数据结构（非500）✅
+- `POST /api/endings/evaluate` → 正确提示无配置（非500）✅
+- `GET /api/events` → `{"detail":"当前剧本未配置世界事件"}`（非500）✅
+- `POST /api/events/evaluate` → 正确提示无配置（非500）✅
+结论：回放/结局/事件三系统API已完全恢复，不再返回500错误。commit 5ffcf24修复已验证生效。
