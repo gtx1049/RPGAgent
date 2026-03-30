@@ -46,6 +46,7 @@
 | P3-10 | API路径不一致（sessions/games前缀混用） | 2026-03-30 12:57 | 待规范 |
 | P3-11 | /health接口无内存监控信息 | 2026-03-30 15:38 | [已修复](https://github.com/gtx1049/RPGAgent/commit/1ee96e4) |
 | P3-12 | 行动前无confirm()确认对话框 | 2026-03-30 20:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/1d2221d) |
+| P3-13 | 编辑器场景创建+按钮无响应 | 2026-03-30 15:19 | 待修复（browser agent确认：点击+按钮后DOM中dialog/modal数量为0，无任何UI响应） |
 
 ---
 
