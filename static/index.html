@@ -111,11 +111,11 @@
         </div>
       </div>
 
-      <!-- 阵营声望 -->
-      <div class="panel">
-        <div class="panel-title">阵营声望</div>
-        <div id="faction-list">
-          <div style="font-size:12px;color:var(--text-dim)">暂无阵营记录</div>
+      <!-- 队友 -->
+      <div class="panel" id="teammates-panel">
+        <div class="panel-title">👥 队友</div>
+        <div id="teammates-list">
+          <div style="font-size:12px;color:var(--text-dim)">加载中...</div>
         </div>
       </div>
 
@@ -323,6 +323,11 @@
     <button class="bnav-btn" id="bnav-menu" onclick="switchBottomTab('menu')">
       <span class="bnav-icon">📜</span>
       <span>日志</span>
+    </button>
+
+    <button class="bnav-btn" id="bnav-teammates" onclick="switchBottomTab('teammates')">
+      <span class="bnav-icon">👥</span>
+      <span>队友</span>
     </button>
   </nav>
 

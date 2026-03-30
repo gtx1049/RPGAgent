@@ -1476,6 +1476,57 @@ function closeMobileSidebar() {
   if (overlay) overlay.classList.remove("visible");
 }
 
+// ── 队友面板 ─────────────────────────────────────
+
+async function loadTeammates() {
+  const el = $("teammates-list");
+  if (!el) return;
+  if (!state.sessionId) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">请先开始游戏</div>';
+    return;
+  }
+  try {
+    const [activeR, availR] = await Promise.all([
+      fetch(`/api/teammates/${state.sessionId}/active`),
+      fetch(`/api/teammates/${state.sessionId}/available`),
+    ]);
+    const active = activeR.ok ? await activeR.json() : [];
+    const available = availR.ok ? await availR.json() : [];
+
+    if (active.length === 0 && available.length === 0) {
+      el.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">暂无队友</div>';
+      return;
+    }
+
+    let html = '';
+    if (active.length > 0) {
+      html += '<div style="margin-bottom:6px;font-size:11px;color:var(--accent)">已招募</div>';
+      for (const t of active) {
+        const loyalty = t.loyalty ?? 50;
+        const hp = t.current_hp ?? '--';
+        const maxHp = t.max_hp ?? '--';
+        const hpPct = maxHp !== '--' ? Math.round((hp / maxHp) * 100) : 0;
+        html += `<div style="margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between">
+            <span style="font-weight:bold">${t.name || t.teammate_id}</span>
+            <span style="font-size:11px;color:var(--text-dim)">❤${hp}/${maxHp}</span>
+          </div>
+          <div style="font-size:10px;color:var(--text-dim)">忠诚度: ${loyalty}/100</div>
+        </div>`;
+      }
+    }
+    if (available.length > 0) {
+      html += '<div style="margin-top:8px;margin-bottom:4px;font-size:11px;color:var(--text-dim)">可招募</div>';
+      for (const n of available) {
+        html += `<div style="font-size:12px;margin-bottom:2px">· ${n.name || n.npc_id}</div>`;
+      }
+    }
+    el.innerHTML = html;
+  } catch {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">加载失败</div>';
+  }
+}
+
 // ── 移动端底部标签页切换 ─────────────────────────
 
 function switchBottomTab(tab) {
@@ -1497,6 +1548,7 @@ function switchBottomTab(tab) {
         skills: "skills-panel",
         inventory: "equip-panel",
         menu: "log-btn",
+        teammates: "teammates-panel",
       };
       const targetId = PANEL_IDS[tab];
       if (targetId) {
@@ -1527,6 +1579,9 @@ function switchBottomTab(tab) {
       break;
     case "menu":
       openLogModal();
+      break;
+    case "teammates":
+      loadTeammates();
       break;
   }
 }
