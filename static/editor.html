@@ -208,6 +208,10 @@ async function loadGameList() {
       opt.textContent = `${g.name} (${g.id})`;
       sel.appendChild(opt);
     });
+    // 自动选中第一个剧本
+    if (games.length > 0) {
+      loadGame(games[0].id);
+    }
   } catch (e) {
     sel.innerHTML = '<option value="">加载失败</option>';
   }
