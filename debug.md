@@ -1,6 +1,6 @@
 # RPGAgent 问题追踪
 
-> 最后更新：2026-03-30 15:19 (GMT+8)
+> 最后更新：2026-03-30 15:38 (GMT+8)
 > 整理策略：只保留活跃问题，已通过/已修复的测试记录已归档到 git commit 历史
 
 ---
@@ -42,6 +42,7 @@
 | P3-8 | 编辑器/游戏无自动保存机制 | 2026-03-30 12:19 | 待实现 |
 | P3-9 | 场景删除API路径勘误（旧路径404，实际路径可用） | 2026-03-30 12:38 | 需更新文档 |
 | P3-10 | API路径不一致（sessions/games前缀混用） | 2026-03-30 12:57 | 待规范 |
+| P3-11 | /health接口无内存监控信息 | 2026-03-30 15:38 | 待实现 |
 
 ---
 
@@ -226,6 +227,20 @@
 - `/api/sessions/{id}/stats/overview` ✓（注意是sessions不是games）
 
 **建议**：P3级，统一API路径规范，或在文档中明确区分两类端点的差异
+
+---
+
+### P3-11: /health接口无内存监控信息
+
+**问题：** /health 仅返回 sessions 数量，无系统资源监控字段
+
+**详情：**
+- `GET /health` → `{"status":"ok","sessions":31}`，无 memory/rss/heapUsed 等字段
+- `/api/health` → 404 Not Found
+- `/metrics` → 404 Not Found
+- 运维无法直接通过API监控服务器内存使用情况
+
+**建议**：P3级，为 /health 添加 memory/rss/heapUsed 等字段，支持基本系统资源监控
 
 ---
 
@@ -477,3 +492,83 @@
 - 单个session内3个并发action存在时序竞争，但服务器正确序列化
 
 建议：P2优先级 - 调查三只小猪剧本"吹倒草屋"返回500的原因，以及AP消耗的竞态条件
+
+---
+
+## 测试反馈 2026-03-30 20:19
+测试项：**11.2 WebSocket断开处理**
+结果：**失败（P1-P2）**
+测试方法：使用Playwright浏览器自动化 + context.setOffline(true) 模拟网络断开
+
+### 测试步骤
+1. 启动游戏会话（示例剧本·第一夜）
+2. 确认WS状态为"已连接"（ws-status-connected）
+3. 使用 `context.setOffline(true)` 模拟断网
+4. 观察UI反馈和叙事区内容
+5. 尝试点击行动按钮
+6. 使用 `context.setOffline(false)` 恢复网络
+7. 观察是否自动重连
+
+### 测试结果
+
+#### ✅ 正常部分
+- WS连接建立成功，收到初始叙事内容（第一幕·电话）
+- 游戏状态正确加载（turn=0, AP=3/3）
+
+#### ❌ 发现的问题
+
+**P1 - WS状态徽章不更新**
+- 离线后，`ws-status-connected` 元素的 textContent 仍然显示 **"已连接"**
+- 实际WebSocket已断开（setOffline(true)会断开所有网络连接）
+- 但UI未检测到断开状态，徽章仍显示绿色"已连接"
+- 根因：`setWSStatus`只在WebSocket的close/error事件中调用，但Playwright的setOffline(true)不会触发WebSocket的close事件
+
+**P1 - 无断连错误提示**
+- 离线后叙事区没有任何错误提示
+- narrative仍然显示初始内容，无"连接中断"、"网络错误"等提示
+- 对比game.js代码：`ws.addEventListener("error", ...)` 中有 `appendSystem("连接中断，请刷新页面重试。")` 但未触发
+
+**P2 - 按钮操作被静默吞掉**
+- 离线时点击"👀环顾四周"按钮
+- 玩家输入 `───> 环顾四周` 显示在叙事区
+- 但无服务器响应（符合预期）
+- **问题**：没有任何错误提示告知用户操作未成功送达
+- 按钮保持enabled状态，用户无法判断操作是否已处理
+
+**P2 - 无自动重连机制**
+- 恢复网络（setOffline(false)）后
+- WS元素仍显示"已连接"（错误的）
+- 但实际WS已断开且未自动重连
+- 再次点击按钮，`───> 环顾四周` 被发送两次（离线时发送一次，联机后再发送一次）
+- 两次player_input都被添加到叙事区，但没有GM响应
+- 根因：代码中无WebSocket重连逻辑（close事件中无重连）
+
+**P2 - 离线时WebSocket readyState不可检测**
+- `page.evaluate(() => window.state?.ws?.readyState)` 返回 `undefined`
+- `window.state` 无法从Playwright的page.evaluate访问（可能是闭包或IIFE）
+- 无法通过前端JS直接验证WS实际状态
+
+### 问题汇总
+
+| 问题 | 优先级 | 描述 | 状态 |
+|------|--------|------|------|
+| WS徽章不更新 | P1 | 离线后ws-status仍显示"已连接" | Playwright setOffline不触发WS事件，心跳补偿 |
+| 无断连提示 | P1 | 叙事区无"连接中断"等错误消息 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/5d990be) error事件触发+心跳超时均有提示 |
+| 按钮静默失败 | P2 | 离线点击无错误反馈 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/5d990be) sendPlayerInput离线时appendSystem |
+| 无自动重连 | P2 | 恢复网络后WS不自动重连 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/5d990be) attemptReconnect指数退避 |
+| WS状态不可检测 | P2 | 前端无法通过JS获取实际WS状态 | 闭包限制，Playwright测试环境问题 |
+
+### 根因分析
+1. `setWSStatus`只在WS open/close/error事件中调用，Playwright的`setOffline`不会触发这些事件 → 心跳超时补偿
+2. `appendSystem("连接中断，请刷新页面重试。")` 只在WS error事件中调用，但error事件可能未触发 → 心跳超时时也会触发
+3. `state.connected` 标志在WS close后设为false，但UI的ws-status元素不反映这个状态 → 心跳超时补偿
+4. 代码中完全没有重连逻辑（无setTimeout重连、无指数退避） → 已实现
+
+### 修复方案（已实现）
+1. **心跳检测** ✅：客户端每5秒发送ping，服务器返回pong，3次无响应则判定断开
+2. **UI状态同步** ✅：心跳超时时调用 `setWSStatus("disconnected")` 并显示错误提示
+3. **操作反馈** ✅：`sendPlayerInput`离线时显示"当前未连接，请等待连接恢复"
+4. **自动重连** ✅：close事件后自动尝试重连，最多3次，指数退避（1s/2s/4s）
+
+测试会话：Playwright headless + context.setOffline（示例剧本·第一夜）
+
