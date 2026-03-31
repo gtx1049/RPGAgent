@@ -28,7 +28,7 @@
 | P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-31 08:19 | ✅ [已验证通过](https://github.com/gaotianxing/RPGAgent/commit/4942dba) - 服务器已部署，前端折叠RPG面板（HP/最大HP/行动力/等级/体力+STR/DEX/CON/INT/WIS/CHA）正常工作，API端到端验证通过 |
 | P2-6 | WebSocket无心跳保活机制 | 2026-03-30 20:03 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/68700e2) |
 | P2-7 | 成就解锁机制完全不工作 | 2026-03-31 09:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c739d74)，机制激活但条件逻辑残留P3问题 |
-| P2-8 | 存档加载功能损坏 | 2026-03-31 09:38 | [未修复] - 存档创建成功但加载返回500/404，根因为存档文件未实际写入 |
+| P2-8 | 存档加载功能损坏 | 2026-03-31 09:42 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/1018e5f) - 根因为load_game/load_autosave路由中session._apply_state()和session.flags引用了不存在的GameSession成员，应为session.gm.session |
 
 ---
 
@@ -216,26 +216,17 @@
 
 ---
 
-### P2-8: 存档加载功能损坏 ❌ 未修复
+### P2-8: 存档加载功能损坏 ✅ 已修复（1018e5f）
 
 **问题：** 存档创建成功但加载返回500/404
 
-**详情：**
-- `POST /api/games/{session}/saves/{save_id}` → `{"ok": true}`，存档创建成功
-- `GET /api/games/{session}/saves` → 返回存档列表（含 autosave 和手动存档）
-- `GET /api/games/{session}/saves/{save_id}/load` → **HTTP 500 Internal Server Error**
-- `GET /api/games/{session}/saves/autosave/load` → **HTTP 404 {"detail":"存档不存在"}**
+**根因：** `load_game`/`load_autosave` 路由中直接调用 `session._apply_state(state)` 和 `session.flags.get()`，但 `GameSession` 类没有这些成员。`GameSession.gm.session` 才是持有游戏状态的 `SessionContext` 实例，调用时产生了 `AttributeError` 导致 500。
 
-**根因：**
-- 存档记录（metadata）被创建，但实际存档文件未写入
-- autosave 在 session 创建时生成记录，但没有实际保存游戏状态文件
-- 存档加载时找不到实际文件，返回500/404错误
+**修复：** 两处 load 路由中：
+- `session._apply_state(state)` → `session.gm.session._apply_state(state)`
+- `session.flags.get("_exploration", {})` → `session.gm.session.flags.get("_exploration", {})`
 
-**修复方案：**
-- 确保存档创建时实际写入游戏状态文件
-- autosave 需要实际执行状态序列化并写入磁盘
-
-**测试session（第98轮）**: c564efb895fa / ae4f28b2a5c2
+**修复文件：** `rpgagent/api/routes/games.py`
 
 ---
 
