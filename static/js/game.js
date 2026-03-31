@@ -430,7 +430,7 @@ function useSkill(skill) {
     appendSystem(`【行动力不足】「${skill.name}」需要 ${cost} 点行动力，当前剩余 ${state.ap} 点。`);
     return;
   }
-  if (!confirm(`消耗${cost}点行动力使用「${skill.name}」，是否继续？`)) return;
+  // 移除确认框，直接执行技能
   sendPlayerInput(`使用技能：${skill.name}`);
 }
 
