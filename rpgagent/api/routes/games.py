@@ -370,10 +370,10 @@ async def load_game(session_id: str, save_id: str):
     # 重建 GameState 并恢复到 session
     from rpgagent.core.session import GameState
     state = GameState(**snapshot_data)
-    session._apply_state(state)
+    session.gm.session._apply_state(state)
 
     # 恢复探索系统状态
-    exploration_snapshot = session.flags.get("_exploration", {})
+    exploration_snapshot = session.gm.session.flags.get("_exploration", {})
     if exploration_snapshot and session.gm.explore_sys:
         session.gm.explore_sys.load_snapshot(exploration_snapshot)
 
@@ -433,10 +433,10 @@ async def load_autosave(session_id: str):
 
     from rpgagent.core.session import GameState
     state = GameState(**snapshot_data)
-    session._apply_state(state)
+    session.gm.session._apply_state(state)
 
     # 恢复探索系统状态
-    exploration_snapshot = session.flags.get("_exploration", {})
+    exploration_snapshot = session.gm.session.flags.get("_exploration", {})
     if exploration_snapshot and session.gm.explore_sys:
         session.gm.explore_sys.load_snapshot(exploration_snapshot)
 
