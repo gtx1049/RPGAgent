@@ -1,6 +1,6 @@
 # RPGAgent 问题追踪
 
-> 最后更新：2026-03-31 12:19 (GMT+8)
+> 最后更新：2026-03-31 14:43 (GMT+8)
 > 整理策略：只保留活跃问题，已通过/已修复的测试记录已归档到 git commit 历史
 
 ---
@@ -52,6 +52,7 @@
 | P3-14 | 市场"开始冒险"跳转后游戏未自动启动 | 2026-03-31 00:44 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/46c242f) - initSelectScreen检查?start=参数，自动启动对应剧本 |
 | P3-15 | 成就条件判断不准确 | 2026-03-31 19:22 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/772c353) - ✅ 第101轮验证：first_step/survivor保持锁定符合预期(chapter completion需完整章节，非turn>=2语义) |
 | P3-16 | CG历史games路由返回500 | 2026-03-31 13:38 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/) - games.py中`session.cg_history`改为`session.gm.session.cg_history` |
+| P3-17 | 探索奖励装备直接装备不进背包 | 2026-03-31 14:38 | 🔧 [修复中] - exploration.py奖励发放时先add到背包再auto-equip |
 
 ---
 
@@ -460,6 +461,21 @@
 **根因：** `games.py` 第462行 `history = session.cg_history or []`，`cg_history`属性不在`session`根对象上而在`session.gm.session`下
 
 **修复文件：** `rpgagent/api/routes/games.py`
+
+---
+
+### P3-17: 探索奖励装备直接装备不进背包 🔧 修复中
+
+**问题：** 探索成功后铁剑直接进入 `equipped.weapon`，但 `inventory=[]`（背包为空）
+
+**详情：**
+- 探索成功后发放奖励：铁剑×1（直接装备）、金币30、吴广秘密藏匿点情报×1
+- `inventory=[]`（背包为空），装备被直接装备而未经过背包
+- 预期行为：奖励应先进入背包，再由玩家决定是否装备
+
+**根因：** `exploration.py` 第91-96行奖励发放逻辑直接调用 `equipment_sys.equip(equip)`，未调用 `inv_sys.add()` 将装备加入背包
+
+**修复文件：** `rpgagent/api/routes/exploration.py`
 
 ---
 
@@ -2244,4 +2260,28 @@ commit 1018e5f已正确部署，P2-8完全修复。
 - `inventory=[]`（背包为空）
 - 预期行为：奖励应先进入背包，再由玩家决定是否装备
 - 优先级：P3（体验问题）
+
+
+## 测试反馈 2026-03-31 14:58（小刚第113轮测试）
+
+### 测试项：2.3 存档系统 - 手动存档创建与加载（P2-8复测）
+
+**结果**：✅ **通过（P2-8修复验证成功）**
+
+**测试session**: cd883beaffa4（示例剧本·第一夜）
+
+**验证结果**：
+1. ✅ **创建手动存档**：`POST /api/games/${SID}/saves/xiaogang_test_113` → `{"ok":true,"save_id":"xiaogang_test_113"}`
+2. ✅ **列出存档**：`GET /api/games/${SID}/saves` → 返回完整存档列表（含手动存档和autosave）
+3. ✅ **加载存档**：`GET /api/games/${SID}/saves/xiaogang_test_113/load` → `{"ok":true,"save_id":"xiaogang_test_113","scene_id":"scene_01","turn":1}`
+
+**与历史测试对比**：
+- 第98轮（09:38 UTC）：手动存档加载返回 500，autosave加载返回 404 ❌
+- 本轮（14:58 UTC）：手动存档加载返回 200，加载成功 ✅
+
+**结论**：P2-8存档加载功能已完全修复，commit 1018e5f 稳定部署。手动存档和autosave加载均正常工作。
+
+**服务器健康状态**：
+- sessions=2, memory rss=134MB, healthy
+- 系统运行稳定
 

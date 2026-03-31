@@ -91,12 +91,26 @@ async def explore_treasure(
                 session.gm.stats_sys.modify("gold", reward.quantity)
             elif reward.type == "equipment" and reward.id:
                 from rpgagent.systems.equipment_system import get_template_equipment
+                from rpgagent.systems.inventory import Item as InventoryItem
                 equip = get_template_equipment(reward.id)
                 if equip:
-                    session.gm.acquisition_sys.grant_equipment(equip)
+                    # 先发往背包
+                    inv_item = InventoryItem(
+                        id=equip.id,
+                        name=equip.name,
+                        description=equip.description,
+                        quantity=1,
+                        usable=True,
+                        effect={"slot": equip.slot, "rarity": equip.rarity.value if hasattr(equip.rarity, 'value') else str(equip.rarity)},
+                        tradable=True,
+                    )
+                    session.gm.inv_sys.add(inv_item)
+                    # 若对应装备栏为空则自动装备
                     current_eq = session.gm.equipment_sys.equipped.get(equip.slot)
                     if current_eq is None:
                         session.gm.equipment_sys.equip(equip)
+                    # 通知 acquisition 系统（记录获取来源）
+                    session.gm.acquisition_sys.grant_equipment(equip)
             elif reward.type == "intel" and reward.id:
                 session.gm.explore_sys.grant_clue(reward.id)
 
