@@ -127,6 +127,8 @@ action_tag: <本次玩家行为触发的数值标签，如 huff_and_puff / trick
 roll: <行动名称>（如果本次行动需要骰点判定，如"潜行"、"推门"等）
 attribute: <使用的属性键>（可选，默认 strength，可选 dexterity/constitution/intelligence/wisdom/charisma）
 dc: <难度阈值 1-100>（可选，默认 50；参考：30=轻松，50=五五开，65=难搞，80=几无可能）
+narrative_success: <本次行动成功时的叙事内容>（roll 时必填，将替代 narrative_hint）
+narrative_failure: <本次行动失败时的叙事内容>（roll 时必填，将替代 narrative_hint）
 [/GM_COMMAND]
 """
 

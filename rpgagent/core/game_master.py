@@ -472,9 +472,16 @@ class GameMaster:
                         narrative_hint=action_hint,
                     )
                     cmd["_roll_result"] = roll_result
-                    # 将判定结果嵌入叙事
+                    # 根据判定结果选择对应叙事（成功/失败分支）
                     roll_block = f"\n🎲 **判定结果**\n{roll_result.description}\n"
-                    narrative = narrative + roll_block
+                    if roll_result.success:
+                        branch_narrative = cmd.get("narrative_success", "")
+                    else:
+                        branch_narrative = cmd.get("narrative_failure", "")
+                    if branch_narrative:
+                        narrative = branch_narrative + roll_block
+                    else:
+                        narrative = narrative + roll_block
                 except (ValueError, KeyError) as e:
                     narrative = narrative + f"\n⚠️ 骰点解析失败：{e}\n"
 
