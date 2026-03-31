@@ -537,15 +537,14 @@
 - [x] 角色编辑 → **通过** [2026-03-29 20:38]
   - 角色ID/名称/类型/描述/性格均可编辑
   - "保存角色"按钮存在（但无用户反馈）
-- [x] 角色属性配置 → **部分通过（P2）** [2026-03-30 11:57]
-  - ✅ **表单字段可编辑**：ID/名称/类型/简介/性格五大字段均可正常编辑
-  - ✅ **类型下拉框功能正常**：可切换 NPC/敌人/队友，三选项均可用
-  - ⚠️ **[P3] 保存无反馈**：点击"保存角色"后UI无任何成功/失败提示（与其他编辑器问题一致）
-  - ❌ **[P2] 角色仅支持叙事属性，缺少RPG游戏机制属性**：
-    - 当前字段：ID、名称、类型(NPC/敌人/队友)、简介、性格
-    - **缺失**：STR/DEX/CON/INT/WIS/CHA、HP/MP、等级、技能、装备等RPG核心属性
-    - 当前角色（如"猪大哥"）仅有叙事描述（"贪吃、懒惰"），无任何数值属性
-    - 建议：P2级，为角色系统增加完整RPG属性体系（等级/属性点/技能树/装备槽位）
+- [x] 角色属性配置 → **通过（P2-5已修复）** [2026-03-31 08:19]
+  - ✅ **表单字段完整**：ID/名称/类型/简介/性格五大叙事字段 + 折叠RPG属性面板
+  - ✅ **RPG属性面板**：HP/最大HP/行动力/等级/体力 + STR/DEX/CON/INT/WIS/CHA六属性，共11个数值字段
+  - ✅ **toggleRpgStats()**：点击"📊 RPG数值属性 ▸"展开/折叠面板
+  - ✅ **loadCharacter()**：从API响应加载RPG字段到表单
+  - ✅ **saveCharacter()**：保存时包含所有RPG字段到后端
+  - ✅ **API验证**：PUT保存后，GET返回完整RPG字段（hp/max_hp/action_power/level/stamina/STR/DEX/CON/INT/WIS/CHA）
+  - commit 4942dba 已部署生效
 
 ### 6.4 编辑器功能
 - [x] 保存功能 → **失败** [2026-03-29 20:38]
@@ -1272,6 +1271,31 @@
   5. ✅ **health接口正常**：`{"status":"ok","sessions":2,"memory":{"rss":145231872}}`
 - **结论**：P1-4探索系统写入API已修复，服务器已部署最新commit（20b5e1c），探索奖励机制验证通过
 
+## 测试反馈 2026-03-31 08:19（第94轮 - 小刚测试）
+
+### 测试项：6.3 角色属性配置（P2-5复测）
+
+**结果**：✅ **通过（P2-5已修复并部署）**
+
+**测试方法**：
+1. 静态分析：curl editor页面HTML，搜索RPG属性相关代码
+2. API端到端验证：PUT保存角色带11个RPG字段 → GET读取验证完整性
+
+**验证结果**：
+- ✅ 折叠RPG属性面板存在（`#rpg-stats`，默认display:none，点击"📊 RPG数值属性 ▸"展开）
+- ✅ 11个RPG数值字段：HP、最大HP、行动力、等级、体力 + STR/DEX/CON/INT/WIS/CHA
+- ✅ `toggleRpgStats()` / `loadCharacter()` / `saveCharacter()` 三个函数完整支持RPG字段
+- ✅ API验证：PUT保存后GET返回全部11个RPG字段（hp/max_hp/action_power/level/stamina/STR/DEX/CON/INT/WIS/CHA）
+- commit 4942dba 已部署生效
+
+**对比第91轮（2026-03-31 07:19）**：当时测试只发现5个叙事字段，疑服务器未部署；本轮测试确认修复已生效。
+
+**结论**：P2-5编辑器角色RPG属性问题已完全修复，服务器已部署最新commit。
+
+测试会话：e9756d2ac4e1（示例剧本·第一夜）
+
+---
+
 ## 测试反馈 2026-03-31 06:57（第90轮续 - 小刚测试）
 
 ### 测试项：8.1.3 氛围光效渲染（P3复测）
@@ -1351,3 +1375,53 @@
 4. ✅ **game-select遮挡游戏界面**：卡片可见但点击会触发覆盖层，正常工作
 
 **结论**：首页UI层叠正常，游戏选择覆盖层在无session时正确显示
+
+---
+
+## 测试反馈 2026-03-31 08:38（第95轮 - 小刚测试）
+
+### 测试项：P3-10 sessions/games API路径一致性
+
+**结果**：❌ **P3问题仍存在（修复不完整）**
+
+**实测session**: c3f0da9e05ba（示例剧本）
+
+**测试数据**：
+
+| 端点 | /api/games/{sid}/ | /api/sessions/{sid}/ | 实际路径 |
+|------|-------------------|---------------------|----------|
+| achievements | **404** ❌ | 200 ✅ | sessions |
+| stats | **404** ❌ | 200 ✅ | sessions |
+| stats/overview | **404** ❌ | 200 ✅ | sessions |
+| npcs | 200 ✅ | **404** ❌ | games |
+| saves | 200 ✅ | **404** ❌ | games |
+| cg | **404** ❌ | 200 ✅ | sessions |
+| teammates | **404** ❌ | **404** ❌ | /api/teammates/{sid}/ ✅ |
+| exploration | **404** ❌ | **404** ❌ | /api/exploration/{sid}/ ✅ |
+
+**结论**：P3-10修复不完整，sessions/games路径完全无统一模式。建议全面梳理API路径归属。
+
+**相关debug.md**: P3-10仍为活跃问题
+
+## 测试反馈 2026-03-31 08:57（第96轮 - 小刚测试）
+
+### 测试项：9.4 探索系统 - 地点探索反馈（P1-4复测）
+
+**结果**：✅ **通过（P1-4已修复并验证）**
+
+**测试session**: 62e7f74e04ed（示例剧本新session）
+
+**验证结果**：
+1. ✅ **GET /api/exploration/{session}/sites** → 200，返回6个探索地点
+2. ✅ **POST /api/exploration/{session}/explore/chen_sheng_will** → HTTP 200
+3. ✅ **探索成功**：`{"success":true,"roll":84,"dc":35,"total":84}` 骰子84超过难度35，判定成功
+4. ✅ **奖励发放**：铁剑×1、金币30、吴广秘密藏匿点情报×1，rewards数组完整
+5. ✅ **has_new_clue=true**：新情报发现标识正确
+6. ✅ **exploration summary更新验证**：`excavated: 0→1`，discovered_with_clues: 0→1，状态正确同步
+
+**与第85/86/87轮对比**：
+- 第85-87轮：POST /api/exploration/{session}/explore/chen_sheng_will → HTTP 500 Internal Server Error ❌
+- 第88轮：首次验证通过（commit 20b5e1c）✅
+- 第96轮（本轮）：再次确认修复稳定有效 ✅
+
+**结论**：P1-4探索系统写入API已完全修复，服务器稳定运行，探索奖励机制验证通过。explored count正确递增，rewards正确发放，system healthy（sessions=6, memory=145MB RSS）。

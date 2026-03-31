@@ -25,7 +25,7 @@
 | P2-2 | AP归零后按钮仍可点击 | 2026-03-30 12:00 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/a1ea2ab) |
 | P2-3 | GM叙事描述的数值未同步到游戏状态 | 2026-03-30 13:40 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/9034f1e) |
 | P2-4 | action响应缺HP/AP/Turn状态字段 | 2026-03-30 00:19 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/df3eca5) |
-| P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-31 07:24 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/4942dba) - 前端角色表单新增折叠RPG属性面板（HP/MaxHP/ActionPower/Level/Exp/Stamina + STR/DEX/CON/INT/WIS/CHA），loadCharacter/saveCharacter均已支持RPG字段 |
+| P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-31 08:19 | ✅ [已验证通过](https://github.com/gaotianxing/RPGAgent/commit/4942dba) - 服务器已部署，前端折叠RPG面板（HP/最大HP/行动力/等级/体力+STR/DEX/CON/INT/WIS/CHA）正常工作，API端到端验证通过 |
 | P2-6 | WebSocket无心跳保活机制 | 2026-03-30 20:03 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/68700e2) |
 | P2-7 | 成就解锁机制完全不工作 | 2026-03-31 09:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c739d74)，机制激活但条件逻辑残留P3问题 |
 
@@ -1664,6 +1664,50 @@
 - memory: rss=145MB
 
 
+## 测试反馈 2026-03-31 08:19（第94轮 - 小刚测试）
+
+### 测试项：6.3 角色属性配置（P2-5复测）
+
+**结果**：✅ **通过（P2-5已修复并部署）**
+
+**测试session**：e9756d2ac4e1（示例剧本·第一夜）
+
+**验证方法**：
+1. 静态分析：curl editor页面HTML，搜索RPG属性相关代码
+2. API验证：PUT保存角色带RPG字段 → GET读取验证
+
+**验证结果**：
+
+**HTML静态分析**：
+- ✅ `toggleRpgStats()` 函数存在，绑定到"📊 RPG数值属性 ▸"标签
+- ✅ `#rpg-stats` 面板包含11个RPG数值字段：HP、最大HP、行动力、等级、体力、STR、DEX、CON、INT、WIS、CHA
+- ✅ `loadCharacter()` 从API响应填充所有RPG字段（f-hp/f-max-hp/f-action-power/f-level/f-stamina/f-strength/f-dexterity/f-constitution/f-intelligence/f-wisdom/f-charisma）
+- ✅ `saveCharacter()` 保存时包含所有RPG数值字段
+
+**API端到端验证**：
+```bash
+# 保存带RPG属性的角色
+PUT /api/editor/games/example/characters/npc01
+Body: {hp:50, max_hp:80, action_power:2, level:5, stamina:100,
+       strength:12, dexterity:14, constitution:10, intelligence:18,
+       wisdom:15, charisma:16}
+→ {"ok":true}
+
+# 读取验证RPG字段
+GET /api/editor/games/example/characters/npc01
+→ {hp:50, max_hp:80, action_power:2, level:5, stamina:100,
+   strength:12, dexterity:14, constitution:10, intelligence:18,
+   wisdom:15, charisma:16} ✅
+```
+
+**与第91轮测试对比**：
+- 第91轮（2026-03-31 07:19）：发现只有5个叙事字段，RPG面板未生效 → P2问题残留
+- 第94轮（2026-03-31 08:19）：RPG面板完全正常，commit 4942dba 已部署
+
+**结论**：P2-5编辑器角色系统RPG属性完整，修复已生效并验证通过。编辑器角色表单现已支持完整的11个RPG数值字段，与游戏内角色系统对齐。
+
+---
+
 ## 测试反馈 2026-03-31 07:38（第92轮 - 小刚测试）
 
 ### 测试项：P3-10 API路径不一致（sessions/games前缀混用）复测
@@ -1722,3 +1766,46 @@
 - 所有核心API响应正常
 - 服务器运行稳定
 
+
+---
+
+## 测试反馈 2026-03-31 08:38（第95轮 - 小刚测试）
+
+### 测试项：P3-10 API路径一致性复测
+
+**结果**：❌ **P3问题确认仍存在（修复不完整）**
+
+**背景**：debug.md记录P3-10已通过commit fc2648c修复，声称"games router新增/{session_id}/achievements别名路由，/api/games/{id}/achievements和/api/sessions/{id}/achievements均可访问"。
+
+**实测结果**（session: c3f0da9e05ba）：
+
+| 端点 | /api/games/{sid}/ | /api/sessions/{sid}/ | 其他路径 |
+|------|-------------------|---------------------|----------|
+| achievements | **404** ❌ | 200 ✅ | - |
+| stats | **404** ❌ | 200 ✅ | - |
+| stats/overview | **404** ❌ | 200 ✅ | - |
+| npcs | 200 ✅ | **404** ❌ | - |
+| saves | 200 ✅ | **404** ❌ | - |
+| cg | **404** ❌ | 200 ✅ | - |
+| logs | 404 ❌ | 404 ❌ | - |
+| status | 200 ✅ | - | - |
+| debug | 200 ✅ | - | - |
+| action | 200 ✅ | - | - |
+| teammates | **404** ❌ | **404** ❌ | /api/teammates/{sid}/ → 200 ✅ |
+| exploration | **404** ❌ | **404** ❌ | /api/exploration/{sid}/ → 200 ✅ |
+
+**问题分析**：
+1. commit fc2648c声称的achievements别名路由**实际未生效**，`/api/games/{sid}/achievements`仍返回404
+2. 服务器**未部署**fc2648c，或该commit的实现方向错误
+3. API路径**完全无统一模式**：
+   - 部分端点挂在`/api/games/{sid}/`下（action/status/saves/npcs/debug）
+   - 部分端点挂在`/api/sessions/{sid}/`下（achievements/stats/stats/overview/cg）
+   - teammates和exploration使用独立路径`/api/teammates/`和`/api/exploration/`
+
+**优先级**：P3（路径不一致影响前端开发体验，非阻塞）
+
+**建议**：
+1. 确认fc2648c是否已部署到生产服务器（http://43.134.81.228:8080）
+2. 全面梳理API路径：所有session-scoped端点应统一使用`/api/games/{session_id}/`或`/api/sessions/{session_id}/`
+3. 建议统一迁移到`/api/games/{session_id}/`作为主路径，`/api/sessions/{session_id}/`作为别名兼容
+4. teammates和exploration的独立路径也需要决定归属
