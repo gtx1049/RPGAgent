@@ -560,12 +560,19 @@ function connectWS(sessionId) {
     state.connected = true;
     setWSStatus("connected");
     startHeartbeat();
+    clearReconnect(); // 清除重试计数
+    // 重连后重置场景渲染标记，避免 scene_update 被跳过
+    state._initialSceneRendered = false;
+    // 重连成功后刷新游戏状态
+    refreshGameStateOnReconnect();
   });
 
   ws.addEventListener("close", () => {
     state.connected = false;
     stopHeartbeat();
     setWSStatus("disconnected");
+    // 自动重连（游戏中途断线时尝试恢复）
+    scheduleReconnect();
   });
 
   ws.addEventListener("error", () => {
@@ -616,6 +623,58 @@ function stopHeartbeat() {
     _heartbeatTimer = null;
   }
   _missedPongs = 0;
+}
+
+// ── WebSocket 自动重连 ───────────────────────
+
+let _reconnectTimer = null;
+let _reconnectAttempt = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+
+function scheduleReconnect() {
+  if (_reconnectTimer) return; // 已有待执行的重连
+  if (!state.sessionId) return; // 无有效会话，不重连
+  if (_reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+    appendSystem("⚠️ 连接已断开，请刷新页面重试。");
+    return;
+  }
+  _reconnectAttempt++;
+  const delay = Math.min(1000 * Math.pow(2, _reconnectAttempt - 1), 30000); // 1s, 2s, 4s, 8s, 16s, max 30s
+  appendSystem(`⚡ 连接中断，${Math.round(delay / 1000)}秒后尝试重连...`);
+  _reconnectTimer = setTimeout(() => {
+    _reconnectTimer = null;
+    if (state.sessionId) {
+      connectWS(state.sessionId);
+    }
+  }, delay);
+}
+
+function clearReconnect() {
+  if (_reconnectTimer) {
+    clearTimeout(_reconnectTimer);
+    _reconnectTimer = null;
+  }
+  _reconnectAttempt = 0;
+}
+
+// WS 重连成功后，刷新游戏状态（AP、HP等）
+function refreshGameStateOnReconnect() {
+  if (!state.sessionId) return;
+  fetch(`/api/games/${state.sessionId}/debug`)
+    .then(r => r.ok ? r.json() : null)
+    .then(debug => {
+      if (!debug) return;
+      const s = debug.stats || {};
+      if (s.hp !== undefined) updateHP(s.hp, s.max_hp);
+      if (s.stamina !== undefined) updateStamina(s.stamina, s.max_stamina);
+      if (debug.action_power !== undefined) {
+        updateAP(debug.action_power, debug.max_action_power);
+      } else if (s.action_power !== undefined) {
+        updateAP(s.action_power, s.max_action_power);
+      }
+      renderActionButtons(); // 重连后确保按钮可点击
+    })
+    .catch(() => {});
 }
 
 // ── 消息处理 ────────────────────────────────
