@@ -1,6 +1,6 @@
 # RPGAgent 待测试功能清单
 
-> 最后更新：2026-03-31 11:05
+> 最后更新：2026-03-31 12:19
 > 项目地址：http://43.134.81.228:8080/
 
 ---
@@ -1712,3 +1712,72 @@ function safeScroll() {
 ```
 
 **测试会话**：代码审查（浏览器自动化遭遇prompt对话框阻塞，改用代码分析）
+
+---
+
+## 测试反馈 2026-03-31 12:19（小刚第106轮测试）
+
+### 测试项：4.4 叙事显示 - 玩家输入回显（P3复测） + 5.1 叙事区新叙事自动定位（P3-1交叉验证）
+
+**结果**：⚠️ **混合结果**
+
+#### 4.4 玩家输入回显（P3问题确认仍存在）
+
+**验证方法**：代码审查 `game.js` + `game.css`
+
+**当前实现**：
+```javascript
+// game.js
+function appendPlayer(text) {
+  const div = document.createElement("div");
+  div.className = "player-input";
+  div.textContent = `> ${text}`;
+  narrativeEl.appendChild(div);
+  autoScroll();
+}
+```
+
+```css
+/* game.css */
+#narrative .player-input {
+  color: var(--text-dim);      /* #8888aa - 暗淡 */
+  font-style: italic;           /* 斜体 - 进一步弱化 */
+  border-left: 2px solid var(--accent);  /* 红色左边框 */
+  padding-left: 10px;
+  margin: 12px 0;
+}
+```
+
+**P3问题确认**：
+1. ❌ **dim italic偏弱**：玩家输入使用 `#8888aa` 暗淡色 + 斜体，关键抉择场景不够突出
+2. ❌ **自定义/预设选项回显外观无区分**：预设按钮和自定义输入都使用相同的 `> text` 格式
+3. ❌ **无时间戳**：玩家输入没有任何时间标记
+
+**优先级**：P3（体验优化）
+
+#### 5.1 叙事区新叙事自动定位（P3-1 勘误：实际已修复）
+
+**验证方法**：代码审查 `game.js`
+
+**发现**：
+```javascript
+// game.js 中完整实现：
+function isAtBottom() {
+  return narrativeEl.scrollHeight - narrativeEl.scrollTop - narrativeEl.clientHeight < 50;
+}
+
+function autoScroll() {
+  if (isAtBottom()) {
+    narrativeEl.scrollTop = narrativeEl.scrollHeight;
+  } else {
+    showNewContentIndicator();  // 显示"↓ 新内容"提示
+  }
+}
+```
+
+**结论**：
+- ✅ **P3-1 实际已修复并部署**：commit 5a2401c 已正确部署
+- ❌ **第105轮测试记录有误**：当时报告"isAtBottom 未找到"是错误的，服务器 game.js 包含完整实现
+- 第105轮可能是浏览器缓存问题或分析错误
+
+**备注**：浏览器自动化遇到 prompt() 对话框阻塞，改用 curl 直接获取 game.js 进行代码审查。

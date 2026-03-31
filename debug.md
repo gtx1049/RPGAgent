@@ -1,6 +1,6 @@
 # RPGAgent 问题追踪
 
-> 最后更新：2026-03-31 10:19 (GMT+8)
+> 最后更新：2026-03-31 12:19 (GMT+8)
 > 整理策略：只保留活跃问题，已通过/已修复的测试记录已归档到 git commit 历史
 
 ---
@@ -1925,3 +1925,58 @@ GET /api/editor/games/example/characters/npc01
 **结论**：P3-1 autoScroll智能滚动功能完全实现并正确部署。用户上滚阅读历史时，新GM叙事不会强制拉回底部，而是显示"↓ 新内容"金色提示；用户点击提示或滚动到底部后，提示自动清除。打字机效果期间也遵守isAtBottom检测，不再无条件强制滚动。
 
 **测试会话**：browser-agent（http://43.134.81.228:8080/，JavaScript动态验证）
+
+## 测试反馈 2026-03-31 04:19（第107轮 - 小刚测试）
+
+### 测试项：4.4 叙事显示 - 玩家输入回显（P3问题持续）
+
+**结果**：❌ **P3问题确认仍存在**
+
+**验证方法**：代码审查 `curl http://43.134.81.228:8080/static/js/game.js` + `curl http://43.134.81.228:8080/static/css/game.css`
+
+**当前 appendPlayer 实现**：
+```javascript
+function appendPlayer(text) {
+  const div = document.createElement("div");
+  div.className = "player-input";
+  div.textContent = `> ${text}`;
+  narrativeEl.appendChild(div);
+  autoScroll();
+}
+```
+
+**当前 CSS 样式**：
+```css
+#narrative .player-input {
+  color: var(--text-dim);      /* #8888aa - 暗淡色 */
+  font-style: italic;           /* 斜体 - 进一步弱化 */
+  border-left: 2px solid var(--accent);  /* 红色左边框 */
+  padding-left: 10px;
+  margin: 12px 0;
+}
+```
+
+**P3问题确认（与 totest.md 记录一致）**：
+1. ❌ **dim italic偏弱**：关键抉择场景玩家输入不够突出，#8888aa暗淡色+斜体视觉效果弱
+2. ❌ **自定义/预设选项回显外观无区分**：预设按钮("环顾四周")和自定义输入使用相同样式
+3. ❌ **无时间戳**：玩家输入无时间标记
+
+**sendPlayerInput 统一处理**：
+```javascript
+function sendPlayerInput(text) {
+  if (!state.connected) return;
+  appendDivider();
+  appendPlayer(text);  // 统一处理，无区分
+  renderOptions([]);
+  state.ws.send(JSON.stringify({ action: "player_input", content: text }));
+}
+```
+
+**优先级**：P3（体验优化，非阻塞）
+
+**建议**：
+1. 提升玩家输入的文字亮度（使用 --text-color 而非 --text-dim）
+2. 为自定义输入和预设行动使用不同的视觉样式（如图标或前缀区分）
+3. 可选：添加时间戳显示（turn信息可能更实用）
+
+**测试会话**：curl代码审查（浏览器自动化遇到prompt对话框阻塞）
