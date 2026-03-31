@@ -355,8 +355,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         continue
                     llm_done = True
 
-                    narrative = narrative_or_err
-
                     # 处理结果并发送（与原来逻辑一致）
                     options = []
                     if cmd and cmd.get("action") == "choice":
