@@ -395,8 +395,14 @@ function executeAction(action) {
       text = "仔细调查";
       break;
     case "rest":
-      text = "休整一下";
-      break;
+      // 休整直接通过WS发送rest_action，不走LLM，不消耗AP
+      if (state.ws && state.connected) {
+        appendDivider();
+        appendPlayer("休整一下");
+        renderOptions([]); // 清除GM选项
+        state.ws.send(JSON.stringify({ action: "rest_action" }));
+      }
+      return;
     case "skill":
       text = `使用技能：${action.skillName}`;
       break;
@@ -565,17 +571,21 @@ function connectWS(sessionId) {
     refreshGameStateOnReconnect();
   });
 
-  ws.addEventListener("close", () => {
+  ws.addEventListener("close", (event) => {
     state.connected = false;
     stopHeartbeat();
+    const reason = event.reason || closeCodeReason(event.code);
+    console.warn(`[WS] 连接断开 | code=${event.code} reason="${reason}" wasClean=${event.wasClean}`);
     setWSStatus("disconnected");
+    appendSystem(`⚠️ 连接已断开（${event.code}: ${reason}），正在尝试重连...`);
     // 自动重连（游戏中途断线时尝试恢复）
     scheduleReconnect();
   });
 
-  ws.addEventListener("error", () => {
+  ws.addEventListener("error", (event) => {
     state.connected = false;
     setWSStatus("disconnected");
+    console.error("[WS] 连接错误", event);
     appendSystem("连接中断，请刷新页面重试。");
   });
 
@@ -621,6 +631,25 @@ function stopHeartbeat() {
     _heartbeatTimer = null;
   }
   _missedPongs = 0;
+}
+
+function closeCodeReason(code) {
+  const reasons = {
+    1000: "正常关闭",
+    1001: "服务器关闭/网关迁移",
+    1002: "协议错误",
+    1003: "数据类型不支持",
+    1005: "无状态（未收到关闭帧）",
+    1006: "异常关闭（网络中断）⚠️",
+    1007: "消息格式错误",
+    1008: "策略违反",
+    1009: "消息过大",
+    1010: "必要扩展未协商",
+    1011: "服务器内部错误",
+    1012: "服务重启",
+    1013: "临时服务不可用",
+  };
+  return reasons[code] || `未知(${code})`;
 }
 
 // ── WebSocket 自动重连 ───────────────────────

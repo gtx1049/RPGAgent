@@ -470,6 +470,39 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
                     logger.info(f"[WS] player_input END session={session_id} turn={session.turn}")
 
+            elif action == "rest_action":
+                # 休整：直接恢复AP和体力，不经过LLM
+                session.gm.stats_sys.refresh_ap()
+                session.gm.stats_sys.restore_stamina(session.gm.stats_sys.stats.max_stamina)
+                if session.gm.hidden_value_sys:
+                    session.gm.hidden_value_sys.tick_all(session.gm.session.turn_count)
+                session.gm.session.turn += 1
+                session.gm.session.add_history("system", "【休整】行动力和体力已恢复。")
+                narrative = "你稍作休息，身体的疲惫渐渐消散。行动力已完全恢复。"
+                stats = session.gm.stats_sys.get_snapshot()
+                moral = session.gm.moral_sys.get_snapshot()
+                await websocket.send_json({
+                    "type": "narrative",
+                    "content": narrative,
+                    "done": True,
+                })
+                await websocket.send_json({
+                    "type": "status_update",
+                    "content": "",
+                    "extra": {
+                        "hp": stats.get("hp", 0),
+                        "max_hp": stats.get("max_hp", 0),
+                        "stamina": stats.get("stamina", 0),
+                        "max_stamina": stats.get("max_stamina", 0),
+                        "action_power": stats.get("action_power", 0),
+                        "max_action_power": stats.get("max_action_power", 3),
+                        "moral_debt_level": moral.get("level", ""),
+                        "moral_debt_value": moral.get("debt", 0),
+                        "turn": session.gm.session.turn,
+                    },
+                })
+                logger.info(f"[WS] rest_action DONE session={session_id}")
+
             elif action == "get_status":
                 stats = session.gm.stats_sys.get_snapshot()
                 moral = session.gm.moral_sys.get_snapshot()
