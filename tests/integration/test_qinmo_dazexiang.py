@@ -271,6 +271,9 @@ def gm(context_loader, game_session, hidden_value_configs, roll_sys):
     mock_agent._sys_prompt = ""
 
     async def mock_agent_reply(msg):
+        # 刷新行动力（测试环境默认 action_power=3，第4回合会耗尽）
+        if hasattr(gm, "stats_sys") and gm.stats_sys:
+            gm.stats_sys.refresh_ap()
         content = msg.content if hasattr(msg, "content") else str(msg)
         lines = content.split("\n")
         player_input = ""
