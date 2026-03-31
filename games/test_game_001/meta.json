@@ -1,0 +1,13 @@
+{
+  "id": "test_game_001",
+  "name": "测试剧本",
+  "version": "1.0.0",
+  "author": "",
+  "summary": "",
+  "tags": [],
+  "engine_version": "0.2",
+  "first_scene": "scene_01",
+  "systems_enabled": {},
+  "hidden_values": [],
+  "hidden_value_actions": {}
+}
