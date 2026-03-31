@@ -365,13 +365,16 @@
   - ✅ appendGM/appendPlayer/appendSystem 三处均实现自动滚动
   - ⚠️ [P3] 无用户阅读检测：用户手动上滚阅读历史时，新GM叙事会将其强行拉回底部
   - ⚠️ [P3] 打字机效果期间每8ms执行一次scrollTop更新，高频重排影响性能
-- [x] 新叙事自动定位 → **部分通过（P3）** [2026-03-30 07:02]
-  - ✅ `appendGM()` 每次append后执行 `narrativeEl.scrollTop = narrativeEl.scrollHeight` 实现自动滚底
-  - ✅ 新GM叙事生成后正确滚动到底部，保持最新内容可见
-  - ⚠️ [P3] 无用户阅读检测：用户手动上滚阅读历史时，新GM叙事会将其强行拉回底部，打断阅读节奏
-  - ⚠️ [P3] 建议：增加"新内容"视觉提示，让用户选择是否滚动；或检测用户是否在阅读历史模式
-  - **注：** REST API `POST /api/games/action` 可正常返回GM叙事，但WS P1阻塞导致前端无法接收实时更新
-- [x] 历史叙事可回滚 → **部分通过（P3：自动滚动打断阅读）** [2026-03-30 07:55]
+- [x] 新叙事自动定位 → **通过（修复已验证）** [2026-03-31 03:57]
+  - ✅ `autoScroll()` 使用 `isAtBottom()` 检测（50px阈值），只在用户处于底部时才自动滚动
+  - ✅ `showNewContentIndicator()` 创建sticky "↓ 新内容"金色提示，用户不在底部时显示
+  - ✅ 滚动事件监听器：用户滚动到底部时自动清除"新内容"提示
+  - ✅ `appendGM()` 打字机效果期间也使用 `autoScroll()`（不再无条件强制滚动）
+  - ✅ `appendPlayer()` / `appendDivider()` / `appendSystem()` 均调用 `autoScroll()`
+  - ✅ 第106轮代码层验证：game.js完整实现确认，commit 5a2401c 已正确部署
+- [x] 历史叙事可回滚 → **通过（修复已验证）** [2026-03-31 03:57]
+  - ✅ P3-1修复后：用户上滚阅读历史时，新叙事显示"↓ 新内容"提示而非强制拉回
+  - ✅ 用户可继续阅读，提示点击可滚动到底部，或自动在底部清除
 - [x] CG缩略图点击 → **部分通过（P3）** [2026-03-30 05:38]
   - ✅ `scene_cg` 消息处理时，`appendGM()` 插入的 `<img>` 标签正确绑定 `onclick="openCgGallery()"`
   - ✅ `openCgGallery()` 函数存在且逻辑完整（`game.js:1199-1205`）：获取CG历史→渲染grid→显示overlay

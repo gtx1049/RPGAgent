@@ -36,7 +36,7 @@
 
 | # | 问题 | 最后确认 | 状态 |
 |---|------|----------|------|
-| P3-1 | 新叙事自动定位打断阅读 | 2026-03-31 03:38 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/5a2401c) - autoScroll()+isAtBottom()检测，用户阅读历史时不打断 |
+| P3-1 | 新叙事自动定位打断阅读 | 2026-03-31 03:57 | ✅ [已验证通过](https://github.com/gaotianxing/RPGAgent/commit/5a2401c) - autoScroll()+isAtBottom()检测（50px阈值），用户阅读历史时不打断，显示"↓ 新内容"金色提示 |
 | P3-2 | 编辑器无撤销/重做功能 | 2026-03-31 20:08 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/5343e5d) - 工具栏添加↩撤销/↪重做按钮，支持Ctrl+Z/Y快捷键，最多50步历史 |
 | P3-3 | 场景/角色/删除操作后无UI反馈 | 2026-03-30 13:10 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/563262b) |
 | P3-4 | 移动端侧边栏JS间歇性失灵 | 2026-03-30 10:25 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/0c7c7d7) - toggleMobileSidebar添加try-catch+addEventListener备份绑定 |
@@ -1896,3 +1896,32 @@ GET /api/editor/games/example/characters/npc01
 **结论**：游戏核心流程健康，所有P1/P2修复验证有效，服务器运行稳定。
 
 **测试会话**：小刚（2026-03-31 03:19 UTC）
+
+## 测试反馈 2026-03-31 03:57（第106轮 - 小刚测试）
+
+### 测试项：5.1 叙事区 - 新叙事自动定位（P3-1代码层验证复测）
+
+**结果**：✅ **通过（P3-1修复已正确部署）**
+
+**测试方法**：
+1. 浏览器JavaScript动态检查：`typeof isAtBottom` / `typeof autoScroll` / `typeof showNewContentIndicator`
+2. 直接检查game.js源码：`curl http://43.134.81.228:8080/static/js/game.js` 分析关键函数实现
+
+**验证结果**：
+
+| 检查项 | 结果 | 详情 |
+|--------|------|------|
+| `isAtBottom()` 函数 | ✅ 存在 | `scrollHeight - scrollTop - clientHeight < 50`（50px阈值）|
+| `autoScroll()` 函数 | ✅ 存在 | `isAtBottom()? scrollTop=scrollHeight : showNewContentIndicator()` |
+| `showNewContentIndicator()` | ✅ 存在 | 创建sticky "↓ 新内容"金色提示，cursor:pointer带onclick滚动到底部 |
+| 滚动事件监听器 | ✅ 存在 | `narrativeEl.addEventListener('scroll', ...)` → `isAtBottom() && newContentEl`时清除指示器 |
+| appendGM调用autoScroll | ✅ 存在 | 打字机效果每字符/标签调用autoScroll() |
+| appendPlayer/Divider/System | ✅ 调用autoScroll | 三者append后均调用autoScroll() |
+
+**与第105轮测试对比**：
+- 第105轮（03:38 UTC）：代码审查方法有误（搜索inline script未找到），误判函数不存在
+- 第106轮（03:57 UTC）：直接在浏览器eval中检查 + curl game.js源码，确认所有函数均已正确实现并部署
+
+**结论**：P3-1 autoScroll智能滚动功能完全实现并正确部署。用户上滚阅读历史时，新GM叙事不会强制拉回底部，而是显示"↓ 新内容"金色提示；用户点击提示或滚动到底部后，提示自动清除。打字机效果期间也遵守isAtBottom检测，不再无条件强制滚动。
+
+**测试会话**：browser-agent（http://43.134.81.228:8080/，JavaScript动态验证）
