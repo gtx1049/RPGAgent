@@ -491,7 +491,11 @@
 
 ### 6.1 剧本管理
 - [x] 剧本列表加载 → **正常** (`/api/editor/games` 返回游戏列表) [2026-03-29 08:39]
-- [ ] 剧本创建 → **❌ 阻塞** (编辑器无剧本创建功能，POST /api/editor/games 返回405；仅支持编辑现有剧本) [2026-03-30 09:38]
+- [x] 剧本创建 → **❌ 失败（P2）** [2026-03-31 14:05]
+  - 编辑器无"新建剧本"按钮，无法通过UI创建
+  - POST /api/editor/games → HTTP 405 Method Not Allowed
+  - 后端无剧本创建端点，仅支持编辑现有剧本
+  - 建议：在编辑器增加"新建剧本"功能，调用后端 POST 接口
 - [x] 剧本删除 → **失败（DELETE /api/editor/games 返回 405 Method Not Allowed，无法删除剧本）** [2026-03-30 13:45]
 - [x] 剧本元信息编辑 → **通过** [2026-03-30 09:38]
   - 点击"剧本信息"tab → 正确显示剧本元信息编辑面板（含ID/名称/作者/简介/标签/版本/首场景ID）
@@ -1890,7 +1894,10 @@ function autoScroll() {
 ### 测试项目
 
 #### 1. MiniMax API 连通性
-- [ ] API Key 读取正常（MINIMAX_API_KEY）
+- [x] API Key 读取正常（MINIMAX_API_KEY）→ **❌ P1阻塞：TONGYI_API_KEY和MINIMAX_API_KEY均未配置** [2026-03-31 13:38]
+  - `POST /api/games/scenes/scene_01/cg/generate` → 返回 `{"reason":"TONGYI_API_KEY not configured"}`
+  - 代码逻辑正确（优先MINIMAX，备选Tongyi），但服务器环境变量两者均未设置
+  - CG生成功能完全不可用，需配置API Key
 - [ ] `POST https://api.minimaxi.com/v1/images/generations` 返回 200
 - [ ] 返回 base64 图片数据可解码为有效 PNG
 
@@ -1906,13 +1913,22 @@ function autoScroll() {
 - [ ] 重复场景不再重复生成（`_auto_cg_generated_scenes` 生效）
 
 #### 4. 回退兼容
-- [ ] `MINIMAX_API_KEY` 未配置时，fallback 到 `TONGYI_API_KEY`
-- [ ] CG 生成失败不影响游戏叙事流程（静默吞掉异常）
+- [x] `MINIMAX_API_KEY` 未配置时，fallback 到 `TONGYI_API_KEY` → **✅ 逻辑正确** [2026-03-31 13:38]
+  - 代码：`api_key = os.getenv("MINIMAX_API_KEY", "") or os.getenv("TONGYI_API_KEY", "")`
+  - `provider = "minimax" if os.getenv("MINIMAX_API_KEY") else "tongyi"`
+- [x] CG 生成失败不影响游戏叙事流程（静默吞掉异常）→ **✅ 逻辑正确** [2026-03-31 13:38]
+  - `try/except` 包裹整个生成流程，异常被静默吞掉
 
 #### 5. 质量验证
 - [ ] CG 风格符合叙事场景（fantasy/dark atmosphere）
 - [ ] 战斗场景 CG 风格：`epic battle scene, dramatic lighting`
 - [ ] 图片清晰度：1024x1024
+
+### 额外发现：CG History端点Bug（P3）
+- [x] `/api/games/{session_id}/cg/history` → **❌ HTTP 500 Internal Server Error** [2026-03-31 13:38]
+  - 根因：`games.py`第462行访问`session.cg_history`（错误路径）
+  - 正确路径应为：`session.gm.session.cg_history`（cg.py第34行已正确实现）
+  - 临时方案：使用 `/api/sessions/{session_id}/cg` 替代（正常工作）
 
 ### API 配置
 ```
@@ -1921,3 +1937,40 @@ Provider = minimax（主）/ tongyi（备）
 Model = image-01
 Endpoint = https://api.minimaxi.com/v1/images/generations
 ```
+
+## 测试反馈 2026-03-31 05:57（小刚第110轮测试）
+
+### 测试项：MiniMax CG系统 + CG History Bug验证
+
+**结果**：⚠️ **混合结果**
+
+#### 1. CG History Bug (P3) → ✅ **可能已修复**
+
+- **测试session**: a945f5af2a82（新session）
+- **验证结果**：
+  - `GET /api/games/{sid}/cg/history` → **HTTP 200** ✅（之前为500）
+  - 响应：`[]`（空数组，符合新session预期）
+  - 对比：`/api/sessions/{sid}/cg` → `{"count":0,"cg_list":[]}`（备用端点正常）
+- **对比历史**：
+  - 第82轮（2026-03-31 19:19 UTC）：cg/history → HTTP 500 Internal Server Error ❌
+  - 第110轮（2026-03-31 05:57 UTC）：cg/history → HTTP 200 `[]` ✅
+- **结论**：cg_history端点500错误消失，可能已修复或返回空数组避免了触发点
+
+#### 2. CG生成API → ❌ **仍为404（未实现）**
+
+- `POST /api/games/{sid}/cg/generate` → `{"detail":"Not Found"}` ❌
+- `POST /api/scenes/{scene_id}/cg/generate` → `{"detail":"Not Found"}` ❌
+- CG生成功能完全未实现
+
+#### 3. LLM API Key状态 → ✅ **已配置（意外恢复）**
+
+- 第100轮（10:19 UTC）报告：`{"detail":"API 密钥未配置..."}` ❌
+- 第110轮（05:57 UTC）实测：`POST /api/games/action` → HTTP 200，GM叙事正常返回 ✅
+- 行动"环顾四周"成功触发完整GM响应（约10秒）
+- **结论**：服务器LLM API Key已配置（或自动恢复），游戏核心功能正常运行
+
+#### 服务器健康状态
+- sessions=1, memory rss=148MB, healthy
+- 系统运行稳定
+
+**测试会话**：小刚（2026-03-31 05:57 UTC）

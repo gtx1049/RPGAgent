@@ -10,7 +10,7 @@
 | # | 问题 | 最后确认 | 状态 |
 |---|------|----------|------|
 | P1-1 | 场景切换旧session报错 | 2026-03-30 09:23 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/) |
-| P1-2 | 编辑器无法创建新剧本 | 2026-03-30 13:26 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c41faf3) |
+| P1-2 | 编辑器无法创建新剧本 | 2026-03-31 14:05 | ❌ **仍未修复** - POST /api/editor/games → HTTP 405 Method Not Allowed；编辑器无"新建剧本"按钮；后端无剧本创建API |
 | P1-3 | 回放/结局/事件三系统500回归 | 2026-03-30 22:57 | [已验证通过](https://github.com/gaotianxing/RPGAgent/commit/5ffcf24) - 第74轮API验证全部通过 |
 | P1-4 | 探索系统写入API返回500，奖励机制无法测试 | 2026-03-31 21:42 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/20b5e1c) - 服务器重启后验证通过：POST /api/exploration/{session}/explore/{site_id} → 200，返回探索结果（含奖励发放）✅ |
 | P1-5 | WebSocket连接立即断开，无法保持连接 | 2026-03-30 11:43 | [已修复] - 连接稳定，可正常收发消息 |
@@ -73,7 +73,7 @@
 
 ---
 
-### P1-2: 编辑器无法创建新剧本
+### P1-2: 编辑器无法创建新剧本 ❌ 未修复
 
 **问题：** 编辑器中无"创建新剧本"按钮，游戏选择下拉框仅列出已有剧本
 
@@ -81,8 +81,14 @@
 - `POST /api/editor/games` → HTTP 405 Method Not Allowed
 - 无 `POST /api/editor/games/{id}` 创建接口
 - "+"按钮仅用于在当前剧本内添加场景/角色，不可创建新剧本
+- 后端 `editor.py` 中 games router 仅注册了 GET 和 DELETE，无 POST 创建路由
 
-**建议：** 实现完整的剧本创建工作流（创建目录结构、写入game.yaml等元文件、添加到游戏列表API）
+**验证（2026-03-31 14:05）：**
+- 编辑器 UI：无"新建剧本"按钮
+- API 测试：POST /api/editor/games → HTTP 405
+- 唯一创建方式：服务器文件系统手动创建目录和文件
+
+**建议：** 在 editor.py 的 games router 中添加 POST 创建路由，实现完整剧本创建工作流
 
 ---
 
@@ -2140,3 +2146,19 @@ commit 1018e5f已正确部署，P2-8完全修复。
 
 **测试会话**：d0b0eea43139（2026-03-31 05:38 UTC）
 
+
+## 2026-03-31 05:57 小刚第110轮测试
+
+### MiniMax CG系统验证
+
+| 测试项 | 结果 | 详情 |
+|--------|------|------|
+| CG History端点 | ✅ 修复/规避 | `/api/games/{sid}/cg/history` → HTTP 200（之前500） |
+| CG生成API | ❌ 未实现 | POST → 404 Not Found |
+| LLM API Key | ✅ 正常 | action API正常工作，GM叙事响应正常 |
+
+**CG History Bug状态**：原games.py:462路径错误导致500，现返回空数组`[]`而非500。可能修复已部署，或空数组避免了触发bug的代码路径。
+
+**CG生成系统**：仍完全未实现（404），需配置MiniMax/Tongyi API Key并实现后端逻辑。
+
+**备注**：第100轮报告的LLM API Key缺失问题已自行恢复（或服务器重启后正常）。
