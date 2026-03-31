@@ -325,10 +325,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                             pass
                         continue
 
-                    tag, narrative_or_err, cmd = tag
-                    llm_done = True
-
-                    if tag == "error":
+                    if tag[0] == "error":
+                        # error tuple: ("error", error_message)
+                        _, err_msg = tag
+                        llm_done = True
+                        logger.error(f"[WS] LLM error: {err_msg}")
                         await websocket.send_json({
                             "type": "narrative",
                             "content": "",
@@ -336,9 +337,12 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         })
                         await websocket.send_json({
                             "type": "error",
-                            "content": f"处理失败：{narrative_or_err}",
+                            "content": f"处理失败：{err_msg}",
                         })
                         continue
+
+                    tag, narrative_or_err, cmd = tag
+                    llm_done = True
 
                     narrative = narrative_or_err
 
