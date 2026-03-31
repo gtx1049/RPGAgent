@@ -7,10 +7,16 @@ RPGAgent API 服务器
 
 import asyncio
 import json
+import logging
 import os
+import signal
 import sys
+import threading
+import traceback
 from pathlib import Path
 from contextlib import asynccontextmanager
+
+import atexit
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +33,34 @@ from .routes import games, logs, teammates, market, debug as debug_module, achie
 from ..config.settings import HOST, PORT, IMAGE_GENERATOR_CACHE_DIR
 
 _static_dir = _project_root.parent / "static"
+
+# ─── 日志 & 信号处理 ───────────────────────────────────────────────────
+
+logger = logging.getLogger("rpgagent.ws")
+_log_file = _project_root.parent / "ws_server.log"
+_handler = logging.FileHandler(_log_file)
+_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+logger.addHandler(_handler)
+logger.setLevel(logging.DEBUG)
+
+def _log_thread_exception(args, thread_name: str = ""):
+    """记录 daemon 线程中的未捕获异常"""
+    exc = args.exc_value
+    tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    logger.error(f"[Thread {thread_name}] uncaught exception:\n{tb}")
+
+# 注册线程异常处理（daemon 线程崩溃不会打印，需要手动捕获）
+threading.excepthook = _log_thread_exception
+
+# SIGTERM/SIGINT 信号处理，记录关闭原因
+def _sig_handler(signum, frame):
+    logger.warning(f"[Signal {signum}] received — graceful shutdown initiated")
+    raise SystemExit(0)
+
+signal.signal(signal.SIGTERM, _sig_handler)
+signal.signal(signal.SIGINT, _sig_handler)
+# SIGUSR1 是 watchfiles 热重载信号，正常情况下不关闭连接
+signal.signal(signal.SIGUSR1, lambda s, f: logger.debug(f"[Signal {s}] SIGUSR1 received (hot reload?)"))
 
 
 # ─── 每幕结尾 CG 生成辅助 ──────────────────────────────────────────────
@@ -49,14 +83,21 @@ def _run_action_in_thread(
     manager, session_id: str, content: str, result_queue: queue.Queue
 ) -> None:
     """
-    在独立线程中执行 LLM 调用（使用 asyncio.run），结果放入 Queue。
-    asyncio.run() 创建独立 event loop，不影响 WS 主循环。
-    不阻塞 WS 心跳（心跳由 WS handler 主循环独立响应）。
+    在独立线程中执行 async LLM 调用。
+    每个 thread 有自己独立的 event loop，避免多轮对话时嵌套 event loop 冲突。
+    asyncio.run() 创建临时 event loop，ThreadPoolExecutor 确保每个 action 独立。
     """
+    logger.info(f"[WS-Thread {threading.current_thread().name}] LLM action START session={session_id}")
+    async def _async_wrapper():
+        return await manager.process_action(session_id, content)
+
     try:
-        narrative, cmd = asyncio.run(manager.process_action(session_id, content))
+        narrative, cmd = asyncio.run(_async_wrapper())
+        logger.info(f"[WS-Thread {threading.current_thread().name}] LLM action DONE session={session_id} len={len(narrative) if narrative else 0}")
         result_queue.put(("done", narrative, cmd))
     except Exception as e:
+        logger.error(f"[WS-Thread {threading.current_thread().name}] LLM action ERROR: {e}")
+        traceback.print_exc()
         result_queue.put(("error", str(e)))
 
 
@@ -238,6 +279,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
                 # ── LLM 调用移入后台线程，不阻塞 WS 心跳 ─────────────
                 # 玩家输入追加到叙事区（立即显示，不等待 LLM）
+                logger.info(f"[WS] player_input START session={session_id} content='{content[:50]}'")
                 await websocket.send_json({
                     "type": "narrative",
                     "content": f"【{content}】\n",
@@ -259,10 +301,16 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
                 # 等待 LLM 结果，同时保持心跳响应（每轮最多阻塞0.5秒）
                 llm_done = False
+                _queue_timeout_count = 0
                 while not llm_done:
                     try:
                         tag = result_queue.get(timeout=0.5)
                     except queue.Empty:
+                        _queue_timeout_count += 1
+                        if _queue_timeout_count >= 120:  # 60秒无响应则告警
+                            logger.warning(f"[WS] LLM waiting >60s, queue timeout #{_queue_timeout_count}")
+                        elif _queue_timeout_count >= 10:  # 5秒后开始日志
+                            logger.debug(f"[WS] LLM still waiting... timeout #{_queue_timeout_count}")
                         # 超时：检查是否有客户端消息（保持心跳可响应）
                         try:
                             raw = await asyncio.wait_for(
@@ -420,6 +468,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                             "content": f"/cg_cache/{cg_filename}",
                         })
 
+                    logger.info(f"[WS] player_input END session={session_id} turn={session.turn}")
+
             elif action == "get_status":
                 stats = session.gm.stats_sys.get_snapshot()
                 moral = session.gm.moral_sys.get_snapshot()
@@ -501,12 +551,18 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                     })
 
     except WebSocketDisconnect:
-        pass
+        logger.info(f"[WS] WebSocketDisconnect session={session_id}")
+    except Exception as e:
+        logger.error(f"[WS] Unexpected error session={session_id}: {type(e).__name__}: {e}\n{traceback.format_exc()}")
 
 
 # ─── 启动 ──────────────────────────────────────────
 
 def run(host: str = HOST, port: int = PORT):
+    import resource
+    logger.info(f"[Server] PID={os.getpid()} starting on {host}:{port}")
+    rsrc = resource.getrusage(resource.RUSAGE_SELF)
+    logger.info(f"[Server] Initial memory RSS={rsrc.ru_maxrss}KB")
     uvicorn.run(
         "api.server:app",
         host=host,
