@@ -410,14 +410,37 @@ class GameMaster:
         self.dm._sys_prompt = current_sys_prompt
 
         # 调用 AgentScope Agent（reply 是 async 方法，需要传入 Msg 对象）
-        # 注意：MiniMax-M2.1 + OpenAI function calling 不兼容（返回400），
-        # 强制使用 tool_choice="none" 禁用工具调用，确保纯文本生成稳定
         from agentscope.message import Msg
         msg = Msg(name="玩家", content=user_prompt, role="user")
-        response = await self.dm.reply(msg, tool_choice="none")
+
+        # 优先使用工具调用（MiniMax兼容时正常工作）
+        # 失败时降级为纯文本模式（MiniMax tool call不兼容时触发）
+        response = None
+        llm_err = None
+        try:
+            response = await self.dm.reply(msg)
+        except Exception as e:
+            import logging
+            err_str = str(e)
+            llm_err = err_str
+            # MiniMax API tool call 400错误：降级为无工具模式
+            if "400" in err_str or "tool id" in err_str.lower() or "not found" in err_str.lower():
+                logging.warning(f"[DM] Tool call failed, falling back: {err_str[:150]}")
+                try:
+                    response = await self.dm.reply(msg, tool_choice="none")
+                except Exception as fallback_err:
+                    logging.error(f"[DM] Fallback also failed: {fallback_err}")
+                    response = None
+            else:
+                # 其他错误不重试，直接抛出
+                logging.error(f"[DM] dm.reply() failed: {err_str[:300]}")
+                raise
 
         # 提取纯文本：response 可能是 str 或 Msg 对象
         # Msg.content 可能是 str 或 ContentBlock 列表，用 get_text_content() 提取纯文本
+        if response is None:
+            return "[系统] AI处理遇到问题，请重试。", None
+
         if isinstance(response, str):
             llm_output = response
         elif hasattr(response, 'get_text_content'):
