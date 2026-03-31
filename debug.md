@@ -36,7 +36,7 @@
 
 | # | 问题 | 最后确认 | 状态 |
 |---|------|----------|------|
-| P3-1 | 新叙事自动定位打断阅读 | 2026-03-31 00:09 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/) - autoScroll()+isAtBottom()检测，用户阅读历史时不打断 |
+| P3-1 | 新叙事自动定位打断阅读 | 2026-03-31 03:38 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/5a2401c) - autoScroll()+isAtBottom()检测，用户阅读历史时不打断 |
 | P3-2 | 编辑器无撤销/重做功能 | 2026-03-31 20:08 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/5343e5d) - 工具栏添加↩撤销/↪重做按钮，支持Ctrl+Z/Y快捷键，最多50步历史 |
 | P3-3 | 场景/角色/删除操作后无UI反馈 | 2026-03-30 13:10 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/563262b) |
 | P3-4 | 移动端侧边栏JS间歇性失灵 | 2026-03-30 10:25 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/0c7c7d7) - toggleMobileSidebar添加try-catch+addEventListener备份绑定 |
@@ -388,17 +388,19 @@
 
 ---
 
-### P3-11: /health接口无内存监控信息
+### P3-11: /health接口无内存监控信息 ✅ 已修复
 
 **问题：** /health 仅返回 sessions 数量，无系统资源监控字段
 
 **详情：**
-- `GET /health` → `{"status":"ok","sessions":31}`，无 memory/rss/heapUsed 等字段
+- 修复前：`GET /health` → `{"status":"ok","sessions":31}`，无 memory/rss/heapUsed 等字段
+- 修复后：`GET /health` → `{"status":"ok","sessions":6,"memory":{"rss":152670208,"python_heap_current":0,"python_heap_peak":0}}`
 - `/api/health` → 404 Not Found
 - `/metrics` → 404 Not Found
-- 运维无法直接通过API监控服务器内存使用情况
 
-**建议**：P3级，为 /health 添加 memory/rss/heapUsed 等字段，支持基本系统资源监控
+**修复文件：** `rpgagent/api/server.py`（commit 1ee96e4）
+
+**服务器验证（2026-03-31 03:44 UTC）：** ✅ memory字段正常返回，rss=152MB
 
 ---
 
