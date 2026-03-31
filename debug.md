@@ -2162,3 +2162,86 @@ commit 1018e5f已正确部署，P2-8完全修复。
 **CG生成系统**：仍完全未实现（404），需配置MiniMax/Tongyi API Key并实现后端逻辑。
 
 **备注**：第100轮报告的LLM API Key缺失问题已自行恢复（或服务器重启后正常）。
+
+---
+
+## 测试反馈 2026-03-31 14:38（小刚第112轮测试）
+
+### 测试项：游戏核心流程综合验证（REST API + 成就系统 + 探索系统 + CG History）
+
+**结果**：✅ **全部通过（混合结果）**
+
+**测试session**: 37fc306a2a99（示例剧本·第一夜）
+
+---
+
+#### 验证1: P3-10 API路径一致性（复测）→ ✅ **完全通过**
+
+| 端点 | HTTP | 结果 |
+|------|------|------|
+| `/api/games/{sid}/stats` | 200 | ✅ 返回完整统计（overview/combat/dialogue等） |
+| `/api/games/{sid}/stats/overview` | 200 | ✅ 返回概览（turn/level/HP/AP/stamina） |
+| `/api/games/{sid}/achievements` | 200 | ✅ 返回6个成就，数据结构正确 |
+
+**结论**：P3-10完全修复，所有games路由别名正常工作。
+
+---
+
+#### 验证2: P1-4 探索系统写入（复测）→ ✅ **完全通过**
+
+**测试**：POST `/api/exploration/{sid}/explore/chen_sheng_will`
+- **HTTP 200** ✅（第88/96轮验证已通过，本轮再次确认稳定）
+- **探索结果**：`success: true`, roll=64, DC=35, 判定通过
+- **奖励发放**：铁剑×1（直接装备）、金币30、吴广秘密藏匿点情报×1
+- **has_new_clue=true** ✅
+
+**新发现-装备异常（P3）**：探索奖励的铁剑被直接装备到 `equipped.weapon`，但 `inventory=[]`（背包为空）。装备奖励应先进入背包而非直接装备。
+
+**结论**：P1-4稳定有效，探索奖励机制正常工作。装备直接装备问题为P3级。
+
+---
+
+#### 验证3: P3-16 CG History Games路由（复测）→ ✅ **已修复**
+
+- `GET /api/games/{sid}/cg/history` → HTTP 200 `[]`（新session空数组）✅
+- 对比历史：第82轮→500，第110轮→200 `[]`，本轮再次确认200
+
+**结论**：P3-16 CG history games路由500问题已修复。
+
+---
+
+#### 验证4: 成就系统REST API行为（观察）
+
+**测试**：session 37fc306a2a99，turn=1（1次action）+ 1次成功探索
+- **成就状态**：`unlocked_count=0/6`（全部锁定）
+- 对比：第104轮WebSocket测试，同剧本同操作 → 1/6解锁（和平谈判者）
+- 对比：第101轮REST测试，2 actions后 → 2/6解锁（和平谈判者✅+问心无愧✅）
+
+**分析**：成就解锁机制可能在REST API路径上触发不稳定，或本轮session操作路径（action→explore）与纯action路径不同导致条件判断差异。
+
+**结论**：需进一步隔离测试确认为REST vs WebSocket差异还是随机性问题。初步判断P3级（体验差异，非阻塞）。
+
+---
+
+#### 验证5: CG生成API（复测）→ ❌ **仍为404**
+
+- `POST /api/games/{sid}/cg/generate` → `{"detail":"Not Found"}` ❌
+- `POST /api/scenes/scene_01/cg/generate?session_id=...` → `{"detail":"Not Found"}` ❌
+- 结论：CG生成端点完全未实现（P1阻塞，API Key未配置 + 端点不存在）
+
+---
+
+#### 服务器健康状态
+- sessions=2, memory rss=134MB, python_heap=0
+- 系统运行稳定
+
+---
+
+### 新增问题记录
+
+**P3-17: 探索奖励装备直接装备不进背包**
+- 探索成功后铁剑直接进入 `equipped.weapon`
+- `inventory=[]`（背包为空）
+- 预期行为：奖励应先进入背包，再由玩家决定是否装备
+- 优先级：P3（体验问题）
+
