@@ -39,6 +39,26 @@ async def _trigger_scene_ending_cg(gm) -> None:
     gm._spawn_cg_task(trigger_reason="scene_ending")
 
 
+# ─── LLM 不阻塞 WS 心跳：后台线程执行 ────────────────────────────────
+
+import queue
+import threading
+
+
+def _run_action_in_thread(
+    manager, session_id: str, content: str, result_queue: queue.Queue
+) -> None:
+    """
+    在线程池中执行 LLM 调用，结果放入 Queue。
+    不在事件循环中运行，不阻塞心跳。
+    """
+    try:
+        narrative, cmd = manager.process_action(session_id, content)
+        result_queue.put(("done", narrative, cmd))
+    except Exception as e:
+        result_queue.put(("error", str(e)))
+
+
 # ─── 启动/关闭 ──────────────────────────────────────
 
 @asynccontextmanager
@@ -215,141 +235,189 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                     })
                     continue
 
-                # 生成叙事（可能耗时）
-                narrative, cmd = await manager.process_action(session_id, content)
+                # ── LLM 调用移入后台线程，不阻塞 WS 心跳 ─────────────
+                # 玩家输入追加到叙事区（立即显示，不等待 LLM）
+                await websocket.send_json({
+                    "type": "narrative",
+                    "content": f"【{content}】\n",
+                    "done": True,
+                })
+                await websocket.send_json({
+                    "type": "narrative",
+                    "content": "⌛ DM正在思考...",
+                    "done": False,
+                })
 
-                options = []
-                if cmd and cmd.get("action") == "choice":
-                    raw_options = cmd.get("options", "").split("|")
-                    # 格式：选项名|描述|触发条件，每3个为一组
-                    dc = cmd.get("dc", "50").strip() if cmd else "50"
-                    dc_hint = ""
-                    if dc.isdigit():
-                        d = int(dc)
-                        if d <= 30:
-                            dc_hint = "【简单】"
-                        elif d <= 50:
-                            dc_hint = "【五五开】"
-                        elif d <= 65:
-                            dc_hint = "【困难】"
-                        elif d <= 80:
-                            dc_hint = "【极难】"
-                        else:
-                            dc_hint = "【几乎不可能】"
-                    
-                    for i in range(0, len(raw_options), 3):
-                        group = raw_options[i:i+3]
-                        if group:
-                            # 第一个是选项名，后续合并为描述
-                            name = group[0].strip()
-                            desc = " ".join(g for g in group[1:] if g.strip())
-                            options.append(f"{name} {dc_hint} {desc}".strip())
+                result_queue: queue.Queue = queue.Queue()
+                t = threading.Thread(
+                    target=_run_action_in_thread,
+                    args=(manager, session_id, content, result_queue),
+                    daemon=True,
+                )
+                t.start()
 
-                # 检测场景变化（可能来自 GM_COMMAND 或 SceneTriggerEngine）
-                scene_change = None
-                if cmd and cmd.get("next_scene"):
-                    scene_change = cmd["next_scene"]
-                    # 每幕结尾自动生成 CG（scene_change 检测后立即触发，此时场景尚未切换）
-                    asyncio.create_task(_trigger_scene_ending_cg(session.gm))
-                elif session.gm.session.flags.get("_triggered_scene"):
-                    scene_change = session.gm.session.flags.pop("_triggered_scene")
+                # 等待 LLM 结果，同时保持心跳响应（每轮最多阻塞0.5秒）
+                llm_done = False
+                while not llm_done:
+                    try:
+                        tag = result_queue.get(timeout=0.5)
+                    except queue.Empty:
+                        # 超时：检查是否有客户端消息（保持心跳可响应）
+                        try:
+                            raw = await asyncio.wait_for(
+                                websocket.receive_text(), timeout=0.1
+                            )
+                            ping_msg = json.loads(raw)
+                            if ping_msg.get("action") == "ping":
+                                await websocket.send_json(
+                                    {"type": "pong", "content": ""}
+                                )
+                        except asyncio.TimeoutError:
+                            pass
+                        continue
 
-                # ── 叙事分chunk流式下发 ──────────────────────────────
-                # 按设计规范：分小段下发，done=false 表示未结束
-                # 每个自然段或 ~120 字符为一个 chunk
-                CHUNK_SIZE = 120
-                if narrative:
-                    # 尝试按段落分割
-                    paragraphs = narrative.replace("\r\n", "\n").split("\n\n")
-                    for i, para in enumerate(paragraphs):
-                        para = para.strip()
-                        if not para:
-                            continue
-                        is_last = (i == len(paragraphs) - 1)
-                        if len(para) <= CHUNK_SIZE:
-                            await websocket.send_json({
-                                "type": "narrative",
-                                "content": para,
-                                "done": is_last,
-                            })
-                        else:
-                            # 长段落按 CHUNK_SIZE 拆分
-                            for j in range(0, len(para), CHUNK_SIZE):
-                                chunk = para[j:j + CHUNK_SIZE]
-                                chunk_is_last = is_last and (j + CHUNK_SIZE >= len(para))
-                                await websocket.send_json({
-                                    "type": "narrative",
-                                    "content": chunk,
-                                    "done": chunk_is_last,
-                                })
-                else:
+                    tag, narrative_or_err, cmd = tag
+                    llm_done = True
+
+                    if tag == "error":
+                        await websocket.send_json({
+                            "type": "narrative",
+                            "content": "",
+                            "done": True,
+                        })
+                        await websocket.send_json({
+                            "type": "error",
+                            "content": f"处理失败：{narrative_or_err}",
+                        })
+                        continue
+
+                    narrative = narrative_or_err
+
+                    # 处理结果并发送（与原来逻辑一致）
+                    options = []
+                    if cmd and cmd.get("action") == "choice":
+                        raw_options = cmd.get("options", "").split("|")
+                        dc = cmd.get("dc", "50").strip() if cmd else "50"
+                        dc_hint = ""
+                        if dc.isdigit():
+                            d = int(dc)
+                            if d <= 30:
+                                dc_hint = "【简单】"
+                            elif d <= 50:
+                                dc_hint = "【五五开】"
+                            elif d <= 65:
+                                dc_hint = "【困难】"
+                            elif d <= 80:
+                                dc_hint = "【极难】"
+                            else:
+                                dc_hint = "【几乎不可能】"
+                        for i in range(0, len(raw_options), 3):
+                            group = raw_options[i:i+3]
+                            if group:
+                                name = group[0].strip()
+                                desc = " ".join(g for g in group[1:] if g.strip())
+                                options.append(f"{name} {dc_hint} {desc}".strip())
+
+                    # 清除"DM正在思考..."并下发叙事
                     await websocket.send_json({
                         "type": "narrative",
                         "content": "",
                         "done": True,
                     })
 
-                # 叙事流结束后下发选项
-                if options:
+                    CHUNK_SIZE = 120
+                    if narrative:
+                        paragraphs = narrative.replace("\r\n", "\n").split("\n\n")
+                        for i, para in enumerate(paragraphs):
+                            para = para.strip()
+                            if not para:
+                                continue
+                            is_last = i == len(paragraphs) - 1
+                            if len(para) <= CHUNK_SIZE:
+                                await websocket.send_json({
+                                    "type": "narrative",
+                                    "content": para,
+                                    "done": is_last,
+                                })
+                            else:
+                                for j in range(0, len(para), CHUNK_SIZE):
+                                    chunk = para[j:j+CHUNK_SIZE]
+                                    await websocket.send_json({
+                                        "type": "narrative",
+                                        "content": chunk,
+                                        "done": is_last and (j + CHUNK_SIZE >= len(para)),
+                                    })
+                    else:
+                        await websocket.send_json({
+                            "type": "narrative",
+                            "content": "",
+                            "done": True,
+                        })
+
+                    if options:
+                        await websocket.send_json({
+                            "type": "options",
+                            "options": options,
+                        })
+
+                    # 检测场景变化
+                    scene_change = None
+                    if cmd and cmd.get("next_scene"):
+                        scene_change = cmd["next_scene"]
+                        asyncio.create_task(_trigger_scene_ending_cg(session.gm))
+                    elif session.gm.session.flags.get("_triggered_scene"):
+                        scene_change = session.gm.session.flags.pop("_triggered_scene")
+
+                    # 状态更新
+                    stats = session.gm.stats_sys.get_snapshot()
+                    moral = session.gm.moral_sys.get_snapshot()
+                    npc_relations = {}
+                    for npc_id, rel_value in session.gm.dialogue_sys.relations.items():
+                        char = session.gm.game_loader.characters.get(npc_id)
+                        npc_relations[npc_id] = {
+                            "name": char.name if char else npc_id,
+                            "role": char.role if char else "npc",
+                            "value": rel_value,
+                            "level": session.gm.dialogue_sys.get_relation_level(npc_id),
+                        }
                     await websocket.send_json({
-                        "type": "options",
-                        "options": options,
+                        "type": "status_update",
+                        "content": "",
+                        "extra": {
+                            "hp": stats.get("hp", 0),
+                            "max_hp": stats.get("max_hp", 0),
+                            "stamina": stats.get("stamina", 0),
+                            "max_stamina": stats.get("max_stamina", 0),
+                            "action_power": stats.get("action_power", 0),
+                            "max_action_power": stats.get("max_action_power", 3),
+                            "moral_debt_level": moral.get("level", ""),
+                            "moral_debt_value": moral.get("debt", 0),
+                            "turn": session.turn,
+                            "npc_relations": npc_relations,
+                            "skills": session.gm.skill_sys.list_learned(),
+                            "equipped": session.gm.equipment_sys.get_equipped(),
+                        },
                     })
 
-                stats = session.gm.stats_sys.get_snapshot()
-                moral = session.gm.moral_sys.get_snapshot()
+                    if scene_change:
+                        await websocket.send_json({
+                            "type": "scene_change",
+                            "content": scene_change,
+                        })
 
-                # 收集 NPC 关系数据（姓名 + 关系值 + 关系等级）
-                npc_relations = {}
-                for npc_id, rel_value in session.gm.dialogue_sys.relations.items():
-                    char = session.gm.game_loader.characters.get(npc_id)
-                    npc_relations[npc_id] = {
-                        "name": char.name if char else npc_id,
-                        "role": char.role if char else "npc",
-                        "value": rel_value,
-                        "level": session.gm.dialogue_sys.get_relation_level(npc_id),
-                    }
+                    if session.gm.session.flags.get("_achievement_unlocked"):
+                        achievement_narrative = session.gm.session.flags.pop("_achievement_unlocked")
+                        await websocket.send_json({
+                            "type": "achievement_unlock",
+                            "content": achievement_narrative,
+                        })
 
-                await websocket.send_json({
-                    "type": "status_update",
-                    "content": "",
-                    "extra": {
-                        "hp": stats.get("hp", 0),
-                        "max_hp": stats.get("max_hp", 0),
-                        "stamina": stats.get("stamina", 0),
-                        "max_stamina": stats.get("max_stamina", 0),
-                        "action_power": stats.get("action_power", 0),
-                        "max_action_power": stats.get("max_action_power", 3),
-                        "moral_debt_level": moral.get("level", ""),
-                        "moral_debt_value": moral.get("debt", 0),
-                        "turn": session.turn,
-                        "npc_relations": npc_relations,
-                        "skills": session.gm.skill_sys.list_learned(),
-                        "equipped": session.gm.equipment_sys.get_equipped(),
-                    },
-                })
-
-                if scene_change:
-                    await websocket.send_json({
-                        "type": "scene_change",
-                        "content": scene_change,
-                    })
-
-                # 成就解锁通知（P2-7 修复）
-                if session.gm.session.flags.get("_achievement_unlocked"):
-                    achievement_narrative = session.gm.session.flags.pop("_achievement_unlocked")
-                    await websocket.send_json({
-                        "type": "achievement_unlock",
-                        "content": achievement_narrative,
-                    })
-
-                # 新 CG 生成时通知前端
-                if session.gm.session.scene_cg_generated and session.gm.session.scene_cg_path:
-                    cg_filename = os.path.basename(session.gm.session.scene_cg_path)
-                    await websocket.send_json({
-                        "type": "scene_cg",
-                        "content": f"/cg_cache/{cg_filename}",
-                    })
+                    if session.gm.session.scene_cg_generated and session.gm.session.scene_cg_path:
+                        cg_filename = os.path.basename(session.gm.session.scene_cg_path)
+                        await websocket.send_json({
+                            "type": "scene_cg",
+                            "content": f"/cg_cache/{cg_filename}",
+                        })
 
             elif action == "get_status":
                 stats = session.gm.stats_sys.get_snapshot()
