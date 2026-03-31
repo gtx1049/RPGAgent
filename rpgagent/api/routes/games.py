@@ -459,7 +459,7 @@ async def get_cg_history(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="会话不存在")
 
-    history = session.cg_history or []
+    history = session.gm.session.cg_history or []
     result = []
     for entry in history:
         cg_path = entry.get("cg_path", "")

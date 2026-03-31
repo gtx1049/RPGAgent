@@ -51,6 +51,7 @@
 | P3-13 | 编辑器场景创建+按钮无响应 | 2026-03-30 23:42 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/97141d2) - 页面加载时自动选中第一个剧本，+按钮立即可用 |
 | P3-14 | 市场"开始冒险"跳转后游戏未自动启动 | 2026-03-31 00:44 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/46c242f) - initSelectScreen检查?start=参数，自动启动对应剧本 |
 | P3-15 | 成就条件判断不准确 | 2026-03-31 19:22 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/772c353) - ✅ 第101轮验证：first_step/survivor保持锁定符合预期(chapter completion需完整章节，非turn>=2语义) |
+| P3-16 | CG历史games路由返回500 | 2026-03-31 13:38 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/) - games.py中`session.cg_history`改为`session.gm.session.cg_history` |
 
 ---
 
@@ -439,6 +440,20 @@
 - first_step: `turn_count` min: 1 → min: 2（第一章需完成至少2回合）
 - survivor: `scene_reached(scene_ids=[])` → `turn_count(min:2)`（需真正完成章节）
 - 修复文件：`rpgagent/systems/achievement_system.py`
+
+---
+
+### P3-16: CG历史games路由返回500 ✅ 已修复
+
+**问题：** `GET /api/games/{session_id}/cg/history` 返回500 Internal Server Error
+
+**详情：**
+- `GET /api/sessions/{session_id}/cg` → 200 正常（cg.py中正确使用`session.gm.session.cg_history`）
+- `GET /api/games/{session_id}/cg/history` → 500（games.py中错误使用`session.cg_history`）
+
+**根因：** `games.py` 第462行 `history = session.cg_history or []`，`cg_history`属性不在`session`根对象上而在`session.gm.session`下
+
+**修复文件：** `rpgagent/api/routes/games.py`
 
 ---
 
@@ -2045,3 +2060,83 @@ commit 1018e5f已正确部署，P2-8完全修复。
 **服务器状态**：sessions=13, memory rss=152MB, 系统健康
 
 **测试会话**：小刚（2026-03-31 04:57 UTC）
+
+## 测试反馈 2026-03-31 13:38（小刚第109轮测试）
+
+### 测试项：新增功能 - MiniMax 文生图 CG 系统
+
+**结果**：❌ **P1阻塞性问题确认（API Key未配置）+ P3 Bug（CG History 500）**
+
+#### 1. MiniMax API 连通性测试
+
+**验证方法**：直接调用 REST API `POST /api/games/scenes/{scene_id}/cg/generate`
+
+**测试session**: d0b0eea43139（示例剧本·第一夜）
+
+**验证结果**：
+1. ✅ **CG生成端点存在且可访问**：`POST /api/games/scenes/scene_01/cg/generate` → HTTP 200，返回JSON（不是404）
+2. ✅ **错误提示清晰**：`{"scene_id":"scene_01","cg_url":null,"reason":"TONGYI_API_KEY not configured"}`
+3. ✅ **不同场景均正常响应**：`scene_02` 同样返回 "TONGYI_API_KEY not configured"
+4. ❌ **API Key未配置**：Both MINIMAX_API_KEY and TONGYI_API_KEY 均未在服务器环境变量中设置
+5. ❌ **CG无法生成**：因API Key缺失，CG生成功能完全不可用
+
+**根因分析**：
+- `image_generator.py` 实现正确，支持 MiniMax（优先）和 Tongyi Wanxiang（备选）
+- 服务器环境变量中既无 `MINIMAX_API_KEY` 也无 `TONGYI_API_KEY`
+- 代码逻辑：`api_key = os.getenv("MINIMAX_API_KEY", "") or os.getenv("TONGYI_API_KEY", "")`
+- 无API Key时函数直接返回 `None`，不调用任何图像生成API
+
+**优先级**：P1（阻塞性问题 - CG功能完全不可用）
+
+**建议**：
+1. 在服务器上设置 `MINIMAX_API_KEY` 环境变量（与openclaw共用同一密钥）
+2. 或设置 `TONGYI_API_KEY` 作为备选
+3. 重启 rpgagent 服务使环境变量生效
+4. 验证：`POST /api/games/scenes/scene_01/cg/generate?session_id=xxx` 返回有效CG URL
+
+---
+
+#### 2. CG History端点Bug测试
+
+**验证方法**：调用 REST API `GET /api/games/{session_id}/cg/history`
+
+**验证结果**：
+- ❌ **HTTP 500 Internal Server Error**
+- ✅ 对应端点 `/api/sessions/{session_id}/cg` 正常工作（返回 `{"count":0,"cg_list":[]}`）
+
+**根因分析**：
+- `games.py` 第462行：`history = session.cg_history or []`（直接访问session.cg_history）
+- `cg.py` 第34行：`history = session.gm.session.cg_history or []`（正确访问路径）
+- `manager.get_session()` 返回的session对象结构与 `session.gm.session` 不同
+- 导致 `session.cg_history` 属性不存在，抛出500错误
+
+**代码位置**：`/api/routes/games.py` 第454-473行
+
+**优先级**：P3（功能缺陷 - 但不影响核心游戏体验，因为 `/api/sessions/{id}/cg` 正常工作）
+
+**建议**：修复 `games.py` 中的 `get_cg_history` 函数，改为 `session.gm.session.cg_history`
+
+---
+
+#### 3. 整体评估
+
+| 测试项 | 结果 | 优先级 |
+|--------|------|--------|
+| MiniMax API连通性 | ❌ API Key未配置 | P1 |
+| CG生成端点 | ✅ 存在且响应 | - |
+| CG历史读取（sessions路由） | ✅ 正常 | - |
+| CG历史读取（games路由） | ❌ 500 Bug | P3 |
+
+**结论**：
+- CG生成功能依赖API Key配置，当前完全不可用（P1阻塞）
+- CG读取功能部分正常（sessions路由OK，games路由Bug P3）
+- 服务器健康状态正常（sessions=1, memory=148MB RSS）
+- LLM API Key已配置（游戏可正常启动和行动）
+
+**相关代码确认**：
+- `image_generator.py` 第292-387行：MiniMaxImageGenerator 实现完整
+- `game_master.py` 第1280-1370行：`_auto_generate_scene_cg` 自动触发逻辑正确
+- `server.py` 第32-48行：`_trigger_scene_ending_cg` 每幕结尾触发机制正确
+
+**测试会话**：d0b0eea43139（2026-03-31 05:38 UTC）
+
