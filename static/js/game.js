@@ -441,7 +441,10 @@ function submitCustomAction() {
 // ── 发送玩家输入 ──────────────────────────────
 
 function sendPlayerInput(text) {
-  if (!state.connected) return;
+  if (!state.connected) {
+    appendSystem("⚠️ 当前未连接，无法发送行动，请刷新页面重试。");
+    return;
+  }
   appendDivider();
   appendPlayer(text);
   renderOptions([]); // 清除GM选项
@@ -584,13 +587,10 @@ function startHeartbeat() {
     if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
     state.ws.send(JSON.stringify({ action: "ping" }));
     _missedPongs++;
-    // 连续3次未收到pong，判定断开
+    // 连续3次未收到pong，只警告不断开连接（LLM处理可能超过90秒）
     if (_missedPongs >= MAX_MISSED_PONGS) {
-      stopHeartbeat();
-      state.connected = false;
-      setWSStatus("disconnected");
-      appendSystem("连接超时，请刷新页面重试。");
-      if (state.ws) state.ws.close();
+      _missedPongs = MAX_MISSED_PONGS - 1; // 保持警告状态，不累加
+      appendSystem("⚠️ 连接响应慢，LLM正在处理中...");
     }
   }, HEARTBEAT_INTERVAL);
 }
