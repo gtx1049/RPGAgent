@@ -527,8 +527,8 @@ class GameMaster:
                 self.current_scene = new_scene
                 # 将触发场景通知注入叙事上下文（供 DM 感知）
                 self.session.flags[f"_triggered_scene"] = triggered_scene
-                # 自动生成新场景 CG（Phase 2 集成）
-                self._auto_generate_scene_cg(trigger_reason="scene_trigger")
+                # 自动生成新场景 CG（线程执行，不阻塞 LLM 响应）
+                self._spawn_cg_task(trigger_reason="scene_trigger")
             else:
                 # 目标场景不存在，记录警告并保留当前场景
                 import logging
@@ -543,8 +543,8 @@ class GameMaster:
             if new_scene:
                 self.current_scene = new_scene
                 self.session.flags[f"_triggered_scene"] = imm_scene
-                # 自动生成新场景 CG（Phase 2 集成）
-                self._auto_generate_scene_cg(trigger_reason="immediate_trigger")
+                # 自动生成新场景 CG（线程执行，不阻塞 LLM 响应）
+                self._spawn_cg_task(trigger_reason="immediate_trigger")
             else:
                 import logging
                 logging.warning(f"[场景切换] 立即跳转失败：场景 '{imm_scene}' 不存在，保留当前场景 '{self.current_scene.id if self.current_scene else '未知'}'")
@@ -1214,9 +1214,9 @@ class GameMaster:
         elif result.damage_taken > 0 and self.stats_sys.stats.hp <= 0:
             self.session.flags["_combat_losses"] = self.session.flags.get("_combat_losses", 0) + 1
 
-        # 战斗结束后自动生成场景 CG（Phase 2 集成）
+        # 战斗结束后自动生成场景 CG（线程执行，不阻塞 LLM 响应）
         if killed or result.damage_taken > 0:
-            self._auto_generate_scene_cg(trigger_reason="combat")
+            self._spawn_cg_task(trigger_reason="combat")
 
         # 处理战斗事件对隐藏数值的影响
         combat_result = {}
@@ -1373,7 +1373,24 @@ class GameMaster:
         在每幕结尾生成 CG。
         由 LLM 下发 next_scene 命令时触发。
         """
-        self._auto_generate_scene_cg(trigger_reason="scene_ending")
+        self._spawn_cg_task(trigger_reason="scene_ending")
+
+    def _spawn_cg_task(self, trigger_reason: str = "manual") -> None:
+        """
+        在独立线程中生成 CG，完全不阻塞调用方。
+        MiniMax API 响应可能需要 10-60 秒，线程执行确保 WS 不超时。
+        """
+        import threading
+
+        def _bg():
+            try:
+                self._auto_generate_scene_cg(trigger_reason=trigger_reason)
+            except Exception:
+                # CG 生成失败静默，不影响游戏流程
+                pass
+
+        t = threading.Thread(target=_bg, daemon=True)
+        t.start()
 
     def new_game_plus(self, preserve: Optional[list[str]] = None) -> "Scene":
         """

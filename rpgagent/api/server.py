@@ -33,19 +33,10 @@ _static_dir = _project_root.parent / "static"
 
 async def _trigger_scene_ending_cg(gm) -> None:
     """
-    在场景切换时触发 CG 生成（线程池执行，避免阻塞事件循环）。
-    生成完成后设置 session.scene_cg_generated 和 session.scene_cg_path，
-    后续 WS 消息会将其发送给前端。
+    在场景切换时触发 CG 生成（使用 daemon 线程，完全不阻塞 WS handler）。
+    MiniMax API 响应可能需要 10-60 秒，线程执行确保 WS 心跳不超时。
     """
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return  # 无 event loop，跳过
-    try:
-        await loop.run_in_executor(None, gm._generate_scene_ending_cg)
-    except Exception:
-        # CG 生成失败静默，不影响游戏流程
-        pass
+    gm._spawn_cg_task(trigger_reason="scene_ending")
 
 
 # ─── 启动/关闭 ──────────────────────────────────────
