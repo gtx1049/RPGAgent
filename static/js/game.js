@@ -616,12 +616,15 @@ function handleMessage(msg) {
       break;
 
     case "scene_update":
-      // 场景更新
+      // 场景更新（首次 WS 连接时跳过 content 追加，REST 已渲染）
       if (msg.scene_title) {
         sceneTitleEl.textContent = msg.scene_title;
       }
-      if (msg.content) {
+      if (msg.content && !state._initialSceneRendered) {
         appendGM(msg.content, "scene-header");
+      }
+      if (state._initialSceneRendered) {
+        state._initialSceneRendered = false; // 重置，后续 scene_change 正常追加
       }
       break;
 
@@ -1236,6 +1239,9 @@ async function launchGame(gameId, playerName) {
 
   // 激活氛围光效（默认神秘氛围）
   setAtmosphere(0);
+
+  // 标记首次场景已渲染，避免 WS scene_update 重复追加内容
+  state._initialSceneRendered = true;
 
   if (data.scene?.content) {
     appendGM(data.scene.content, "scene-header");
