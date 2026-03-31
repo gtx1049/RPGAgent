@@ -1873,3 +1873,51 @@ function autoScroll() {
 
 **测试会话**：小刚浏览器自动化测试（2026-03-31 05:19 UTC）
 **服务器状态**：sessions=25, memory rss=152MB, healthy
+
+---
+
+## 新增功能：MiniMax 文生图 CG 系统（2026-03-31）
+
+### 测试目标
+集成 MiniMax image-01 文生图到 RPGAgent，每幕结尾自动生成 CG 图片。
+
+### 实现文件
+- `rpgagent/systems/image_generator.py` — 新增 `MiniMaxImageGenerator` 类
+- `rpgagent/core/game_master.py` — `_generate_scene_ending_cg()` 每幕结尾触发 CG
+- `rpgagent/api/server.py` — WS handler 中 `next_scene` 时触发 CG 生成
+- `docs/设计构想-CG文生图系统.md` — 已更新为 Phase 3 完成
+
+### 测试项目
+
+#### 1. MiniMax API 连通性
+- [ ] API Key 读取正常（MINIMAX_API_KEY）
+- [ ] `POST https://api.minimaxi.com/v1/images/generations` 返回 200
+- [ ] 返回 base64 图片数据可解码为有效 PNG
+
+#### 2. 每幕结尾 CG 自动生成
+- [ ] LLM 下发 `next_scene` 后，自动触发 CG 生成
+- [ ] CG 图片保存至 `~/.cache/rpgagent/cg/`
+- [ ] `session.scene_cg_generated = True` 标记正确
+- [ ] `session.scene_cg_history` 包含记录
+
+#### 3. WS 推送至前端
+- [ ] 新生成 CG 时，前端收到 `scene_cg` WS 消息
+- [ ] 前端自动弹出 CG 画廊（或展示缩略图）
+- [ ] 重复场景不再重复生成（`_auto_cg_generated_scenes` 生效）
+
+#### 4. 回退兼容
+- [ ] `MINIMAX_API_KEY` 未配置时，fallback 到 `TONGYI_API_KEY`
+- [ ] CG 生成失败不影响游戏叙事流程（静默吞掉异常）
+
+#### 5. 质量验证
+- [ ] CG 风格符合叙事场景（fantasy/dark atmosphere）
+- [ ] 战斗场景 CG 风格：`epic battle scene, dramatic lighting`
+- [ ] 图片清晰度：1024x1024
+
+### API 配置
+```
+MINIMAX_API_KEY = 与 openclaw 共用同一密钥
+Provider = minimax（主）/ tongyi（备）
+Model = image-01
+Endpoint = https://api.minimaxi.com/v1/images/generations
+```

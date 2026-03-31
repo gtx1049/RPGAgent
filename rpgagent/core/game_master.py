@@ -1286,6 +1286,9 @@ class GameMaster:
         - 场景切换后（进入新场景第一回合）
         - 战斗胜利/失败结算
         - 重要剧情节点（LLM 通过 gm_command 触发）
+        - 每幕结尾（LLM 下发 next_scene 时）
+
+        API 优先级：MINIMAX_API_KEY（主） > TONGYI_API_KEY（备）
         """
         import os
 
@@ -1298,7 +1301,8 @@ class GameMaster:
         if scene_id in self._auto_cg_generated_scenes:
             return
 
-        api_key = os.getenv("TONGYI_API_KEY", "")
+        # 优先 MiniMax（与 openclaw 共用 key），备选通义万相
+        api_key = os.getenv("MINIMAX_API_KEY", "") or os.getenv("TONGYI_API_KEY", "")
         if not api_key:
             return
 
@@ -1329,18 +1333,26 @@ class GameMaster:
         if "combat" in trigger_reason or "battle" in trigger_reason:
             style = "epic battle scene, dramatic lighting, high quality"
 
+        # 优先 MiniMax，备选 Tongyi
+        provider = "minimax" if os.getenv("MINIMAX_API_KEY") else "tongyi"
+
         try:
             from rpgagent.systems.image_generator import make_generator
             import asyncio
 
-            gen = make_generator(provider="tongyi", api_key=api_key)
-            img_path = asyncio.run(gen.generate(
-                scene_id=scene_id,
-                scene_content=scene.content,
-                characters=characters,
-                style=style,
-            ))
-            asyncio.run(gen.close())
+            gen = make_generator(provider=provider, api_key=api_key)
+
+            async def _gen():
+                img_path = await gen.generate(
+                    scene_id=scene_id,
+                    scene_content=scene.content,
+                    characters=characters,
+                    style=style,
+                )
+                await gen.close()
+                return img_path
+
+            img_path = asyncio.run(_gen())
 
             self.session.scene_cg_path = img_path
             self.session.scene_cg_generated = True
@@ -1355,6 +1367,13 @@ class GameMaster:
         except Exception:
             # CG 生成失败不打断叙事，吞掉异常
             pass
+
+    def _generate_scene_ending_cg(self) -> None:
+        """
+        在每幕结尾生成 CG。
+        由 LLM 下发 next_scene 命令时触发。
+        """
+        self._auto_generate_scene_cg(trigger_reason="scene_ending")
 
     def new_game_plus(self, preserve: Optional[list[str]] = None) -> "Scene":
         """

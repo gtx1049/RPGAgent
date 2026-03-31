@@ -289,13 +289,103 @@ class TongyiWanxiangGenerator(ImageGenerator):
             raise RuntimeError(f"TongyiWanxiang item has neither url nor b64_image: {item}")
 
 
+# ─── MiniMax image-01 实现 ────────────────────────────────────────────
+
+class MiniMaxImageGenerator(ImageGenerator):
+    """
+    MiniMax image-01 文生图（OpenAI-compatible API）
+
+    环境变量：
+    - MINIMAX_API_KEY: API 密钥（与 openclaw 共用同一密钥）
+
+    API: https://api.minimaxi.com/v1/images/generations
+    模型：image-01
+    """
+
+    SIZE_MAP = {
+        "1024*1024": "1024x1024",
+        "720*1280": "720x1280",
+        "1280*720": "1280x720",
+        "16:9": "1280x720",
+        "9:16": "720x1280",
+    }
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        cache_dir: Path | str | None = None,
+        default_style: str | None = "fantasy illustration, dark atmosphere, high quality",
+        model: str = "image-01",
+    ):
+        super().__init__(api_key=api_key, cache_dir=cache_dir, default_style=default_style)
+        self.api_url = "https://api.minimaxi.com/v1/images/generations"
+        self.model = model
+
+    async def _call_api(self, prompt: str, style: str, size: str = "1024*1024", **kwargs) -> bytes:
+        if not self.api_key:
+            raise RuntimeError(
+                "MINIMAX_API_KEY not set. "
+                "Set MINIMAX_API_KEY environment variable or pass api_key to constructor."
+            )
+
+        # MiniMax image-01: OpenAI-compatible format
+        # style 作为 suffix 附加到 prompt
+        import base64
+        full_prompt = f"{prompt}, {style}" if style else prompt
+
+        payload = {
+            "model": self.model,
+            "prompt": full_prompt,
+            "n": 1,
+            "size": self.SIZE_MAP.get(size, "1024x1024"),
+            "response_format": "base64",
+        }
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        response = await self.http_client.post(
+            self.api_url,
+            headers=headers,
+            json=payload,
+        )
+
+        if response.status_code != 200:
+            raise RuntimeError(
+                f"MiniMax image API error {response.status_code}: {response.text}"
+            )
+
+        result = response.json()
+        data_list = result.get("data", [])
+        if not data_list:
+            raise RuntimeError(f"MiniMax image API returned no data: {result}")
+
+        item = data_list[0]
+        b64_data = item.get("b64_image", "")
+        if b64_data:
+            return base64.b64decode(b64_data)
+
+        # 备选：URL 方式
+        image_url = item.get("url", "")
+        if image_url:
+            img_response = await self.http_client.get(image_url)
+            img_response.raise_for_status()
+            return img_response.content
+
+        raise RuntimeError(f"MiniMax image API item has neither b64_image nor url: {item}")
+
+
 # ─── Factory ─────────────────────────────────────────────────────────
 
 def make_generator(
-    provider: str = "tongyi",
+    provider: str = "minimax",
     **kwargs,
 ) -> ImageGenerator:
-    """根据 provider 名称创建生成器实例"""
+    """根据 provider 名称创建生成器实例（默认 minimax）"""
+    if provider == "minimax":
+        return MiniMaxImageGenerator(**kwargs)
     if provider == "tongyi":
         return TongyiWanxiangGenerator(**kwargs)
     raise ValueError(f"Unknown image generator provider: {provider}")
@@ -308,14 +398,18 @@ async def generate_scene_cg(
     scene_content: str,
     characters: list[dict] | None = None,
     style: str | None = None,
-    provider: str = "tongyi",
+    provider: str = "minimax",
+    api_key: str | None = None,
     force_regenerate: bool = False,
 ) -> str:
     """
     便捷入口：根据场景内容生成 CG。
-    使用 TONGYI_API_KEY 环境变量。
+    默认 provider="minimax"，fallback TONGYI_API_KEY。
     """
-    gen = make_generator(provider=provider)
+    import os
+    api_key = api_key or os.getenv("MINIMAX_API_KEY", "") or os.getenv("TONGYI_API_KEY", "")
+    provider = "minimax" if os.getenv("MINIMAX_API_KEY") else provider
+    gen = make_generator(provider=provider, api_key=api_key)
     try:
         return await gen.generate(
             scene_id=scene_id,

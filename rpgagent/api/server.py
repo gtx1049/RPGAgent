@@ -29,6 +29,25 @@ from ..config.settings import HOST, PORT, IMAGE_GENERATOR_CACHE_DIR
 _static_dir = _project_root.parent / "static"
 
 
+# ─── 每幕结尾 CG 生成辅助 ──────────────────────────────────────────────
+
+async def _trigger_scene_ending_cg(gm) -> None:
+    """
+    在场景切换时触发 CG 生成（线程池执行，避免阻塞事件循环）。
+    生成完成后设置 session.scene_cg_generated 和 session.scene_cg_path，
+    后续 WS 消息会将其发送给前端。
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return  # 无 event loop，跳过
+    try:
+        await loop.run_in_executor(None, gm._generate_scene_ending_cg)
+    except Exception:
+        # CG 生成失败静默，不影响游戏流程
+        pass
+
+
 # ─── 启动/关闭 ──────────────────────────────────────
 
 @asynccontextmanager
@@ -239,6 +258,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 scene_change = None
                 if cmd and cmd.get("next_scene"):
                     scene_change = cmd["next_scene"]
+                    # 每幕结尾自动生成 CG（scene_change 检测后立即触发，此时场景尚未切换）
+                    asyncio.create_task(_trigger_scene_ending_cg(session.gm))
                 elif session.gm.session.flags.get("_triggered_scene"):
                     scene_change = session.gm.session.flags.pop("_triggered_scene")
 

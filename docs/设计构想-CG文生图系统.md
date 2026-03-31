@@ -1,7 +1,8 @@
 # 设计构想：文生图CG生成系统
 
 > 创建时间：2026-03-27
-> 状态：待实现
+> 更新时间：2026-03-31（新增 MiniMax image-01 支持 + 每幕结尾自动生成）
+> 状态：Phase 1+2+3 完成 ✅
 
 ---
 
@@ -15,11 +16,30 @@
 
 | 服务 | 优点 | 缺点 | 推荐度 |
 |------|------|------|--------|
-| **通义万相** | 国内可用、成本低、API 稳定 | 风格偏中式 | ⭐⭐⭐⭐ |
-| **文心一格** | 国内可用、百度生态 | 版权限制 | ⭐⭐⭐ |
-| **Stable Diffusion** | 开源、本地部署、可控性强 | 需要 GPU 资源 | ⭐⭐⭐⭐⭐ (自部署) |
+| **MiniMax image-01** | 与openclaw共用API Key、国内可用、质量高 | 需申请配额 | ⭐⭐⭐⭐⭐（当前主用） |
+| **通义万相** | 国内可用、成本低、API 稳定 | 风格偏中式 | ⭐⭐⭐⭐（备用） |
+| **Stable Diffusion** | 开源、本地部署、可控性强 | 需要 GPU 资源 | ⭐⭐⭐⭐⭐（自部署） |
 | **DALL-E 3** | 质量高、GPT-4 优化 | 成本高 | ⭐⭐⭐ |
 | **ComfyUI API** | 灵活、工作流可定制 | 配置复杂 | ⭐⭐ |
+
+## MiniMax image-01 实现
+
+**环境变量**：`MINIMAX_API_KEY`（与 openclaw 共用同一密钥）
+
+**API 规格**：
+- Endpoint：`POST https://api.minimaxi.com/v1/images/generations`
+- 模型：`image-01`
+- 认证：`Authorization: Bearer <MINIMAX_API_KEY>`
+- 输入：OpenAI-compatible format
+- 输出：Base64 编码图片（优先）或 URL
+
+**集成方式**：
+```python
+from rpgagent.systems.image_generator import make_generator
+
+gen = make_generator(provider="minimax", api_key=MINIMAX_API_KEY)
+img_path = await gen.generate(scene_id="scene_01", scene_content="...", style="fantasy")
+```
 
 ---
 
@@ -284,12 +304,18 @@ class CGallery {
    - [x] 场景 .cg.yaml 配置文件读取（context_loader.py 已实现）
    - [x] 支持自动/手动触发模式（GameMaster + GMS 工具双路径）
 
-3. **Phase 3: 前端展示**
+3. **Phase 3: MiniMax 集成 + 每幕结尾生成** ✅ (2026-03-31)
+   - [x] 新增 MiniMaxImageGenerator（OpenAI-compatible API）
+   - [x] 每幕结尾自动生成 CG（scene_change 触发）
+   - [x] CG 通过 WebSocket 实时推送至前端画廊
+   - [x] CG 保存至 ~/.cache/rpgagent/cg/ 本地缓存
+
+4. **Phase 4: 前端展示**
    - [ ] CG 画廊组件
    - [ ] 淡入动画效果
    - [ ] CG 历史查看功能
 
-4. **Phase 4: 扩展支持**
+5. **Phase 5: 扩展支持**
    - [ ] 添加 Stable Diffusion 支持
    - [ ] 添加 DALL-E 支持
    - [ ] 支持自定义风格模型
