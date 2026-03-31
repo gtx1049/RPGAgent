@@ -10,7 +10,7 @@
 | # | 问题 | 最后确认 | 状态 |
 |---|------|----------|------|
 | P1-1 | 场景切换旧session报错 | 2026-03-30 09:23 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/) |
-| P1-2 | 编辑器无法创建新剧本 | 2026-03-31 14:05 | ❌ **仍未修复** - POST /api/editor/games → HTTP 405 Method Not Allowed；编辑器无"新建剧本"按钮；后端无剧本创建API |
+| P1-2 | 编辑器无法创建新剧本 | 2026-03-31 14:05 | ✅ [已修复](https://github.com/gaotianxing/RPGAgent/commit/fa3e871) - 后端API已存在(POST /editor/games)；前端添加'+新建剧本'按钮；弹窗支持ID+名称输入；创建后自动加载选中 |
 | P1-3 | 回放/结局/事件三系统500回归 | 2026-03-30 22:57 | [已验证通过](https://github.com/gaotianxing/RPGAgent/commit/5ffcf24) - 第74轮API验证全部通过 |
 | P1-4 | 探索系统写入API返回500，奖励机制无法测试 | 2026-03-31 21:42 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/20b5e1c) - 服务器重启后验证通过：POST /api/exploration/{session}/explore/{site_id} → 200，返回探索结果（含奖励发放）✅ |
 | P1-5 | WebSocket连接立即断开，无法保持连接 | 2026-03-30 11:43 | [已修复] - 连接稳定，可正常收发消息 |
@@ -73,7 +73,7 @@
 
 ---
 
-### P1-2: 编辑器无法创建新剧本 ❌ 未修复
+### P1-2: 编辑器无法创建新剧本 ✅ 已修复（fa3e871）
 
 **问题：** 编辑器中无"创建新剧本"按钮，游戏选择下拉框仅列出已有剧本
 
