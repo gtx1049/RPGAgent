@@ -1,6 +1,6 @@
 # RPGAgent 待测试功能清单
 
-> 最后更新：2026-03-31 21:19
+> 最后更新：2026-03-31 09:38
 > 项目地址：http://43.134.81.228:8080/
 
 ---
@@ -1425,3 +1425,55 @@
 - 第96轮（本轮）：再次确认修复稳定有效 ✅
 
 **结论**：P1-4探索系统写入API已完全修复，服务器稳定运行，探索奖励机制验证通过。explored count正确递增，rewards正确发放，system healthy（sessions=6, memory=145MB RSS）。
+
+## 测试反馈 2026-03-31 09:19（第97轮 - 小刚测试）
+
+### 测试项：5.3 模态框 - 成就面板（achievements）面板打开/关闭验证
+
+**结果**：✅ **通过**
+
+**测试session**: a2af8b8fb46e（示例剧本新session）
+
+**验证结果**：
+1. ✅ **成就按钮点击**：onclick事件触发 `openAchPanel()` 函数
+2. ✅ **模态框打开**：`display` 从 `none` → `flex`，模态框正确显示
+3. ✅ **模态框标题**：显示"🏆 成就"（level=3 heading）
+4. ✅ **关闭按钮存在**：× 按钮可见
+5. ✅ **× 按钮关闭**：点击后 `display` → `none`，模态框关闭
+6. ✅ **ESC键关闭**：按下Escape键后模态框正确关闭
+7. ✅ **API验证**：`GET /api/sessions/{id}/achievements` → 200，返回6个成就（全部锁定），数据结构正确
+
+**与第94轮测试记录对比**：
+- 第94轮记录成就面板功能正常（0/6已解锁）
+- 本轮测试进一步验证打开/关闭交互完整
+
+**结论**：成就面板模态框功能完全正常，open/close逻辑正确，ESC键和×按钮均能正确关闭，P3模态框问题已修复。
+
+**备注**：agent-browser click事件在成就按钮上偶发不触发（与第83轮移动端侧边栏相同问题），建议使用JavaScript直接调用 `openAchPanel()` 函数。
+
+## 测试反馈 2026-03-31 09:38（小刚第98轮测试）
+
+### 测试项：2.3 存档系统 - 手动存档创建与加载
+
+**结果**：❌ **问题仍存在**
+
+**测试session**: c564efb895fa / ae4f28b2a5c2（示例剧本）
+
+**验证结果**：
+1. ✅ **创建存档**：`POST /api/games/{session}/saves/manual_test_save` → `{"ok": true}`，创建成功
+2. ✅ **列出存档**：`GET /api/games/{session}/saves` → 返回存档列表（包含 autosave 和 manual_test_save）
+3. ❌ **加载存档**：`GET /api/games/{session}/saves/manual_test_save/load` → **HTTP 500 Internal Server Error**
+4. ❌ **加载自动存档**：`GET /api/games/{session}/saves/autosave/load` → **HTTP 404 {"detail":"存档不存在"}**
+
+**根因分析**：
+- 存档记录存在（saves API可列出），但后端实际文件不存在
+- autosave 在 session 创建时生成记录，但未实际写入存档文件
+- 存档创建接口只创建了元数据记录，没有实际保存游戏状态
+
+**与历史记录对比**：
+- 第29轮测试：手动存档加载返回 500，autosave 加载返回 404
+- 第98轮（本轮）：问题仍未修复
+
+**结论**：存档系统写入功能正常，但加载功能损坏。玩家可以创建存档但无法加载。
+
+**建议**：P2级，修复存档加载逻辑，确保存档文件实际写入且可正确读取。
