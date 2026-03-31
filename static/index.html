@@ -41,6 +41,12 @@
 
       <!-- 行动按钮 -->
       <div id="action-panel" style="padding: 10px 14px; border-top: 1px solid var(--border); flex-shrink: 0;">
+        <!-- 行动力指示器（常驻显示，无需打开菜单） -->
+        <div id="ap-indicator" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:12px;color:var(--text-dim);">
+          <span>行动力</span>
+          <div id="action-ap-dots" style="display:flex;gap:3px;"></div>
+          <span id="action-ap-text" style="margin-left:auto;font-size:11px;"></span>
+        </div>
         <div id="action-buttons"></div>
 
         <!-- 自定义行动输入框（默认隐藏） -->

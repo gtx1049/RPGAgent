@@ -175,6 +175,21 @@ function updateAP(ap, maxAp) {
       }
     }
   }
+  // 主屏幕行动力指示器
+  const dotsEl = $("action-ap-dots");
+  const textEl = $("action-ap-text");
+  if (dotsEl) {
+    dotsEl.innerHTML = "";
+    for (let i = 0; i < maxAp; i++) {
+      const dot = document.createElement("span");
+      dot.textContent = i < ap ? "●" : "○";
+      dot.style.color = i < ap ? "var(--accent, #7fba7f)" : "var(--border, #444)";
+      dotsEl.appendChild(dot);
+    }
+  }
+  if (textEl) {
+    textEl.textContent = `${ap}/${maxAp}`;
+  }
   renderActionButtons();
 }
 
