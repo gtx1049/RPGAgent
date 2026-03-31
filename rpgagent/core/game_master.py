@@ -902,6 +902,8 @@ class GameMaster:
                     "name": ending.name,
                     "type": ending.ending_type,
                 }
+                # 游戏结束时结算成就
+                self._evaluate_achievements()
             else:
                 self.session.flags["_ending_triggered"] = None
 
@@ -920,6 +922,8 @@ class GameMaster:
                         "name": result.ending.name,
                         "type": result.ending.ending_type,
                     }
+                    # 游戏结束时结算成就
+                    self._evaluate_achievements()
                 else:
                     self.session.flags["_ending_triggered"] = None
 
@@ -1096,8 +1100,8 @@ class GameMaster:
             else:
                 self.session.flags["_skill_fragment_crafted"] = None
 
-        # 每回合结束后评估一次成就（自动检测）
-        self._evaluate_achievements()
+        # 成就仅在游戏结束时结算（移除每回合自动评估）
+        # _evaluate_achievements() 在结局触发时由 trigger_ending / trigger_final_ending 调用
 
     def _evaluate_achievements(self) -> None:
         """每回合自动评估成就，解锁后写入 session.flags 供叙事层感知"""
