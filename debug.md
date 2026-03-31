@@ -45,7 +45,7 @@
 | P3-7 | NPC关系系统缺损 | 2026-03-31 07:08 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/e5e8a21) - 剧本hidden_value_actions补充relation_delta配置，game_master.py新增talk_to_npc关键词推断 |
 | P3-8 | 编辑器/游戏无自动保存机制 | 2026-03-30 23:05 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/12a2617)（游戏侧120秒后台存档） |
 | P3-9 | 场景删除API路径勘误（旧路径404，实际路径可用） | 2026-03-30 12:38 | ✅ 已关闭 - commit 21fe6b1 |
-| P3-10 | API路径不一致（sessions/games前缀混用） | 2026-03-31 07:38 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/fc2648c) - games router新增`/{session_id}/achievements`别名路由，`/api/games/{id}/achievements`和`/api/sessions/{id}/achievements`均可访问 |
+| P3-10 | API路径不一致（sessions/games前缀混用） | 2026-03-31 10:05 | ✅ [已完全修复](https://github.com/gaotianxing/RPGAgent/commit/6688248) - games router新增`/{session_id}/achievements`+`/{session_id}/stats`+`/{session_id}/stats/overview`三个别名路由，`/api/games/{id}/stats` 和 `/api/games/{id}/stats/overview`现已可访问，与achievements保持一致 |
 | P3-11 | /health接口无内存监控信息 | 2026-03-30 15:38 | [已修复](https://github.com/gtx1049/RPGAgent/commit/1ee96e4) |
 | P3-12 | 行动前无confirm()确认对话框 | 2026-03-30 20:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/1d2221d) |
 | P3-13 | 编辑器场景创建+按钮无响应 | 2026-03-30 23:42 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/97141d2) - 页面加载时自动选中第一个剧本，+按钮立即可用 |
@@ -366,7 +366,7 @@
 
 ---
 
-### P3-10: API路径不一致 ✅ 已修复
+### P3-10: API路径不一致 ✅ 已完全修复（2026-03-31 6688248）
 
 **问题：** 统计/成就类API使用`/api/sessions/{id}`前缀，而状态/debug类API使用`/api/games/{id}`前缀
 
@@ -1831,7 +1831,9 @@ GET /api/editor/games/example/characters/npc01
 
 ### 测试项：P3-10 sessions/games API路径一致性（复测）+ 服务器状态检查
 
-**结果**：⚠️ **P3-10部分修复 + 服务器LLM配置丢失（新问题）**
+**结果**：⚠️ **P3-10 stats路由未修复** + 服务器LLM配置丢失
+
+> 📝 **后续修复（2026-03-31 10:05）**：commit 6688248 已为 games router 添加 stats/stats/overview 别名路由，P3-10 现已完全修复。
 
 **测试方法**：curl API endpoints with fake session_id
 
@@ -1859,11 +1861,11 @@ GET /api/editor/games/example/characters/npc01
 
 **结论**：
 1. **新发现**：服务器LLM API key未配置，所有需要AI生成内容的操作不可用
-2. **P3-10部分修复**：achievements路由已修复（commit fc2648c生效），但stats路由仍未添加到games router
+2. **P3-10部分修复**：achievements路由已修复（commit fc2648c生效），但stats/stats/overview路由仍未添加到games router
 3. **sessions=0**：服务器可能重启过，建议检查部署状态
 
 **建议**：
 1. **P1级**：配置OPENAI_API_KEY或RPG_API_KEY环境变量后重启服务器
-2. **P3-10续**：为 `/api/games/{sid}/stats` 和 `/api/games/{sid}/stats/overview` 添加别名路由（参考achievements的修复方式）
+2. ~~**P3-10续**：为 `/api/games/{sid}/stats` 和 `/api/games/{sid}/stats/overview` 添加别名路由~~ ✅ 已修复（commit 6688248）
 
 **测试会话**：N/A（无法创建session）
