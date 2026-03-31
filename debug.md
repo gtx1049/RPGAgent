@@ -1980,3 +1980,68 @@ function sendPlayerInput(text) {
 3. 可选：添加时间戳显示（turn信息可能更实用）
 
 **测试会话**：curl代码审查（浏览器自动化遇到prompt对话框阻塞）
+
+---
+
+## 测试反馈 2026-03-31 12:38（第107轮 - 小刚测试）
+
+### 测试项：8.3.5 操作确认提示（confirm对话框）
+
+**结果**：✅ **通过（修复已验证）**
+
+**测试环境**：
+- Session: eac61058b5d6（示例剧本·第一夜）
+- WS连接状态：已连接
+- AP状态：2/3
+
+**代码审查**：
+- `game.js` line 397: `if (action.cost > 0 && !confirm(\`消耗${action.cost}点行动力「${text}」，是否继续？\`)) return;`
+- `game.js` line 410: skill使用confirm
+- `game.js` line 436: 自由行动confirm
+- 三个confirm点均正确实现
+
+**浏览器自动化验证**：
+1. 隐藏 game-select 覆盖层（z-index:100 遮挡action按钮）
+2. 点击"👀环顾四周 (1AP)" → confirm对话框出现（browser agent等待对话框）
+3. dialog accept → turn 1→2，GM响应正常
+4. 叙事区正确渲染玩家输入和GM回应
+
+**新发现 P3问题**：
+- ❌ game-select 覆盖层在游戏启动后未隐藏(display:flex, z-index:100)，action按钮被遮挡
+- ❌ "幸存者"成就在1 action后即解锁，条件"完成任意章节"不符
+
+**优先级**：P3（体验问题，confirm功能本身已修复）
+
+**相关已修复**：commit 1d2221d 行动确认对话框修复已部署生效
+
+**测试会话**：小刚RPGAgent浏览器自动化测试（2026-03-31 04:38 UTC）
+
+---
+
+## 测试反馈 2026-03-31 12:57（小刚第108轮测试）
+
+### P3-10 API路径一致性 + P2-8 存档加载功能（综合复测）
+
+**结果**：✅ **全部通过**
+
+**测试session**：23fbfe48376b（示例剧本·第一夜）
+
+#### P3-10 验证结果
+- `/api/games/{sid}/achievements` → 200 ✅（返回6个成就）
+- `/api/games/{sid}/stats` → 200 ✅（返回完整统计）
+- `/api/games/{sid}/stats/overview` → 200 ✅（返回统计概览）
+- `/api/games/{sid}/status` → 200 ✅
+- `/api/games/{sid}/saves` → 200 ✅
+
+commit 6688248已正确部署，P3-10完全修复。
+
+#### P2-8 验证结果
+- 创建手动存档 `xiaogang_test_save` → 200 ✅
+- 加载手动存档 → 200 ✅
+- 加载自动存档 `autosave_23fbfe48376b` → 200 ✅
+
+commit 1018e5f已正确部署，P2-8完全修复。
+
+**服务器状态**：sessions=13, memory rss=152MB, 系统健康
+
+**测试会话**：小刚（2026-03-31 04:57 UTC）
