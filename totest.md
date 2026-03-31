@@ -1477,3 +1477,25 @@
 **结论**：存档系统写入功能正常，但加载功能损坏。玩家可以创建存档但无法加载。
 
 **建议**：P2级，修复存档加载逻辑，确保存档文件实际写入且可正确读取。
+
+## 测试反馈 2026-03-31 09:57（小刚第99轮测试）
+
+### 测试项：P3-10 sessions/games API路径一致性（复测）
+
+**结果**：⚠️ **部分修复**
+
+**验证方法**：使用fake session_id测试各端点的路由存在性
+
+**发现**：
+1. ✅ **achievements已修复**：commit fc2648c生效，`/api/games/{sid}/achievements` 和 `/api/sessions/{sid}/achievements` 均返回"会话不存在或已过期"（路由存在，会话不存在）
+2. ❌ **stats未修复**：`/api/games/{sid}/stats` 返回"Not Found"，路由不存在；`/api/sessions/{sid}/stats` 返回"会话不存在或已过期"
+3. ❌ **stats/overview未修复**：同上
+
+**新发现（严重）**：服务器LLM API key未配置
+- `POST /api/games/{id}/start` → `{"detail":"API 密钥未配置。请设置 OPENAI_API_KEY 或 RPG_API_KEY 环境变量后重启服务器。"}`
+- sessions数量=0（服务器可能重启过）
+- 所有游戏核心功能（启动、行动、WS连接）均不可用
+
+**结论**：P3-10仅achievements修复，stats路由仍需类似修复。服务器需重新配置LLM API key。
+
+**相关debug.md**：P3-10仍为活跃问题（部分修复）

@@ -1824,3 +1824,46 @@ GET /api/editor/games/example/characters/npc01
 2. 全面梳理API路径：所有session-scoped端点应统一使用`/api/games/{session_id}/`或`/api/sessions/{session_id}/`
 3. 建议统一迁移到`/api/games/{session_id}/`作为主路径，`/api/sessions/{session_id}/`作为别名兼容
 4. teammates和exploration的独立路径也需要决定归属
+
+---
+
+## 2026-03-31 09:57（小刚第99轮测试）
+
+### 测试项：P3-10 sessions/games API路径一致性（复测）+ 服务器状态检查
+
+**结果**：⚠️ **P3-10部分修复 + 服务器LLM配置丢失（新问题）**
+
+**测试方法**：curl API endpoints with fake session_id
+
+**服务器状态检查**：
+- ✅ 首页 `/` → HTTP 200，正常
+- ✅ 游戏列表 `/api/games` → HTTP 200，返回3个剧本
+- ✅ 市场列表 `/api/market/games` → HTTP 200
+- ✅ 编辑器列表 `/api/editor/games` → HTTP 200
+- ✅ 健康检查 `/health` → `{"status":"ok","sessions":0,"memory":{"rss":130MB}}`
+- ❌ **游戏启动 `POST /api/games/{id}/start`** → `{"detail":"API 密钥未配置。请设置 OPENAI_API_KEY 或 RPG_API_KEY 环境变量后重启服务器。"}`
+
+**sessions数量异常**：
+- 当前sessions=0（远低于第98轮的130+）
+- 推测：服务器近期重启过，导致所有session丢失且LLM API key未配置
+
+**P3-10部分修复验证**：
+
+| 端点 | /api/games/{sid}/ | /api/sessions/{sid}/ | 状态 |
+|------|-------------------|---------------------|------|
+| achievements | "会话不存在或已过期" ✅ | "会话不存在或已过期" ✅ | **已修复** |
+| stats | **"Not Found"** ❌ | "会话不存在或已过期" ✅ | **未修复** |
+| stats/overview | **"Not Found"** ❌ | "会话不存在或已过期" ✅ | **未修复** |
+| npcs | "会话不存在" ✅ | — | 正常（始终在games） |
+| saves | "会话不存在" ✅ | — | 正常（始终在games） |
+
+**结论**：
+1. **新发现**：服务器LLM API key未配置，所有需要AI生成内容的操作不可用
+2. **P3-10部分修复**：achievements路由已修复（commit fc2648c生效），但stats路由仍未添加到games router
+3. **sessions=0**：服务器可能重启过，建议检查部署状态
+
+**建议**：
+1. **P1级**：配置OPENAI_API_KEY或RPG_API_KEY环境变量后重启服务器
+2. **P3-10续**：为 `/api/games/{sid}/stats` 和 `/api/games/{sid}/stats/overview` 添加别名路由（参考achievements的修复方式）
+
+**测试会话**：N/A（无法创建session）

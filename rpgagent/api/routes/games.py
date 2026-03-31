@@ -521,3 +521,20 @@ async def get_game_unlocked_achievements(session_id: str):
         ],
         "count": len(unlocked),
     }
+
+
+# ─── 统计（别名，兼容 /api/games/{id}/stats 路径）─────────────────
+
+@router.get("/{session_id}/stats")
+async def get_game_stats_via_games(session_id: str):
+    """返回当前会话的完整游戏统计数据 - /api/games/{id}/stats 别名"""
+    # 复用 stats.py 的路由逻辑，避免重复代码
+    from .stats import get_game_stats
+    return await get_game_stats(session_id=session_id)
+
+
+@router.get("/{session_id}/stats/overview")
+async def get_stats_overview_via_games(session_id: str):
+    """轻量版统计概览 - /api/games/{id}/stats/overview 别名"""
+    from .stats import get_stats_overview
+    return await get_stats_overview(session_id=session_id)
