@@ -326,7 +326,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         continue
 
                     if tag[0] == "error":
-                        # error tuple: ("error", error_message)
+                        # error tuple: ("error", error_message) — 2元素
                         _, err_msg = tag
                         llm_done = True
                         logger.error(f"[WS] LLM error: {err_msg}")
@@ -341,7 +341,18 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         })
                         continue
 
-                    tag, narrative_or_err, cmd = tag
+                    # done tuple: ("done", narrative, cmd) — 3元素
+                    if len(tag) >= 2:
+                        narrative = tag[1]
+                        cmd = tag[2] if len(tag) >= 3 else None
+                    else:
+                        logger.error(f"[WS] Unexpected queue result format: {tag!r}")
+                        await websocket.send_json({
+                            "type": "error",
+                            "content": "处理结果格式异常，请刷新页面重试。",
+                        })
+                        llm_done = True
+                        continue
                     llm_done = True
 
                     narrative = narrative_or_err
