@@ -49,11 +49,12 @@ def _run_action_in_thread(
     manager, session_id: str, content: str, result_queue: queue.Queue
 ) -> None:
     """
-    在线程池中执行 LLM 调用，结果放入 Queue。
-    不在事件循环中运行，不阻塞心跳。
+    在独立线程中执行 LLM 调用（使用 asyncio.run），结果放入 Queue。
+    asyncio.run() 创建独立 event loop，不影响 WS 主循环。
+    不阻塞 WS 心跳（心跳由 WS handler 主循环独立响应）。
     """
     try:
-        narrative, cmd = manager.process_action(session_id, content)
+        narrative, cmd = asyncio.run(manager.process_action(session_id, content))
         result_queue.put(("done", narrative, cmd))
     except Exception as e:
         result_queue.put(("error", str(e)))
