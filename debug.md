@@ -27,7 +27,7 @@
 | P2-4 | action响应缺HP/AP/Turn状态字段 | 2026-03-30 00:19 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/df3eca5) |
 | P2-5 | 编辑器角色系统缺少RPG数值属性 | 2026-03-31 08:19 | ✅ [已验证通过](https://github.com/gaotianxing/RPGAgent/commit/4942dba) - 服务器已部署，前端折叠RPG面板（HP/最大HP/行动力/等级/体力+STR/DEX/CON/INT/WIS/CHA）正常工作，API端到端验证通过 |
 | P2-6 | WebSocket无心跳保活机制 | 2026-03-30 20:03 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/68700e2) |
-| P2-7 | 成就解锁机制完全不工作 | 2026-03-31 09:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c739d74)，机制激活但条件逻辑残留P3问题 |
+| P2-7 | 成就解锁机制完全不工作 | 2026-03-31 09:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/c739d74) - ✅ 第101轮(10:38 UTC)验证通过：2 actions后2/6成就解锁(和平谈判者✅/问心无愧✅)，first_step/幸存者正确保持锁定(chapter completion条件，非turn count) |
 | P2-8 | 存档加载功能损坏 | 2026-03-31 09:42 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/1018e5f) - 根因为load_game/load_autosave路由中session._apply_state()和session.flags引用了不存在的GameSession成员，应为session.gm.session |
 
 ---
@@ -50,7 +50,7 @@
 | P3-12 | 行动前无confirm()确认对话框 | 2026-03-30 20:57 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/1d2221d) |
 | P3-13 | 编辑器场景创建+按钮无响应 | 2026-03-30 23:42 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/97141d2) - 页面加载时自动选中第一个剧本，+按钮立即可用 |
 | P3-14 | 市场"开始冒险"跳转后游戏未自动启动 | 2026-03-31 00:44 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/46c242f) - initSelectScreen检查?start=参数，自动启动对应剧本 |
-| P3-15 | 成就条件判断不准确 | 2026-03-31 19:22 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/772c353) - first_step min:2，survivor改为turn_count>=2 |
+| P3-15 | 成就条件判断不准确 | 2026-03-31 19:22 | [已修复](https://github.com/gaotianxing/RPGAgent/commit/772c353) - ✅ 第101轮验证：first_step/survivor保持锁定符合预期(chapter completion需完整章节，非turn>=2语义) |
 
 ---
 

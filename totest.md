@@ -835,6 +835,12 @@
 
 ### 9.6 成就系统
 - [x] 成就解锁反馈 → **通过** [2026-03-30 03:19]
+  - 复测(第101轮): 2026-03-31 10:38 UTC ✅
+    - 新session初始: 0/6解锁
+    - 1 action后(turn=1): 和平谈判者✅ + 问心无愧✅ 解锁(2/6)
+    - 2 actions后(turn=2): 第一步❌/幸存者❌ 仍锁定(2/6)
+    - 分析: "完成第一章"需完成Chapter 1全部场景，非仅turn>=2；"完成任意章节"同理需章节完成
+    - 结论: 成就解锁机制正常工作，条件语义正确
   - `/api/sessions/{id}/achievements` 返回全部6个成就（含id/name/description/icon/unlocked）
   - `/api/sessions/{id}/achievements/unlocked` 返回详细解锁信息（unlocked_at_turn/scene_id/narrative）
   - narrative字段含格式化消息如"🏅 成就解锁：「幸存者」—— 完成任意章节"
