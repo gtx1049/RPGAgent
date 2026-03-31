@@ -561,8 +561,6 @@ function connectWS(sessionId) {
     setWSStatus("connected");
     startHeartbeat();
     clearReconnect(); // 清除重试计数
-    // 重连后重置场景渲染标记，避免 scene_update 被跳过
-    state._initialSceneRendered = false;
     // 重连成功后刷新游戏状态
     refreshGameStateOnReconnect();
   });
@@ -690,15 +688,13 @@ function handleMessage(msg) {
       break;
 
     case "scene_update":
-      // 场景更新（首次 WS 连接时跳过 content 追加，REST 已渲染）
+      // 场景更新（已渲染过则跳过，REST已渲染；WS重连也不重复渲染）
       if (msg.scene_title) {
         sceneTitleEl.textContent = msg.scene_title;
       }
-      if (msg.content && !state._initialSceneRendered) {
+      if (msg.content && !state._sceneEverRendered) {
         appendGM(msg.content, "scene-header");
-      }
-      if (state._initialSceneRendered) {
-        state._initialSceneRendered = false; // 重置，后续 scene_change 正常追加
+        state._sceneEverRendered = true;
       }
       break;
 
@@ -738,6 +734,8 @@ function handleMessage(msg) {
       appendDivider();
       appendSystem(`→ ${msg.content}`);
       sceneTitleEl.textContent = msg.content;
+      // 场景切换后，允许新的 scene_update 渲染内容
+      state._sceneEverRendered = false;
       break;
 
     case "achievement_unlock":
@@ -1314,8 +1312,8 @@ async function launchGame(gameId, playerName) {
   // 激活氛围光效（默认神秘氛围）
   setAtmosphere(0);
 
-  // 标记首次场景已渲染，避免 WS scene_update 重复追加内容
-  state._initialSceneRendered = true;
+  // 标记场景已渲染（永久，不随WS重连重置）
+  state._sceneEverRendered = true;
 
   if (data.scene?.content) {
     appendGM(data.scene.content, "scene-header");
