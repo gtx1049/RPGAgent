@@ -1,6 +1,6 @@
 # RPGAgent 待测试功能清单
 
-> 最后更新：2026-03-31 09:38
+> 最后更新：2026-03-31 10:19
 > 项目地址：http://43.134.81.228:8080/
 
 ---
@@ -47,7 +47,11 @@
 - [x] `POST /api/scenes/{scene_id}/cg/generate` - 生成场景CG → **404 Not Found** [2026-03-30 02:02]
 
 ### 2.2 游戏操作 (`/api/games`)
-- [x] `POST /api/games/action` - 玩家行动 → **通过** [2026-03-29 16:19]
+- [x] `POST /api/games/{game_id}/start` - 启动游戏 → **❌ LLM API Key未配置（2026-03-31 10:19）** [2026-03-31 10:19]
+  - 服务器返回：`{"detail":"API 密钥未配置。请设置 OPENAI_API_KEY 或 RPG_API_KEY 环境变量后重启服务器。"}`
+  - sessions=0，服务器可能重启后未配置API Key
+  - 所有游戏核心功能（启动、行动、WebSocket）均不可用
+- [x] `POST /api/games/action` - 玩家行动 → **❌ LLM API Key未配置（2026-03-31 10:19）** [2026-03-31 10:19]
   - 发送"环顾四周"→ 200，返回GM叙事（场景描写+判定结果）、options字段（5个选项管道符分隔）、scene_cg=null
   - action_power消耗正确：3→2；turn递增：0→1
 - [x] `GET /api/games/{session_id}/npcs` - 获取NPC列表 → **通过** [2026-03-29 16:19]
@@ -170,7 +174,9 @@
 - [x] `GET /api/market/tags` - 所有标签 → **正常** [2026-03-29 08:39]
 
 ### 2.15 系统接口
-- [x] `GET /health` - 健康检查 → **通过（返回 {"status":"ok","sessions":130}）** [2026-03-29 09:02]
+- [x] `GET /health` - 健康检查 → **⚠️ 服务器存活但游戏功能阻塞（返回 {"status":"ok","sessions":0,"memory":{"rss":136278016}}）** [2026-03-31 10:19]
+  - sessions=0，API Key未配置导致所有游戏启动失败
+  - 基础服务（API列表、编辑器、市场）正常运行
 - [x] `GET /` - 首页 → **通过（HTTP 200，标题 RPGAgent，完整游戏界面HTML）** [2026-03-29 20:57]
 - [x] `GET /index.html` - 首页HTML → **通过（HTTP 200，与 / 等效，服务相同HTML）** [2026-03-29 20:57]
 - [x] `GET /market` - 市场页面 → **通过（HTTP 200，标题"剧本市场 - RPGAgent"）** [2026-03-29 20:57]
@@ -1499,3 +1505,45 @@
 **结论**：P3-10仅achievements修复，stats路由仍需类似修复。服务器需重新配置LLM API key。
 
 **相关debug.md**：P3-10仍为活跃问题（部分修复）
+
+## 测试反馈 2026-03-31 10:19（小刚第100轮测试）
+
+### 测试项：服务器健康状态与API Key配置验证
+
+**结果**：❌ **P1阻塞性问题确认**
+
+**测试环境**：
+- 时间：2026-03-31 10:19 UTC (18:19 GMT+8)
+- 服务器：43.134.81.228:8080
+
+**验证结果**：
+1. ✅ **服务器存活**：`/health` → `{"status":"ok","sessions":0,"memory":{"rss":136278016}}`
+2. ✅ **基础服务正常**：`GET /api/games` → 200，返回3个剧本列表 ✅
+3. ✅ **编辑器可用**：`GET /api/editor/games` → 200，返回剧本列表 ✅
+4. ✅ **市场可用**：`GET /market` → 200，页面正常加载 ✅
+5. ❌ **游戏启动失败**：`POST /api/games/example/start` → `{"detail":"API 密钥未配置。请设置 OPENAI_API_KEY 或 RPG_API_KEY 环境变量后重启服务器。"}` ❌
+6. ❌ **sessions=0**：服务器无活跃session，上次测试的session已过期或服务器被重启
+
+**与第99轮对比**：
+- 第99轮（09:57 UTC）：sessions=2，API Key未配置
+- 第100轮（10:19 UTC）：sessions=0，API Key仍未配置
+- 服务器可能在两次测试之间被重启，但未正确配置LLM API Key
+
+**影响范围**：
+- ❌ 游戏启动（/api/games/{id}/start）
+- ❌ 玩家行动（/api/games/action）
+- ❌ WebSocket连接（依赖session）
+- ✅ 剧本列表API
+- ✅ 编辑器功能
+- ✅ 市场页面
+- ✅ 健康检查
+
+**结论**：
+P1级阻塞性问题持续：服务器LLM API Key未配置，导致所有游戏核心功能不可用。服务器基础服务运行正常，但无法进行实际游戏体验测试。
+
+**建议**：
+1. 在服务器上设置 `OPENAI_API_KEY` 或 `RPG_API_KEY` 环境变量
+2. 重启 rpgagent 服务
+3. 验证游戏启动功能恢复正常
+
+**相关问题**：P3-10 API路径修复（debug.md标记为"已完全修复"）无法验证，因为服务器无法创建游戏session进行测试

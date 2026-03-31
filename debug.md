@@ -1,6 +1,6 @@
 # RPGAgent 问题追踪
 
-> 最后更新：2026-03-31 09:38 (GMT+8)
+> 最后更新：2026-03-31 10:19 (GMT+8)
 > 整理策略：只保留活跃问题，已通过/已修复的测试记录已归档到 git commit 历史
 
 ---
@@ -916,20 +916,21 @@
 结果：问题（API安全P2 + LLM反馈P3）
 
 详情：
-### 11.1 API Key未配置 → **失败（P2安全问题）**
-- **测试方法**：向各API端点发送无认证请求，检查是否返回401/403
-- **测试结果**：
-  - GET /api/games → 200 无需认证 ✅
-  - GET /api/editor/games → 200 无需认证 ✅
-  - GET /api/editor/games/example/scenes → 200 无需认证 ✅（编辑器敏感数据）
-  - POST /api/games/example/start → 200 无需认证 ✅（游戏创建）
-  - POST /api/games/{session}/saves/test_save → 200 无需认证 ✅（存档写入）
-  - GET /health → 200 无需认证 ✅
-  - 携带 fake X-API-Key header → 与不带header结果相同，服务器不验证
-- **风险评估**：
-  - P2级安全问题：所有API无认证，任意用户可操作用户存档、访问编辑器
-  - 敏感端点（editor创建/删除、存档读写）均暴露
-- **建议**：P2级，为敏感API添加API Key认证（如 X-API-Key: <secret>）；公开端点（/api/games列表、/health）可保留无需认证
+### 11.1 API Key未配置 → **失败（P1阻塞性问题）**
+- **严重程度升级**：原为P2安全问题（API无认证），现升级为P1阻塞（服务器LLM API Key未配置）
+- **测试时间**：2026-03-31 09:57 UTC（首次发现）→ 2026-03-31 10:19 UTC（确认持续）
+- **现象**：
+  - `POST /api/games/example/start` → `{"detail":"API 密钥未配置。请设置 OPENAI_API_KEY 或 RPG_API_KEY 环境变量后重启服务器。"}`
+  - sessions=0，服务器无活跃session
+  - 所有依赖LLM的功能（游戏启动、玩家行动、WebSocket）全部不可用
+- **影响范围**：
+  - ❌ 游戏启动
+  - ❌ 玩家行动（action）
+  - ❌ WebSocket连接（WS依赖session）
+  - ✅ 剧本列表API（静态数据）
+  - ✅ 编辑器功能（文件读写）
+  - ✅ 市场页面（静态数据）
+- **建议**：P1级，在服务器设置 `OPENAI_API_KEY` 或 `RPG_API_KEY` 环境变量后重启服务
 
 ### 11.1 LLM调用失败 → **部分通过（P3）**
 - **测试方法**：发送边界输入（空action、特殊字符、超长文本），观察LLM错误处理
