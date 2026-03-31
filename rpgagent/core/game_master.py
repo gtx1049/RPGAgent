@@ -410,16 +410,11 @@ class GameMaster:
         self.dm._sys_prompt = current_sys_prompt
 
         # 调用 AgentScope Agent（reply 是 async 方法，需要传入 Msg 对象）
+        # 注意：MiniMax-M2.1 + OpenAI function calling 不兼容（返回400），
+        # 强制使用 tool_choice="none" 禁用工具调用，确保纯文本生成稳定
         from agentscope.message import Msg
         msg = Msg(name="玩家", content=user_prompt, role="user")
-        try:
-            response = await self.dm.reply(msg)
-        except Exception as llm_err:
-            import logging
-            err_str = str(llm_err)
-            # MiniMax API tool call 400 错误：打印日志并向上抛出，由 server.py 处理
-            logging.error(f"[DM] dm.reply() failed: {err_str[:300]}")
-            raise
+        response = await self.dm.reply(msg, tool_choice="none")
 
         # 提取纯文本：response 可能是 str 或 Msg 对象
         # Msg.content 可能是 str 或 ContentBlock 列表，用 get_text_content() 提取纯文本
