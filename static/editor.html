@@ -70,6 +70,8 @@ textarea#content-editor:focus{outline:none}
 #empty-hint{flex:1;display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:13px;text-align:center;padding:20px}
 #add-btn{background:var(--accent);border:none;color:#fff;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px;transition:.15s}
 #add-btn:hover{filter:brightness(1.1)}
+#new-game-btn{background:var(--accent2,#2f855a);border:none;color:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;transition:.15s;margin-left:6px}
+#new-game-btn:hover{filter:brightness(1.1)}
 #new-item-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:100}
 #new-item-modal.show{display:flex}
 .modal-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px;width:360px}
@@ -92,6 +94,7 @@ textarea#content-editor:focus{outline:none}
 <div id="topbar">
   <h1>🎲 RPGAgent 剧本编辑器</h1>
   <select id="game-select"><option value="">— 选择剧本 —</option></select>
+  <button id="new-game-btn" title="新建剧本">+ 新建剧本</button>
   <div id="tabs">
     <button class="tab active" data-tab="scenes">场景</button>
     <button class="tab" data-tab="characters">角色</button>
@@ -189,6 +192,7 @@ textarea#content-editor:focus{outline:none}
   <div class="modal-box">
     <h3 id="modal-title">新建场景</h3>
     <input id="new-id-input" placeholder="ID（如 act_01）">
+    <input id="new-name-input" placeholder="名称（如 我的剧本）" style="display:none">
     <div class="modal-actions">
       <button class="cancel" onclick="closeModal()">取消</button>
       <button class="confirm" onclick="confirmNew()">创建</button>
@@ -219,6 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupTabs();
   setupEditor();
   setupShortcuts();
+  document.getElementById('new-game-btn').onclick = () => openModal('game', '新建剧本', 'my_game');
 });
 
 // ── 剧本列表 ───────────────────────────────────────
@@ -671,6 +676,8 @@ function openModal(mode, title, placeholder) {
   document.getElementById('modal-title').textContent = title;
   document.getElementById('new-id-input').value = '';
   document.getElementById('new-id-input').placeholder = placeholder;
+  document.getElementById('new-name-input').style.display = mode === 'game' ? 'block' : 'none';
+  document.getElementById('new-name-input').value = '';
   document.getElementById('new-item-modal').classList.add('show');
   document.getElementById('new-id-input').focus();
 }
@@ -708,6 +715,23 @@ async function confirmNew() {
     } else {
       const err = await res.json().catch(() => ({}));
       showToast('创建角色失败: ' + (err.detail || res.status), 'error');
+    }
+  } else if (modalMode === 'game') {
+    const name = document.getElementById('new-name-input').value.trim() || id;
+    const res = await fetch(`${API}/games`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id, name}),
+    });
+    if (res.ok) {
+      await loadGameList();
+      const sel = document.getElementById('game-select');
+      sel.value = id;
+      await loadGame(id);
+      showToast('剧本已创建', 'success');
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast('创建剧本失败: ' + (err.detail || res.status), 'error');
     }
   }
 }
