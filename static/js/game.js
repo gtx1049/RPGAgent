@@ -29,6 +29,8 @@ const state = {
   // ── UI状态 ──────────────────
   awaitingInput: false,
   customActionMode: false,
+  playerName: "无名旅人",
+  gameStarted: false,   // 是否已完成角色创建
 };
 
 // ── DOM refs ────────────────────────────────
@@ -551,6 +553,39 @@ triggerStyle.textContent = `
   .gm-option-trigger:hover { opacity: 0.85; }
 `;
 document.head.appendChild(triggerStyle);
+
+// ── 角色名字（手机端友好） ─────────────────────
+
+function confirmPlayerName() {
+  const input = $("player-name-input");
+  const name = (input ? input.value : "").trim() || "无名旅人";
+  state.playerName = name;
+  // 从pending或URL读取待启动的gameId
+  const params = new URLSearchParams(location.search);
+  const gameId = state._pendingGameId || params.get("start");
+  if (gameId && !state.gameStarted) {
+    // 清除URL参数
+    history.replaceState(null, "", location.pathname);
+    launchGame(gameId, name);
+  } else if (!state.gameStarted) {
+    showGameList();
+  }
+}
+
+function showNameInputPanel() {
+  $("name-input-panel").style.display = "block";
+  // 默认填充上次名字
+  const input = $("player-name-input");
+  if (input) {
+    input.value = state.playerName || "无名旅人";
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+}
+
+function hideNameInputPanel() {
+  $("name-input-panel").style.display = "none";
+}
 
 // ── WebSocket ────────────────────────────────
 
@@ -1279,15 +1314,19 @@ async function startGame(gameId, playerName) {
 async function initSelectScreen() {
   const games = await loadGameList();
 
-  // 检查 ?start=xxx URL参数，自动启动对应剧本（从市场页面跳转）
+  // 检查 ?start=xxx URL参数，显示名字输入面板（从市场页面跳转）
   const urlParams = new URLSearchParams(location.search);
   const autoStartId = urlParams.get("start");
   if (autoStartId) {
-    // 清除URL参数，不刷新页面
-    history.replaceState(null, "", location.pathname);
     const found = games.find(g => g.id === autoStartId);
     if (found) {
-      launchGame(autoStartId, "冒险者");
+      // 显示名字输入面板，不自动启动
+      $("game-select").style.display = "none";
+      showNameInputPanel();
+      const hint = $("name-hint");
+      if (hint) hint.textContent = `即将开始：${found.name}`;
+      // 将gameId存入state，confirmPlayerName时使用
+      state._pendingGameId = autoStartId;
       return;
     }
   }
@@ -1328,6 +1367,9 @@ async function initSelectScreen() {
 
 async function launchGame(gameId, playerName) {
   $("game-select").style.display = "none";
+  hideNameInputPanel();
+  state.gameStarted = true;
+  state.playerName = playerName;
   const data = await startGame(gameId, playerName);
   if (!data || !data.session_id) {
     appendSystem("启动游戏失败，请检查服务器日志。");

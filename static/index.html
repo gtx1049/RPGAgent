@@ -63,6 +63,19 @@
     <!-- 右侧：状态栏 -->
     <div id="sidebar">
 
+      <!-- 角色名字（手机端友好输入） -->
+      <div id="name-input-panel" class="panel" style="display:none;">
+        <div class="panel-title">角色名字</div>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <input id="player-name-input" type="text" value="无名旅人" maxlength="20"
+            style="flex:1;background:#1a1a2e;border:1px solid #444;color:#ccc;padding:5px 8px;border-radius:4px;font-size:13px;"
+            placeholder="输入角色名字" />
+          <button class="btn-secondary" style="padding:5px 10px;font-size:12px;white-space:nowrap;"
+            onclick="confirmPlayerName()">开始</button>
+        </div>
+        <div id="name-hint" style="font-size:11px;color:#888;margin-top:4px;"></div>
+      </div>
+
       <!-- 状态数值 -->
       <div class="panel">
         <div class="panel-title">状态</div>
