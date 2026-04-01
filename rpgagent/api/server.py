@@ -43,6 +43,11 @@ _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(me
 logger.addHandler(_handler)
 logger.setLevel(logging.DEBUG)
 
+# Also configure root logger to write to ws_server.log (for game_master.py logging)
+root_logger = logging.getLogger()
+root_logger.addHandler(_handler)
+root_logger.setLevel(logging.DEBUG)
+
 def _log_thread_exception(args, thread_name: str = ""):
     """记录 daemon 线程中的未捕获异常"""
     exc = args.exc_value
@@ -287,7 +292,8 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 })
                 await websocket.send_json({
                     "type": "narrative",
-                    "content": "⌛ DM正在思考...",
+                    "content": "...",
+                    "thinking": True,
                     "done": False,
                 })
 
@@ -358,7 +364,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                     # 处理结果并发送（与原来逻辑一致）
                     options = []
                     if cmd and cmd.get("action") == "choice":
-                        raw_options = cmd.get("options", "").split("|")
+                        raw_options_str = cmd.get("options", "")
                         dc = cmd.get("dc", "50").strip() if cmd else "50"
                         dc_hint = ""
                         if dc.isdigit():
@@ -373,12 +379,41 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                                 dc_hint = "【极难】"
                             else:
                                 dc_hint = "【几乎不可能】"
-                        for i in range(0, len(raw_options), 3):
-                            group = raw_options[i:i+3]
-                            if group:
-                                name = group[0].strip()
-                                desc = " ".join(g for g in group[1:] if g.strip())
+
+                        # 智能解析 options：支持多种格式
+                        # 格式1: 选项1|描述1|trigger:xxx|选项2|描述2|trigger:xxx（3个一组）
+                        # 格式2: 选项1|描述1（只有选项和描述）
+                        # 格式3: 选项1|描述1|trigger:xxx（单个选项带trigger）
+                        raw_options = [p.strip() for p in raw_options_str.split("|")]
+                        raw_options = [p for p in raw_options if p]  # 过滤空字符串
+
+                        # 检查是否是单个选项（包含 trigger 或只有两个元素）
+                        if len(raw_options) == 1:
+                            # 可能是 "选项名|描述" 或 "选项名"
+                            parts = raw_options[0].split("|")
+                            if len(parts) >= 1 and parts[0]:
+                                name = parts[0].strip()
+                                desc = parts[1].strip() if len(parts) > 1 else ""
                                 options.append(f"{name} {dc_hint} {desc}".strip())
+                        elif len(raw_options) == 2:
+                            # "选项名|描述"
+                            options.append(f"{raw_options[0]} {dc_hint} {raw_options[1]}".strip())
+                        elif len(raw_options) == 3:
+                            # "选项名|描述|trigger:xxx"
+                            name = raw_options[0].strip()
+                            desc = raw_options[1].strip()
+                            options.append(f"{name} {dc_hint} {desc}".strip())
+                        else:
+                            # 多组选项，每3个一组
+                            for i in range(0, len(raw_options), 3):
+                                group = raw_options[i:i+3]
+                                if group:
+                                    name = group[0].strip()
+                                    # 过滤掉包含 trigger: 的元素
+                                    desc_parts = [g for g in group[1:] if "trigger:" not in g.lower()]
+                                    desc = " ".join(desc_parts).strip()
+                                    if name:
+                                        options.append(f"{name} {dc_hint} {desc}".strip())
 
                     # 清除"DM正在思考..."并下发叙事
                     await websocket.send_json({
@@ -489,7 +524,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 session.gm.stats_sys.restore_stamina(session.gm.stats_sys.stats.max_stamina)
                 if session.gm.hidden_value_sys:
                     session.gm.hidden_value_sys.tick_all(session.gm.session.turn_count)
-                session.gm.session.turn += 1
+                session.gm.session.increment_turn()
                 session.gm.session.add_history("system", "【休整】行动力和体力已恢复。")
                 narrative = "你稍作休息，身体的疲惫渐渐消散。行动力已完全恢复。"
                 stats = session.gm.stats_sys.get_snapshot()
@@ -511,7 +546,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                         "max_action_power": stats.get("max_action_power", 3),
                         "moral_debt_level": moral.get("level", ""),
                         "moral_debt_value": moral.get("debt", 0),
-                        "turn": session.gm.session.turn,
+                        "turn": session.gm.session.turn_count,
                     },
                 })
                 logger.info(f"[WS] rest_action DONE session={session_id}")

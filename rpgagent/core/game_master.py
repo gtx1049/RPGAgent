@@ -268,8 +268,11 @@ class GameMaster:
         if self.current_scene:
             self.session.update_state(scene_id=self.current_scene.id)
 
-        # AgentScope Agent（用于生成叙事）
+        # AgentScope Agent（用于生成叙事）— 已废弃，改用 DirectLLMClient
         self._agent: Optional[agent.ReActAgent] = None
+
+        # DirectLLMClient（自行管理 memory 和工具调用）
+        self._llm_client: Optional[Any] = None
 
         # GMS 工具集（AgentScope Toolkit）
         self._toolkit: Optional[Any] = None
@@ -343,7 +346,7 @@ class GameMaster:
 
     @property
     def dm(self) -> agent.ReActAgent:
-        """懒加载 DM Agent（带 GMS 工具集）"""
+        """懒加载 DM Agent（带 GMS 工具集）- 已废弃，保留接口兼容"""
         if self._agent is None:
             scene = self.get_current_scene()
             sys_prompt = (
@@ -372,8 +375,129 @@ class GameMaster:
             )
         return self._agent
 
+    @property
+    def llm_client(self) -> "DirectLLMClient":
+        """懒加载 DirectLLMClient（自行管理 memory 和工具调用）"""
+        if self._llm_client is None:
+            from rpgagent.core.direct_llm_client import DirectLLMClient
+            from rpgagent.core.gms_tools import create_gms_tools
+
+            scene = self.get_current_scene()
+            sys_prompt = (
+                self.prompt_builder.build_system_prompt(scene)
+                if scene
+                else "你是RPG游戏主持人。"
+            )
+
+            # 获取工具定义（OpenAI function calling 格式）
+            import inspect
+            def get_tool_schema(func):
+                """从方法签名提取参数 schema"""
+                sig = inspect.signature(func)
+                params = {}
+                required = []
+                for name, p in sig.parameters.items():
+                    if name == 'self':
+                        continue
+                    param_type = 'string'
+                    default = None
+                    if p.default is not inspect.Parameter.empty:
+                        default = p.default
+                        if isinstance(default, int):
+                            param_type = 'integer'
+                        elif isinstance(default, bool):
+                            param_type = 'boolean'
+                        elif isinstance(default, float):
+                            param_type = 'number'
+                    else:
+                        required.append(name)
+                    param_info = {'type': param_type}
+                    # 只添加可 JSON 序列化的默认值（排除哨兵对象如 _UNSET_STYLE）
+                    if default is not None and isinstance(default, (str, int, float, bool)):
+                        param_info['default'] = default
+                    params[name] = param_info
+                return {
+                    'type': 'object',
+                    'properties': params,
+                    'required': required
+                }
+
+            tool_funcs = create_gms_tools(self)
+            tool_schemas = []
+            for func in tool_funcs:
+                tool_schemas.append({
+                    "type": "function",
+                    "function": {
+                        "name": func.__name__,
+                        "description": (func.__doc__ or "").strip(),
+                        "parameters": get_tool_schema(func),
+                    },
+                })
+
+            self._llm_client = DirectLLMClient(
+                model=self.model,
+                system_prompt=sys_prompt,
+                tools=tool_schemas,
+                max_memory=10,  # 保留最近 10 条对话
+                max_turns=10,
+            )
+        return self._llm_client
+
     def get_current_scene(self) -> Optional[Scene]:
         return self.current_scene
+
+    def _cleanup_memory_after_reply(self) -> None:
+        """
+        清理 AgentScope memory 中的 tool 调用记录。
+
+        MiniMax M2.7 在多轮对话后，对 tool_call ID 的解析会失败（2013错误）。
+        解决方案：重建 memory，只保留纯文本消息（player/assistant narrative），
+        删除所有 tool 消息和带 tool_use 的 assistant 消息。
+        """
+        import logging
+        memory = self.dm.memory
+        if not hasattr(memory, 'content'):
+            logging.warning("[MEM] Memory has no content attribute, skip cleanup")
+            return
+
+        msg_count = len(memory.content)
+        if msg_count == 0:
+            return
+
+        # 重建 memory：只保留需要保留的消息
+        kept_msgs = []
+        for msg_item, marks in memory.content:
+            # 删除条件：role=tool 或 assistant 且包含 tool_use
+            if msg_item.role == "tool":
+                continue  # 删除 tool 消息
+            if msg_item.role == "assistant":
+                # 检查是否包含 tool_use content block
+                if msg_item.has_content_blocks("tool_use"):
+                    continue  # 删除带 tool_use 的 assistant
+                # content 为 None/空 的 assistant 也删除
+                if not msg_item.content:
+                    continue
+                # 如果 content 是空列表
+                if isinstance(msg_item.content, list) and len(msg_item.content) == 0:
+                    continue
+            # 保留其他消息（player, system, 纯文本 assistant）
+            kept_msgs.append((msg_item, marks))
+
+        # 清空并重建
+        memory.content.clear()
+        for msg_item, marks in kept_msgs:
+            memory.content.append((msg_item, marks))
+
+        deleted = msg_count - len(memory.content)
+        logging.info(f"[MEM] Cleanup: {msg_count} msgs → {len(memory.content)} msgs, deleted {deleted}")
+
+        # 估算 token 数
+        total_chars = sum(
+            len(str(m.content)) if isinstance(m.content, str) else sum(len(str(b)) for b in m.content)
+            for m, _ in memory.content
+        )
+        est_tokens = total_chars // 3
+        logging.info(f"[MEM] Context size: ~{est_tokens} tokens (est ~{total_chars} chars)")
 
     async def process_input(self, player_input: str) -> Tuple[str, Optional[Dict]]:
         """
@@ -382,10 +506,12 @@ class GameMaster:
         2. 检查行动力，耗尽则刷新
         3. 消耗 1 行动力
         4. 构造 user_prompt（附当前状态摘要）
-        5. 调用 AgentScope DM Agent 生成叙事
+        5. 调用 DirectLLMClient 生成叙事（自行管理 memory 和工具调用）
         6. 解析 GM_COMMAND，更新数值系统
         7. 返回叙事内容
         """
+        import logging
+
         # ── 注入攻击过滤（保护 LLM 不得被 prompt injection 劫持） ──
         from rpgagent.utils.sanitize import sanitize_for_llm
         sanitized = sanitize_for_llm(player_input)
@@ -404,59 +530,57 @@ class GameMaster:
         history_summary = self.session.get_history_summary()
         user_prompt = self.prompt_builder.build_user_prompt(player_input, history_summary)
 
-        # 注入最新系统状态到 system prompt（每次动态更新）
-        # 注意：ReActAgent.sys_prompt 是只读属性，需直接修改 _sys_prompt
+        # 更新 system prompt（DirectLLMClient 自行管理）
         current_sys_prompt = self.prompt_builder.build_system_prompt(scene)
-        self.dm._sys_prompt = current_sys_prompt
+        self.llm_client.update_system_prompt(current_sys_prompt)
 
-        # 调用 AgentScope Agent（reply 是 async 方法，需要传入 Msg 对象）
-        from agentscope.message import Msg
-        msg = Msg(name="玩家", content=user_prompt, role="user")
+        # ── 创建工具执行器 ──
+        from rpgagent.core.gms_tools import GMSTools
+        tools = GMSTools(self)
 
-        # 优先使用工具调用（MiniMax兼容时正常工作）
-        # 失败时降级为纯文本模式（MiniMax tool call不兼容时触发）
-        response = None
-        try:
-            response = await self.dm.reply(msg)
-        except Exception as e:
-            import logging
-            err_str = str(e)
-            # MiniMax API tool call 400错误：降级为无工具模式
-            if "400" in err_str or "tool id" in err_str.lower() or "not found" in err_str.lower():
-                logging.warning(f"[DM] Tool call failed, falling back: {err_str[:150]}")
-                try:
-                    response = await self.dm.reply(msg, tool_choice="none")
-                except Exception as fallback_err:
-                    logging.error(f"[DM] Fallback also failed: {fallback_err}")
-                    # 两次都失败：返回提示让用户重试，不崩溃
-                    return "[系统] AI暂时无法响应，请稍后重试。", None
-            else:
-                logging.error(f"[DM] dm.reply() unexpected error: {err_str[:300]}")
-                raise
+        def tool_executor(tool_name: str, args: dict) -> str:
+            """执行工具调用"""
+            if not hasattr(tools, tool_name):
+                return f"[错误] 未知工具: {tool_name}"
+            try:
+                result = getattr(tools, tool_name)(**args)
+                # 提取 ToolResponse 中的文本内容
+                if hasattr(result, 'content'):
+                    parts = []
+                    for block in result.content:
+                        if hasattr(block, 'text'):
+                            parts.append(block.text)
+                        elif isinstance(block, dict):
+                            parts.append(str(block.get('text', '')))
+                    return "".join(parts) if parts else str(result)
+                return str(result)
+            except Exception as e:
+                return f"[工具执行错误] {str(e)}"
 
-        # 提取纯文本：response 可能是 str 或 Msg 对象
-        # Msg.content 可能是 str 或 ContentBlock 列表，用 get_text_content() 提取纯文本
-        if response is None:
+        # ── 调用 DirectLLMClient ──
+        # DirectLLMClient 自己管理 memory、工具调用循环、滑动窗口
+        # 不再依赖 AgentScope ReActAgent，完全可控
+        logging.info(f"[DM] Calling llm_client.reply() for: '{player_input[:50]}'")
+
+        narrative, cmd, all_msgs = await self.llm_client.reply(
+            user_input=user_prompt,
+            tool_executor=tool_executor,
+        )
+
+        ctx_info = self.llm_client.get_context_info()
+        logging.info(f"[DM] reply OK: narrative_len={len(narrative)}, context={ctx_info}")
+
+        if not narrative:
             return "[系统] AI暂时无法响应，请稍后重试。", None
 
-        if isinstance(response, str):
-            llm_output = response
-        elif hasattr(response, 'get_text_content'):
-            llm_output = response.get_text_content() or str(response)
-        elif hasattr(response, 'content'):
-            c = response.content
-            llm_output = c if isinstance(c, str) else str(c)
-        else:
-            llm_output = str(response)
-
-        self.session.add_history("gm", llm_output)
+        self.session.add_history("gm", narrative)
 
         # 记录升级前的等级（用于检测是否升级）
         level_before = self.stats_sys.stats.level
 
-        # 解析 GM_COMMAND
-        cmd = GMCommandParser.parse(llm_output)
-        narrative = GMCommandParser.extract_narrative(llm_output)
+        # 解析 GM_COMMAND（DirectLLMClient 已自动提取纯文本 narrative）
+        if cmd is None:
+            cmd = GMCommandParser.parse(narrative)
         # 从叙事文本中提取数值变化（体力消耗/HP变化/金币/经验）
         narrative_deltas = GMCommandParser.extract_value_deltas(narrative)
 
@@ -633,9 +757,17 @@ class GameMaster:
         # 消耗行动力的行为类型（非叙事行动本身也需要消耗）
         ap_cost_actions = {"narrative", "combat", "choice", "skill_use", "item_use", "explore"}
         if action in ap_cost_actions:
-            if not self.stats_sys.use_ap(1):
-                # 行动力耗尽，仅允许观察（look/observe）
-                if player_input and not any(k in player_input for k in ["看看", "观察", "look", "observe", "检查"]):
+            # 预设快捷行动消耗1AP，自由行动消耗2AP
+            preset_keywords = ["环顾四周", "与NPC交谈", "接近目标", "仔细调查", "观察周围", "检查"]
+            is_preset = any(kw in player_input for kw in preset_keywords)
+            ap_cost = 1 if is_preset else 2
+            import logging
+            logging.info(f"[AP] player_input='{player_input[:30]}', is_preset={is_preset}, ap_cost={ap_cost}")
+            if not self.stats_sys.use_ap(ap_cost):
+                # 行动力不足，尝试消耗较少AP
+                if ap_cost > 1 and self.stats_sys.use_ap(1):
+                    pass  # 允许用1AP执行
+                else:
                     self.session.add_history("system", "【行动力耗尽】你感到力不从心，只能勉强观察周围环境。")
                     self.session.flags["_ap_exhausted"] = True
                     return

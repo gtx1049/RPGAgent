@@ -417,8 +417,7 @@ function executeAction(action) {
     return;
   }
 
-  if (action.cost > 0 && !confirm(`消耗${action.cost}点行动力「${text}」，是否继续？`)) return;
-
+  // 移除行动确认对话框，直接执行
   sendPlayerInput(text);
 }
 
@@ -456,7 +455,7 @@ function cancelCustomAction() {
 function submitCustomAction() {
   const text = $("custom-input").value.trim();
   if (!text) return;
-  if (!confirm(`执行自由行动「${text.substring(0, 20)}${text.length > 20 ? '…' : ''}」，是否继续？`)) return;
+  // 移除行动确认对话框，直接执行
   cancelCustomAction();
   sendPlayerInput(text);
 }
@@ -763,7 +762,14 @@ function handleMessage(msg) {
       break;
 
     case "narrative":
-      if (msg.content) appendGM(msg.content);
+      if (msg.content) {
+        // 循环句号动画（thinking模式）
+        if (msg.thinking) {
+          appendGM('<span class="thinking-dots">...</span>');
+        } else {
+          appendGM(msg.content);
+        }
+      }
       if (msg.done) {
         renderActionButtons(); // 叙事结束后刷新行动按钮
       }
