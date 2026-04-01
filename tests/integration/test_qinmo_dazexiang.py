@@ -256,7 +256,7 @@ def roll_sys():
 
 @pytest.fixture
 def gm(context_loader, game_session, hidden_value_configs, roll_sys):
-    """GameMaster fixture，使用 AsyncMock Agent 替代真实 AgentScope 调用"""
+    """GameMaster fixture，使用 AsyncMock LLM Client 替代真实 API 调用"""
     from unittest.mock import AsyncMock, MagicMock
 
     gm = GameMaster(
@@ -266,28 +266,24 @@ def gm(context_loader, game_session, hidden_value_configs, roll_sys):
     )
     gm.roll_sys = roll_sys
 
-    # 用 AsyncMock Agent 替换真实的 ReActAgent，避免 LLM API 调用
-    mock_agent = MagicMock()
-    mock_agent._sys_prompt = ""
-
-    async def mock_agent_reply(msg):
+    # 用 AsyncMock 替换真实的 llm_client.reply()，避免 LLM API 调用
+    async def mock_llm_reply(user_input, tool_executor=None):
         # 刷新行动力（测试环境默认 action_power=3，第4回合会耗尽）
         if hasattr(gm, "stats_sys") and gm.stats_sys:
             gm.stats_sys.refresh_ap()
-        content = msg.content if hasattr(msg, "content") else str(msg)
-        lines = content.split("\n")
-        player_input = ""
-        # build_user_prompt uses "[你的行动]\n{player_input}" format
+        # 解析 player_input
+        player_input = user_input
+        lines = user_input.split("\n")
         for i, line in enumerate(lines):
             if line.strip() == "[你的行动]":
                 if i + 1 < len(lines):
                     player_input = lines[i + 1].strip()
                 break
         scene_id = game_session.current_scene_id
-        return MockModel.get_response(scene_id, player_input)
+        response_text = MockModel.get_response(scene_id, player_input)
+        return response_text, None, []
 
-    mock_agent.reply = AsyncMock(side_effect=mock_agent_reply)
-    gm._agent = mock_agent
+    gm.llm_client.reply = AsyncMock(side_effect=mock_llm_reply)
     return gm
 
 
