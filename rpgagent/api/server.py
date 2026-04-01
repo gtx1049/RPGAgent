@@ -249,18 +249,74 @@ async def health():
 
 # ─── WebSocket 实时叙事流 ──────────────────────────────
 
-@app.websocket("/ws/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: str):
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket 连接端点。
+    
+    Query 参数:
+    - client_id: 客户端 ID（用于重连恢复）
+    - session_id: 会话 ID
+    
+    如果只传 client_id，会通过 client_id 恢复会话。
+    """
     manager = get_manager()
-    session = manager.get_session(session_id)
-
+    
+    # 从 query string 获取参数
+    client_id = websocket.query_params.get("client_id")
+    session_id = websocket.query_params.get("session_id")
+    
+    session = None
+    
+    if session_id:
+        session = manager.get_session(session_id)
+    elif client_id:
+        session = manager.get_session_by_client_id(client_id)
+        if session:
+            session_id = session.session_id
+            logger.info(f"[WS] Reconnected client {client_id} to session {session_id}")
+    
     if not session:
-        # 不接受无效连接，直接关闭（避免握手后关闭的资源浪费）
-        await websocket.close(code=4000)
+        await websocket.close(code=4000, reason="Session not found")
         return
 
     await websocket.accept()
+    
+    client_id = session.client_id
+    if not client_id:
+        client_id = manager.generate_client_id()
+    
+    await manager.register_client(client_id, session_id)
+    
+    await _ws_handle_messages(websocket, manager, session_id, client_id, session)
 
+
+@app.websocket("/ws/{session_id}")
+async def websocket_endpoint_legacy(websocket: WebSocket, session_id: str):
+    """
+    兼容旧版前端（使用 path 参数传入 session_id）。
+    """
+    manager = get_manager()
+    
+    session = manager.get_session(session_id)
+    
+    if not session:
+        await websocket.close(code=4000, reason="Session not found")
+        return
+
+    await websocket.accept()
+    
+    client_id = session.client_id
+    if not client_id:
+        client_id = manager.generate_client_id()
+    
+    await manager.register_client(client_id, session_id)
+    
+    await _ws_handle_messages(websocket, manager, session_id, client_id, session)
+
+
+async def _ws_handle_messages(websocket: WebSocket, manager, session_id: str, client_id: str, session):
+    """WebSocket 消息处理循环（供两个端点共用）"""
     # ── 发送初始状态（连接成功后的欢迎消息）─────────────
     stats = session.gm.stats_sys.get_snapshot()
     moral = session.gm.moral_sys.get_snapshot()
@@ -288,12 +344,18 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     await websocket.send_json({
         "type": "connected",
         "session_id": session_id,
+        "client_id": client_id,
         "message": "连接成功，可以开始游戏",
     })
 
     try:
         while True:
             raw = await websocket.receive_text()
+            
+            # 更新心跳
+            if client_id:
+                await manager.update_client_heartbeat(client_id)
+            
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
@@ -672,6 +734,10 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
     except WebSocketDisconnect:
         logger.info(f"[WS] WebSocketDisconnect session={session_id}")
+        # 标记客户端为离线，会话会在60秒后被清理
+        if client_id:
+            await manager.set_client_offline(client_id)
+            logger.info(f"[WS] Client {client_id} marked offline, will be cleaned up after 60s")
     except Exception as e:
         logger.error(f"[WS] Unexpected error session={session_id}: {type(e).__name__}: {e}\n{traceback.format_exc()}")
 

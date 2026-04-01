@@ -8,6 +8,10 @@ from typing import Optional
 class StartGameRequest(BaseModel):
     # game_id 从 URL path 获取，不从 body 读取（避免冗余）
     player_name: str = "玩家"
+    client_id: Optional[str] = Field(
+        default=None,
+        description="客户端 ID，用于重连恢复。不传则自动生成新的。",
+    )
 
 
 class PlayerActionRequest(BaseModel):

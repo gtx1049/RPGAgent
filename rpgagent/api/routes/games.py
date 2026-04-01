@@ -51,7 +51,7 @@ async def list_games():
 
 @router.post("/{game_id}/start", response_model=dict)
 async def start_game(game_id: str, req: StartGameRequest):
-    """创建新游戏会话，返回 session_id"""
+    """创建新游戏会话，返回 session_id 和 client_id"""
     if not API_KEY:
         raise HTTPException(
             status_code=503,
@@ -65,16 +65,18 @@ async def start_game(game_id: str, req: StartGameRequest):
     db = Database(game_id=game_id)
     manager = get_manager()
 
-    session = await manager.start_game(
+    session, client_id = await manager.start_game(
         game_id=game_id,
         player_name=req.player_name,
         game_loader=loader,
         db=db,
+        client_id=req.client_id,
     )
 
     scene = session.gm.get_current_scene()
     scene_info = {
         "session_id": session.session_id,
+        "client_id": client_id,
         "game_id": game_id,
         "player_name": req.player_name,
         "scene": {
