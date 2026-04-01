@@ -222,7 +222,10 @@ class GameMaster:
         self.model = AnthropicChatModel(
             model_name=model_name,
             api_key=api_key,
-            client_kwargs={"base_url": base_url.rstrip("/")},
+            client_kwargs={
+                "base_url": base_url.rstrip("/"),
+                "max_retries": 0,  # 禁用 HTTP 重试，避免多轮对话时 2013 错误
+            },
             thinking={"type": "disabled"},
             stream=False,
         )

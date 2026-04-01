@@ -49,6 +49,10 @@ class DirectLLMClient:
         self.max_memory = max_memory
         self.max_turns = max_turns
         self.logger = logging.getLogger("rpgagent.llm")
+        
+        # 互斥锁，防止并发调用导致消息历史冲突
+        import threading
+        self._call_lock = threading.Lock()
 
         # 消息历史: [{"role": "system", "content": "..."}, {"role": "user", ...}, ...]
         # 格式化为 Anthropic API 兼容的 dict 列表
@@ -93,23 +97,39 @@ class DirectLLMClient:
             tool_executor=tool_executor,
         )
 
-        # 提取叙事文本
-        narrative = self._extract_narrative(response_text)
-
-        # 解析 GM_COMMAND（复用 game_master.py 中的解析逻辑）
+        # 解析 GM_COMMAND（必须先解析，再移除 GM_COMMAND 块）
         cmd = None
-        if narrative:
+        if response_text:
             import re
             pattern = r"\[GM_COMMAND\]\s*(.*?)\s*\[/GM_COMMAND\]"
-            match = re.search(pattern, narrative, re.DOTALL)
+            match = re.search(pattern, response_text, re.DOTALL)
             if match:
                 cmd = {}
                 raw_block = match.group(1).replace("\\n", "\n")
+                self.logger.info(f"[GM_COMMAND] raw_block:\n{raw_block[:500]}")
+                # 收集所有 options 行，合并为一个字符串
+                options_parts = []
                 for line in raw_block.strip().split("\n"):
                     if ":" not in line:
                         continue
                     key, _, value = line.partition(":")
-                    cmd[key.strip()] = value.strip()
+                    key = key.strip()
+                    value = value.strip()
+                    if key == "options":
+                        # 累积所有 options 行
+                        if value:
+                            options_parts.append(value)
+                    else:
+                        cmd[key] = value
+                # 合并所有 options，用 | 分隔
+                if options_parts:
+                    cmd["options"] = "|".join(options_parts)
+                self.logger.info(f"[GM_COMMAND] parsed cmd: {cmd}")
+            else:
+                self.logger.warning("[GM_COMMAND] No GM_COMMAND found in response_text")
+
+        # 提取叙事文本（移除 GM_COMMAND 块）
+        narrative = self._extract_narrative(response_text)
 
         return narrative, cmd, list(self.messages)
 
@@ -125,13 +145,22 @@ class DirectLLMClient:
 
     def _add_assistant_message(self, content: str, tool_calls: Optional[list] = None) -> None:
         """添加助手消息到历史"""
+        import uuid
+        
         if tool_calls:
             # 带工具调用的 assistant 消息
             content_blocks = []
+            assigned_ids = []  # 记录实际使用的 id
             for tc in tool_calls:
+                # 使用传入的 id，如果为空则生成
+                tool_id = tc.get("id")
+                if not tool_id:
+                    tool_id = f"call_{uuid.uuid4().hex[:12]}"
+                    self.logger.warning(f"[TOOL] _add_assistant_message: generated tool_id {tool_id}")
+                assigned_ids.append(tool_id)
                 content_blocks.append({
                     "type": "tool_use",
-                    "id": tc["id"],
+                    "id": tool_id,
                     "name": tc["function"]["name"],
                     "input": json.loads(tc["function"]["arguments"]) if isinstance(tc["function"]["arguments"], str) else tc["function"]["arguments"],
                 })
@@ -158,6 +187,11 @@ class DirectLLMClient:
             })
         self._apply_memory_window()
 
+    def __init__(self, ...):
+        # ... 现有代码 ...
+        # 添加互斥锁防止并发调用
+        self._call_lock = asyncio.Lock()
+    
     def _add_tool_result(self, tool_call_id: str, tool_name: str, result: str) -> None:
         """添加工具执行结果到历史"""
         self.messages.append({
@@ -212,14 +246,16 @@ class DirectLLMClient:
             turn += 1
 
             # 调用 LLM
+            # 注意：必须始终传递 tools，因为消息历史中可能包含 tool_use 块
+            # 如果 tools=None 但消息中有 tool_use 块，API 会报 2013 错误
             kwargs = {
                 "messages": self.messages,
-                "tools": self.tools if turn == 1 else None,  # 只有第一轮带工具
+                "tools": self.tools,  # 始终传递 tools
             }
 
-            self.logger.info(f"[LLM] Sending request (turn {turn}), messages={len(self.messages)}")
+            self.logger.info(f"[LLM] Sending request (turn {turn}), messages={len(self.messages)}, tools={'Yes' if self.tools else 'No'}")
 
-            response = await self.model(messages=self.messages, tools=self.tools if turn == 1 else None)
+            response = await self.model(messages=self.messages, tools=self.tools)
             
             # 解析响应
             content_blocks = self._parse_response(response)
@@ -232,14 +268,18 @@ class DirectLLMClient:
                 if block.get("type") == "text":
                     text_parts.append(block.get("text", ""))
                 elif block.get("type") == "tool_use":
+                    # 重新生成有效的 tool id，不使用 block 中可能无效的 id
+                    import uuid
+                    tool_id = f"call_{uuid.uuid4().hex[:12]}"
                     tool_calls.append({
-                        "id": block.get("id"),
+                        "id": tool_id,
                         "type": "function",
                         "function": {
                             "name": block.get("name"),
                             "arguments": json.dumps(block.get("input", {}), ensure_ascii=False),
                         },
                     })
+                    self.logger.info(f"[TOOL] _parse_response: generated tool_id={tool_id} for {block.get('name')}")
 
             current_text = "".join(text_parts)
             current_tool_calls = tool_calls if tool_calls else None
@@ -287,23 +327,44 @@ class DirectLLMClient:
 
     def _parse_response(self, response: Any) -> list:
         """解析 LLM 响应，提取 content blocks"""
+        import uuid
+        
         if hasattr(response, "content") and response.content:
             blocks = []
             for block in response.content:
-                if hasattr(block, "type"):
+                # 处理 dict 类型的 block
+                if isinstance(block, dict):
+                    block_dict = {"type": block.get("type")}
+                    if block.get("type") == "text":
+                        block_dict["text"] = block.get("text", "")
+                    elif block.get("type") == "tool_use":
+                        # 确保 tool_use 块有有效的 id
+                        tool_id = block.get("id")
+                        if not tool_id:
+                            tool_id = f"tmp_{uuid.uuid4().hex[:8]}"
+                            self.logger.warning(f"[TOOL] Generated temporary tool_id: {tool_id}")
+                        block_dict["id"] = tool_id
+                        block_dict["name"] = block.get("name")
+                        block_dict["input"] = block.get("input", {})
+                    blocks.append(block_dict)
+                elif hasattr(block, "type"):
                     block_dict = {"type": block.type}
                     if block.type == "text" and hasattr(block, "text"):
                         block_dict["text"] = block.text
                     elif block.type == "tool_use":
-                        block_dict["id"] = getattr(block, "id", None)
+                        # 确保 tool_use 块有有效的 id
+                        tool_id = getattr(block, "id", None)
+                        if not tool_id:
+                            tool_id = f"tmp_{uuid.uuid4().hex[:8]}"
+                            self.logger.warning(f"[TOOL] Generated temporary tool_id: {tool_id}")
+                        block_dict["id"] = tool_id
                         block_dict["name"] = getattr(block, "name", None)
                         block_dict["input"] = getattr(block, "input", {})
                     blocks.append(block_dict)
-                elif isinstance(block, dict):
-                    blocks.append(block)
             return blocks
         elif hasattr(response, "content") and isinstance(response.content, list):
             return response.content
+        return []
         return []
 
     def _extract_narrative(self, text: str) -> str:

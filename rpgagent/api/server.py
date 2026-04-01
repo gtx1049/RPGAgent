@@ -13,10 +13,14 @@ import signal
 import sys
 import threading
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from contextlib import asynccontextmanager
 
 import atexit
+
+# 全局 LLM 调用线程池（单例，确保串行执行）
+_llm_executor: ThreadPoolExecutor = None
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -89,17 +93,51 @@ def _run_action_in_thread(
 ) -> None:
     """
     在独立线程中执行 async LLM 调用。
-    每个 thread 有自己独立的 event loop，避免多轮对话时嵌套 event loop 冲突。
-    asyncio.run() 创建临时 event loop，ThreadPoolExecutor 确保每个 action 独立。
+    使用全局单例 ThreadPoolExecutor (max_workers=1) 确保串行执行，避免并发导致的 2013 错误。
     """
+    global _llm_executor
     logger.info(f"[WS-Thread {threading.current_thread().name}] LLM action START session={session_id}")
-    async def _async_wrapper():
-        return await manager.process_action(session_id, content)
-
+    
+    # 确保全局 executor 存在
+    if _llm_executor is None:
+        _llm_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="LLM-Worker")
+    
+    def _sync_wrapper():
+        """同步包装器，在线程池中执行"""
+        try:
+            # 获取当前线程的 event loop
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+            except RuntimeError:
+                # 没有 event loop，创建新的
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            try:
+                result = loop.run_until_complete(manager.process_action(session_id, content))
+                return ("done", result[0], result[1])
+            finally:
+                pass  # 不关闭 loop
+        except Exception as e:
+            logger.error(f"[WS-Thread] Exception: {e}")
+            traceback.print_exc()
+            return ("error", str(e))
+    
     try:
-        narrative, cmd = asyncio.run(_async_wrapper())
-        logger.info(f"[WS-Thread {threading.current_thread().name}] LLM action DONE session={session_id} len={len(narrative) if narrative else 0}")
-        result_queue.put(("done", narrative, cmd))
+        # 使用全局单例 executor，确保串行执行
+        future = _llm_executor.submit(_sync_wrapper)
+        result = future.result(timeout=300)  # 5分钟超时
+        if result[0] == "done":
+            _, narrative, cmd = result
+            logger.info(f"[WS-Thread {threading.current_thread().name}] LLM action DONE session={session_id} len={len(narrative) if narrative else 0}")
+            result_queue.put(result)
+        else:
+            _, err_msg = result
+            logger.error(f"[WS-Thread {threading.current_thread().name}] LLM action ERROR: {err_msg}")
+            result_queue.put(("error", err_msg))
     except Exception as e:
         logger.error(f"[WS-Thread {threading.current_thread().name}] LLM action ERROR: {e}")
         traceback.print_exc()
@@ -363,6 +401,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
                     # 处理结果并发送（与原来逻辑一致）
                     options = []
+                    logger.info(f"[WS-OPTIONS] cmd={cmd}")
                     if cmd and cmd.get("action") == "choice":
                         raw_options_str = cmd.get("options", "")
                         dc = cmd.get("dc", "50").strip() if cmd else "50"
