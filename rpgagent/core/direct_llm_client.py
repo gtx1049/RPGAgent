@@ -187,11 +187,6 @@ class DirectLLMClient:
             })
         self._apply_memory_window()
 
-    def __init__(self, ...):
-        # ... 现有代码 ...
-        # 添加互斥锁防止并发调用
-        self._call_lock = asyncio.Lock()
-    
     def _add_tool_result(self, tool_call_id: str, tool_name: str, result: str) -> None:
         """添加工具执行结果到历史"""
         self.messages.append({
