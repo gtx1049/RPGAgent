@@ -144,42 +144,54 @@ class DirectLLMClient:
         self._apply_memory_window()
 
     def _add_assistant_message(self, content: str, tool_calls: Optional[list] = None) -> None:
-        """添加助手消息到历史"""
+        """添加助手消息到历史（Anthropic 格式）"""
         import uuid
         
         if tool_calls:
-            # 带工具调用的 assistant 消息
+            # Anthropic 格式：使用 content blocks
             content_blocks = []
-            assigned_ids = []  # 记录实际使用的 id
             for tc in tool_calls:
-                # 使用传入的 id，如果为空则生成
                 tool_id = tc.get("id")
                 if not tool_id:
                     tool_id = f"call_{uuid.uuid4().hex[:12]}"
                     self.logger.warning(f"[TOOL] _add_assistant_message: generated tool_id {tool_id}")
-                assigned_ids.append(tool_id)
+                
+                # 处理 input 字段
+                raw_input = tc.get("input") or tc.get("function", {}).get("arguments", {})
+                if hasattr(raw_input, "model_dump"):
+                    input_dict = raw_input.model_dump()
+                elif isinstance(raw_input, str):
+                    try:
+                        input_dict = json.loads(raw_input)
+                    except:
+                        input_dict = {"raw": raw_input}
+                elif isinstance(raw_input, dict):
+                    input_dict = raw_input
+                else:
+                    input_dict = {}
+                
                 content_blocks.append({
                     "type": "tool_use",
                     "id": tool_id,
-                    "name": tc["function"]["name"],
-                    "input": json.loads(tc["function"]["arguments"]) if isinstance(tc["function"]["arguments"], str) else tc["function"]["arguments"],
+                    "name": tc.get("name") or tc.get("function", {}).get("name"),
+                    "input": input_dict,
                 })
+            
             if content:
                 content_blocks.insert(0, {"type": "text", "text": content})
+            
             self.messages.append({
                 "role": "assistant",
                 "name": "GameMaster",
                 "content": content_blocks,
             })
         elif content:
-            # 纯文本 assistant 消息
             self.messages.append({
                 "role": "assistant",
                 "name": "GameMaster",
                 "content": [{"type": "text", "text": content}],
             })
         else:
-            # 空消息（不应该发生）
             self.messages.append({
                 "role": "assistant",
                 "name": "GameMaster",
@@ -188,12 +200,21 @@ class DirectLLMClient:
         self._apply_memory_window()
 
     def _add_tool_result(self, tool_call_id: str, tool_name: str, result: str) -> None:
-        """添加工具执行结果到历史"""
+        """添加工具执行结果到历史（Anthropic 格式）"""
+        # 防御：确保 tool_call_id 不为空
+        if not tool_call_id:
+            import uuid
+            tool_call_id = f"call_{uuid.uuid4().hex[:12]}"
+            self.logger.warning(f"[TOOL] _add_tool_result: generated tool_call_id={tool_call_id}")
+        
+        # Anthropic 格式：使用 type="tool_result" block
         self.messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call_id,
-            "content": result,
-            "name": tool_name,
+            "role": "user",  # MiniMax 要求 tool result 作为 user 消息
+            "content": [{
+                "type": "tool_result",
+                "tool_use_id": tool_call_id,
+                "content": result,
+            }],
         })
         # tool result 不计入滑动窗口（不限制数量）
 
@@ -252,6 +273,15 @@ class DirectLLMClient:
 
             response = await self.model(messages=self.messages, tools=self.tools)
             
+            # 调试：打印 API 响应的原始结构
+            import uuid as uuid_mod
+            self.logger.info(f"[LLM] Raw response type: {type(response)}, content type: {type(getattr(response, 'content', None))}")
+            if hasattr(response, "content") and response.content:
+                for idx, block in enumerate(response.content):
+                    block_type = getattr(block, "type", None) if hasattr(block, "type") else (block.get("type") if isinstance(block, dict) else None)
+                    block_id = getattr(block, "id", None) if hasattr(block, "id") else (block.get("id") if isinstance(block, dict) else None)
+                    self.logger.info(f"[LLM] Block {idx}: type={block_type}, id={block_id!r}, raw={str(block)[:200]}")
+            
             # 解析响应
             content_blocks = self._parse_response(response)
 
@@ -266,12 +296,23 @@ class DirectLLMClient:
                     # 重新生成有效的 tool id，不使用 block 中可能无效的 id
                     import uuid
                     tool_id = f"call_{uuid.uuid4().hex[:12]}"
+                    
+                    # 处理 input 字段：可能是 Pydantic 模型或 dict
+                    raw_input = block.get("input", {})
+                    if hasattr(raw_input, "model_dump"):
+                        # Pydantic 模型，转为 dict
+                        input_dict = raw_input.model_dump()
+                    elif isinstance(raw_input, dict):
+                        input_dict = raw_input
+                    else:
+                        input_dict = {}
+                    
                     tool_calls.append({
                         "id": tool_id,
                         "type": "function",
                         "function": {
                             "name": block.get("name"),
-                            "arguments": json.dumps(block.get("input", {}), ensure_ascii=False),
+                            "arguments": json.dumps(input_dict, ensure_ascii=False),
                         },
                     })
                     self.logger.info(f"[TOOL] _parse_response: generated tool_id={tool_id} for {block.get('name')}")
@@ -321,17 +362,15 @@ class DirectLLMClient:
         return current_text, current_tool_calls
 
     def _parse_response(self, response: Any) -> list:
-        """解析 LLM 响应，提取 content blocks"""
+        """解析 LLM 响应，提取 content blocks（Anthropic 格式）"""
         import uuid
         
-        # 防御：如果 response.content 是列表但为空，直接返回空列表
-        if hasattr(response, "content") and not response.content:
+        if not hasattr(response, "content") or not response.content:
             return []
         
-        if hasattr(response, "content") and response.content:
-            blocks = []
-            for block in response.content:
-                # 处理 dict 类型的 block
+        blocks = []
+        for block in response.content:
+            try:
                 if isinstance(block, dict):
                     block_type = block.get("type")
                     if block_type == "text":
@@ -342,32 +381,50 @@ class DirectLLMClient:
                         tool_id = raw_id if raw_id else f"tmp_{uuid.uuid4().hex[:8]}"
                         if not raw_id:
                             self.logger.warning(f"[TOOL] Generated temporary tool_id: {tool_id}")
+                        
+                        # 处理 input 字段（Pydantic 模型或 dict）
+                        raw_input = block.get("input", {})
+                        if hasattr(raw_input, "model_dump"):
+                            input_dict = raw_input.model_dump()
+                        elif isinstance(raw_input, dict):
+                            input_dict = raw_input
+                        else:
+                            input_dict = {}
+                        
                         blocks.append({
                             "type": "tool_use",
                             "id": tool_id,
                             "name": block.get("name"),
-                            "input": block.get("input", {}),
+                            "input": input_dict,
                         })
-                    # 忽略其他类型的 block
                 elif hasattr(block, "type"):
                     block_type = block.type
                     if block_type == "text" and hasattr(block, "text"):
                         blocks.append({"type": "text", "text": block.text})
                     elif block_type == "tool_use":
-                        # 确保 tool_use 块有有效的 id（防御空字符串和None）
                         raw_id = getattr(block, "id", None)
                         tool_id = raw_id if raw_id else f"tmp_{uuid.uuid4().hex[:8]}"
                         if not raw_id:
                             self.logger.warning(f"[TOOL] Generated temporary tool_id: {tool_id}")
+                        
+                        raw_input = getattr(block, "input", None)
+                        if hasattr(raw_input, "model_dump"):
+                            input_dict = raw_input.model_dump()
+                        elif isinstance(raw_input, dict):
+                            input_dict = raw_input
+                        else:
+                            input_dict = {}
+                        
                         blocks.append({
                             "type": "tool_use",
                             "id": tool_id,
                             "name": getattr(block, "name", None),
-                            "input": getattr(block, "input", {}),
+                            "input": input_dict,
                         })
-                    # 忽略其他类型的 block
-            return blocks
-        return []
+            except Exception as e:
+                self.logger.warning(f"[TOOL] Failed to parse block: {e}, block={block}")
+                continue
+        return blocks
 
     def _extract_narrative(self, text: str) -> str:
         """从 LLM 输出中提取叙事文本（去除 GM_COMMAND 部分）"""

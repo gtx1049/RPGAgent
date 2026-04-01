@@ -219,6 +219,7 @@ class GameMaster:
         if saved_ach:
             self.achievement_sys.load_snapshot(saved_ach)
 
+        # 使用 AnthropicChatModel（MiniMax 支持 Anthropic API 格式）
         self.model = AnthropicChatModel(
             model_name=model_name,
             api_key=api_key,
