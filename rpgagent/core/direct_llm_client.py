@@ -324,42 +324,49 @@ class DirectLLMClient:
         """解析 LLM 响应，提取 content blocks"""
         import uuid
         
+        # 防御：如果 response.content 是列表但为空，直接返回空列表
+        if hasattr(response, "content") and not response.content:
+            return []
+        
         if hasattr(response, "content") and response.content:
             blocks = []
             for block in response.content:
                 # 处理 dict 类型的 block
                 if isinstance(block, dict):
-                    block_dict = {"type": block.get("type")}
-                    if block.get("type") == "text":
-                        block_dict["text"] = block.get("text", "")
-                    elif block.get("type") == "tool_use":
-                        # 确保 tool_use 块有有效的 id
-                        tool_id = block.get("id")
-                        if not tool_id:
-                            tool_id = f"tmp_{uuid.uuid4().hex[:8]}"
+                    block_type = block.get("type")
+                    if block_type == "text":
+                        blocks.append({"type": "text", "text": block.get("text", "")})
+                    elif block_type == "tool_use":
+                        # 确保 tool_use 块有有效的 id（防御空字符串和None）
+                        raw_id = block.get("id")
+                        tool_id = raw_id if raw_id else f"tmp_{uuid.uuid4().hex[:8]}"
+                        if not raw_id:
                             self.logger.warning(f"[TOOL] Generated temporary tool_id: {tool_id}")
-                        block_dict["id"] = tool_id
-                        block_dict["name"] = block.get("name")
-                        block_dict["input"] = block.get("input", {})
-                    blocks.append(block_dict)
+                        blocks.append({
+                            "type": "tool_use",
+                            "id": tool_id,
+                            "name": block.get("name"),
+                            "input": block.get("input", {}),
+                        })
+                    # 忽略其他类型的 block
                 elif hasattr(block, "type"):
-                    block_dict = {"type": block.type}
-                    if block.type == "text" and hasattr(block, "text"):
-                        block_dict["text"] = block.text
-                    elif block.type == "tool_use":
+                    block_type = block.type
+                    if block_type == "text" and hasattr(block, "text"):
+                        blocks.append({"type": "text", "text": block.text})
+                    elif block_type == "tool_use":
                         # 确保 tool_use 块有有效的 id（防御空字符串和None）
                         raw_id = getattr(block, "id", None)
                         tool_id = raw_id if raw_id else f"tmp_{uuid.uuid4().hex[:8]}"
                         if not raw_id:
                             self.logger.warning(f"[TOOL] Generated temporary tool_id: {tool_id}")
-                        block_dict["id"] = tool_id
-                        block_dict["name"] = getattr(block, "name", None)
-                        block_dict["input"] = getattr(block, "input", {})
-                    blocks.append(block_dict)
+                        blocks.append({
+                            "type": "tool_use",
+                            "id": tool_id,
+                            "name": getattr(block, "name", None),
+                            "input": getattr(block, "input", {}),
+                        })
+                    # 忽略其他类型的 block
             return blocks
-        elif hasattr(response, "content") and isinstance(response.content, list):
-            return response.content
-        return []
         return []
 
     def _extract_narrative(self, text: str) -> str:
