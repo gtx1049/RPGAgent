@@ -295,7 +295,7 @@ class DirectLLMClient:
 
             for tc in tool_calls:
                 tool_name = tc["function"]["name"]
-                tool_id = tc["id"]
+                tool_id = tc.get("id") or f"call_{uuid.uuid4().hex[:12]}"
                 try:
                     args = json.loads(tc["function"]["arguments"])
                 except:
@@ -347,10 +347,10 @@ class DirectLLMClient:
                     if block.type == "text" and hasattr(block, "text"):
                         block_dict["text"] = block.text
                     elif block.type == "tool_use":
-                        # 确保 tool_use 块有有效的 id
-                        tool_id = getattr(block, "id", None)
-                        if not tool_id:
-                            tool_id = f"tmp_{uuid.uuid4().hex[:8]}"
+                        # 确保 tool_use 块有有效的 id（防御空字符串和None）
+                        raw_id = getattr(block, "id", None)
+                        tool_id = raw_id if raw_id else f"tmp_{uuid.uuid4().hex[:8]}"
+                        if not raw_id:
                             self.logger.warning(f"[TOOL] Generated temporary tool_id: {tool_id}")
                         block_dict["id"] = tool_id
                         block_dict["name"] = getattr(block, "name", None)
