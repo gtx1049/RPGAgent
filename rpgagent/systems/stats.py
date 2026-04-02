@@ -12,7 +12,7 @@ D&D 风格六属性 + RPG 数值 + 行动力系统
 
 from dataclasses import dataclass, field
 from typing import Dict
-from ..config.settings import DEFAULT_STATS, DEFAULT_ACTION_POWER
+from ..config.settings import make_default_stats, DEFAULT_ACTION_POWER
 from .interface import IStatsSystem
 
 
@@ -82,7 +82,7 @@ class StatsSystem(IStatsSystem):
     """角色属性管理系统"""
 
     def __init__(self, initial: Dict = None):
-        defaults = DEFAULT_STATS.copy()
+        defaults = make_default_stats()
         defaults["action_power"] = DEFAULT_ACTION_POWER
         defaults["max_action_power"] = DEFAULT_ACTION_POWER
         if initial:

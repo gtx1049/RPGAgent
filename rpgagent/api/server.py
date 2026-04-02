@@ -464,57 +464,65 @@ async def _ws_handle_messages(websocket: WebSocket, manager, session_id: str, cl
                     # 处理结果并发送（与原来逻辑一致）
                     options = []
                     logger.info(f"[WS-OPTIONS] cmd={cmd}")
+
+                    def _dc_to_hint(dc_str):
+                        try:
+                            d = int(dc_str)
+                            if d <= 30: return "【简单】"
+                            elif d <= 50: return "【五五开】"
+                            elif d <= 65: return "【困难】"
+                            elif d <= 80: return "【极难】"
+                            else: return "【几乎不可能】"
+                        except: return ""
+
+                    def _attr_label(attr):
+                        mapping = {
+                            "strength": "力量", "dexterity": "敏捷",
+                            "constitution": "体质", "intelligence": "智力",
+                            "wisdom": "感知", "charisma": "魅力",
+                            "str": "力量", "dex": "敏捷", "con": "体质",
+                            "int": "智力", "wis": "感知", "cha": "魅力",
+                        }
+                        return mapping.get(attr.lower(), attr)
+
                     if cmd and cmd.get("action") == "choice":
                         raw_options_str = cmd.get("options", "")
-                        dc = cmd.get("dc", "50").strip() if cmd else "50"
-                        dc_hint = ""
-                        if dc.isdigit():
-                            d = int(dc)
-                            if d <= 30:
-                                dc_hint = "【简单】"
-                            elif d <= 50:
-                                dc_hint = "【五五开】"
-                            elif d <= 65:
-                                dc_hint = "【困难】"
-                            elif d <= 80:
-                                dc_hint = "【极难】"
-                            else:
-                                dc_hint = "【几乎不可能】"
+                        default_dc = cmd.get("dc", "50").strip() if cmd else "50"
+                        default_hint = _dc_to_hint(default_dc) if default_dc.isdigit() else ""
 
-                        # 智能解析 options：支持多种格式
-                        # 格式1: 选项1|描述1|trigger:xxx|选项2|描述2|trigger:xxx（3个一组）
-                        # 格式2: 选项1|描述1（只有选项和描述）
-                        # 格式3: 选项1|描述1|trigger:xxx（单个选项带trigger）
                         raw_options = [p.strip() for p in raw_options_str.split("|")]
-                        raw_options = [p for p in raw_options if p]  # 过滤空字符串
+                        raw_options = [p for p in raw_options if p]
 
-                        # 检查是否是单个选项（包含 trigger 或只有两个元素）
-                        if len(raw_options) == 1:
-                            # 可能是 "选项名|描述" 或 "选项名"
+                        if not raw_options:
+                            pass
+                        elif len(raw_options) == 1:
                             parts = raw_options[0].split("|")
-                            if len(parts) >= 1 and parts[0]:
-                                name = parts[0].strip()
-                                desc = parts[1].strip() if len(parts) > 1 else ""
-                                options.append(f"{name} {dc_hint} {desc}".strip())
+                            name = parts[0].strip()
+                            desc = parts[1].strip() if len(parts) > 1 else ""
+                            options.append(f"{name} {default_hint} {desc}".strip())
                         elif len(raw_options) == 2:
-                            # "选项名|描述"
-                            options.append(f"{raw_options[0]} {dc_hint} {raw_options[1]}".strip())
+                            options.append(f"{raw_options[0]} {default_hint} {raw_options[1]}".strip())
                         elif len(raw_options) == 3:
-                            # "选项名|描述|trigger:xxx"
                             name = raw_options[0].strip()
                             desc = raw_options[1].strip()
-                            options.append(f"{name} {dc_hint} {desc}".strip())
+                            options.append(f"{name} {default_hint} {desc}".strip())
+                        elif len(raw_options) == 6:
+                            # name|desc|attr|dc|success|fail
+                            name = raw_options[0]
+                            desc = raw_options[1]
+                            attr = raw_options[2]
+                            dc = raw_options[3]
+                            hint = _dc_to_hint(dc) if dc.isdigit() else default_hint
+                            attr_str = f"[{_attr_label(attr)}]" if attr else ""
+                            options.append(f"{name} {attr_str} {hint} {desc}".strip())
                         else:
                             # 多组选项，每3个一组
                             for i in range(0, len(raw_options), 3):
                                 group = raw_options[i:i+3]
-                                if group:
+                                if len(group) >= 2:
                                     name = group[0].strip()
-                                    # 过滤掉包含 trigger: 的元素
-                                    desc_parts = [g for g in group[1:] if "trigger:" not in g.lower()]
-                                    desc = " ".join(desc_parts).strip()
-                                    if name:
-                                        options.append(f"{name} {dc_hint} {desc}".strip())
+                                    desc = group[1].strip() if len(group) > 1 else ""
+                                    options.append(f"{name} {default_hint} {desc}".strip())
 
                     # 清除"DM正在思考..."并下发叙事
                     await websocket.send_json({

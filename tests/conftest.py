@@ -9,9 +9,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 @pytest.fixture
 def stats_system():
-    """干净的 StatsSystem 实例"""
+    """干净的 StatsSystem 实例（固定属性，用于测试）"""
     from rpgagent.systems.stats import StatsSystem
-    return StatsSystem()
+    return StatsSystem(initial={
+        "strength": 10, "dexterity": 10, "constitution": 10,
+        "intelligence": 10, "wisdom": 10, "charisma": 10,
+    })
 
 
 @pytest.fixture

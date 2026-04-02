@@ -771,6 +771,8 @@ function handleMessage(msg) {
         }
       }
       if (msg.done) {
+        // 停止省略号闪烁动画
+        document.querySelectorAll(".thinking-dots").forEach(el => el.remove());
         renderActionButtons(); // 叙事结束后刷新行动按钮
       }
       break;

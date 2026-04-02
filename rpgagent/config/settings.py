@@ -55,24 +55,27 @@ HOST = "0.0.0.0"
 PORT = 7860
 
 # 数值系统默认值
-DEFAULT_STATS = {
-    "hp": 100,
-    "max_hp": 100,
-    "stamina": 100,
-    "max_stamina": 100,
-    "action_power": 3,
-    "max_action_power": 3,
-    "level": 1,
-    "exp": 0,
-    "exp_to_level": 100,
-    # D&D 六属性
-    "strength": 10,      # 力量
-    "dexterity": 10,    # 敏捷
-    "constitution": 10,  # 体质
-    "intelligence": 10,  # 智力
-    "wisdom": 10,       # 感知
-    "charisma": 10,     # 魅力
-}
+def make_default_stats() -> dict:
+    """每次调用生成一套随机属性（10点自由分配）"""
+    import random
+    attrs = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
+    bonus = [0] * 6
+    for _ in range(10):
+        bonus[random.randint(0, 5)] += 1
+    return {
+        "hp": 100,
+        "max_hp": 100,
+        "stamina": 100,
+        "max_stamina": 100,
+        "action_power": 3,
+        "max_action_power": 3,
+        "level": 1,
+        "exp": 0,
+        "exp_to_level": 100,
+        **{attr: 10 + bonus[i] for i, attr in enumerate(attrs)},
+    }
+
+DEFAULT_STATS = make_default_stats()
 
 DEFAULT_MORAL_DEBT = 0  # 道德债务初始值
 
