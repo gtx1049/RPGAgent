@@ -335,6 +335,68 @@ class GMSTools:
         except Exception as e:
             return ToolResponse(content=[TextBlock(type="text", text=f"判定失败：{e}")])
 
+    def get_character_attributes(self, attribute: str = "", dc: int = 50) -> ToolResponse:
+        """
+        获取角色属性及检定成功率。
+
+        生成选项时，传入选项需要的属性和DC，直接返回成功率。
+        属性键名：strength/dexterity/constitution/intelligence/wisdom/charisma
+
+        Args:
+            attribute: 属性键名（可选，不传则只返回属性列表）
+            dc: 检定难度 1-100（默认50）
+        """
+        ability = self.gm.stats_sys.ability if self.gm.stats_sys else None
+
+        attr_names = {
+            "strength": "力量", "dexterity": "敏捷", "constitution": "体质",
+            "intelligence": "智力", "wisdom": "感知", "charisma": "魅力",
+        }
+
+        # 不传属性时，返回完整属性列表
+        if not attribute:
+            lines = ["【角色属性】"]
+            if ability:
+                for attr_key, attr_cn in attr_names.items():
+                    value = getattr(ability, attr_key, 10)
+                    modifier = (value - 10) // 2
+                    modifier_str = f"+{modifier}" if modifier >= 0 else str(modifier)
+                    lines.append(f"  {attr_cn}({attr_key}): {value} | 修正 {modifier_str}")
+            else:
+                lines.append("  属性系统未初始化")
+            return ToolResponse(content=[TextBlock(type="text", text="\n".join(lines))])
+
+        # 传属性+DC时，返回成功率
+        if not ability:
+            return ToolResponse(content=[TextBlock(type="text", text="属性系统未初始化")])
+
+        attr_key = attribute.lower()
+        if attr_key not in attr_names:
+            return ToolResponse(content=[TextBlock(type="text", text=f"未知属性：{attribute}，可选：{list(attr_names.keys())}")])
+
+        value = getattr(ability, attr_key, 10)
+        modifier = (value - 10) // 2
+        adjusted_dc = max(5, min(95, dc - modifier * 5))
+
+        # 四档难度
+        if adjusted_dc <= 30:
+            tier = "【简单】"
+        elif adjusted_dc <= 50:
+            tier = "【五五开】"
+        elif adjusted_dc <= 65:
+            tier = "【困难】"
+        elif adjusted_dc <= 80:
+            tier = "【极难】"
+        else:
+            tier = "【几乎不可能】"
+
+        modifier_str = f"+{modifier}" if modifier >= 0 else str(modifier)
+
+        return ToolResponse(content=[TextBlock(
+            type="text",
+            text=f"{attr_names[attr_key]}={value}（修正{modifier_str}）{tier}"
+        )])
+
     # ── 场景 CG 生成 ─────────────────────────────────
 
     _UNSET_STYLE = object()
@@ -622,6 +684,7 @@ def create_gms_tools(game_master: Any) -> list:
         tools.grant_skill_points,
         tools.list_all_skills,
         tools.roll_check,
+        tools.get_character_attributes,
         tools.list_recruitable_teammates,
         tools.list_active_teammates,
         tools.recruit_teammate,

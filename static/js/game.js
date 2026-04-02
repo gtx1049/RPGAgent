@@ -589,7 +589,9 @@ function hideNameInputPanel() {
 // ── WebSocket ────────────────────────────────
 
 function connectWS(sessionId) {
-  if (state.ws) state.ws.close();
+  if (state.ws && state.ws.readyState < WebSocket.CLOSING) {
+    state.ws.close();
+  }
   state.sessionId = sessionId;
   const ws = new WebSocket(`${WS_URL}/ws/${sessionId}`);
   state.ws = ws;
@@ -611,7 +613,10 @@ function connectWS(sessionId) {
     const reason = event.reason || closeCodeReason(event.code);
     console.warn(`[WS] 连接断开 | code=${event.code} reason="${reason}" wasClean=${event.wasClean}`);
     setWSStatus("disconnected");
-    appendSystem(`⚠️ 连接已断开（${event.code}: ${reason}），正在尝试重连...`);
+    // 1006 在页面刷新/重连期间正常出现，静默处理不打扰用户
+    if (event.code !== 1006 || _reconnectAttempt > 0) {
+      appendSystem(`⚠️ 连接已断开，正在尝试重连...`);
+    }
     // 自动重连（游戏中途断线时尝试恢复）
     scheduleReconnect();
   });

@@ -290,7 +290,18 @@ class DirectLLMClient:
 
             self.logger.info(f"[LLM] Sending request (turn {turn}), messages={len(self.messages)}, tools={'Yes' if self.tools else 'No'}")
 
-            response = await self.model(messages=self.messages, tools=self.tools)
+            # MiniMax 偶尔返回 500/1033，重试最多3次
+            response = None
+            for attempt in range(3):
+                try:
+                    response = await self.model(messages=self.messages, tools=self.tools)
+                    break
+                except Exception as e:
+                    if attempt < 2 and ("500" in str(e) or "api_error" in str(e) or "1033" in str(e)):
+                        self.logger.warning(f"[LLM] API error (attempt {attempt+1}/3): {e}, retrying...")
+                        await asyncio.sleep(2)
+                    else:
+                        raise
             
             # 调试：打印 API 响应的原始结构
             import uuid as uuid_mod

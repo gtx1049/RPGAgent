@@ -465,13 +465,26 @@ async def _ws_handle_messages(websocket: WebSocket, manager, session_id: str, cl
                     options = []
                     logger.info(f"[WS-OPTIONS] cmd={cmd}")
 
+                    # 如果本次有 roll_check，用真实roll结果覆盖叙事
+                    roll_result = cmd.get("_roll_result") if cmd else None
+                    if roll_result:
+                        success = getattr(roll_result, "success", None)
+                        roll_desc = getattr(roll_result, "description", "") or ""
+                        # 用 roll 真实结果 + GM 的成功/失败叙事
+                        if success and cmd.get("narrative_success"):
+                            narrative = f"{roll_desc}\n\n{cmd['narrative_success']}"
+                        elif not success and cmd.get("narrative_failure"):
+                            narrative = f"{roll_desc}\n\n{cmd['narrative_failure']}"
+                        else:
+                            narrative = roll_desc
+
                     def _dc_to_hint(dc_str):
                         try:
                             d = int(dc_str)
-                            if d <= 30: return "【简单】"
-                            elif d <= 50: return "【五五开】"
-                            elif d <= 65: return "【困难】"
-                            elif d <= 80: return "【极难】"
+                            if d <= 35: return "【简单】"
+                            elif d <= 55: return "【五五开】"
+                            elif d <= 75: return "【困难】"
+                            elif d <= 90: return "【极难】"
                             else: return "【几乎不可能】"
                         except: return ""
 
@@ -506,23 +519,37 @@ async def _ws_handle_messages(websocket: WebSocket, manager, session_id: str, cl
                             name = raw_options[0].strip()
                             desc = raw_options[1].strip()
                             options.append(f"{name} {default_hint} {desc}".strip())
+                        elif len(raw_options) == 5:
+                            name = raw_options[0].strip()
+                            desc = raw_options[1].strip()
+                            attr = raw_options[2].strip()
+                            dc = raw_options[3].strip()
+                            hint = _dc_to_hint(dc) if dc.isdigit() else default_hint
+                            attr_str = f"[{_attr_label(attr)}]" if attr else ""
+                            options.append(f"{name} {attr_str} {hint} {desc}".strip())
                         elif len(raw_options) == 6:
-                            # name|desc|attr|dc|success|fail
-                            name = raw_options[0]
-                            desc = raw_options[1]
-                            attr = raw_options[2]
-                            dc = raw_options[3]
+                            name = raw_options[0].strip()
+                            desc = raw_options[1].strip()
+                            attr = raw_options[2].strip()
+                            dc = raw_options[3].strip()
                             hint = _dc_to_hint(dc) if dc.isdigit() else default_hint
                             attr_str = f"[{_attr_label(attr)}]" if attr else ""
                             options.append(f"{name} {attr_str} {hint} {desc}".strip())
                         else:
-                            # 多组选项，每3个一组
-                            for i in range(0, len(raw_options), 3):
-                                group = raw_options[i:i+3]
-                                if len(group) >= 2:
-                                    name = group[0].strip()
-                                    desc = group[1].strip() if len(group) > 1 else ""
-                                    options.append(f"{name} {default_hint} {desc}".strip())
+                            # 先按 || 分组（LLM 常用此分隔符）
+                            combined = "|".join(raw_options)
+                            groups_str = combined.split("||")
+                            for group_str in groups_str:
+                                parts = [p.strip() for p in group_str.split("|")]
+                                parts = [p for p in parts if p]  # 过滤空
+                                if len(parts) >= 2:
+                                    name = parts[0]
+                                    desc = parts[1] if len(parts) > 1 else ""
+                                    attr = parts[2] if len(parts) > 2 else ""
+                                    dc = parts[3] if len(parts) > 3 else default_dc
+                                    hint = _dc_to_hint(dc) if dc.isdigit() else default_hint
+                                    attr_str = f"[{_attr_label(attr)}]" if attr else ""
+                                    options.append(f"{name} {attr_str} {hint} {desc}".strip())
 
                     # 清除"DM正在思考..."并下发叙事
                     await websocket.send_json({
