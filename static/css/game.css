@@ -83,6 +83,8 @@ body {
   padding: 20px;
   padding-bottom: max(20px, calc(var(--bottom-nav-h) + 10px)); /* 底部留出空间 */
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   line-height: 1.9;
   font-size: 15px;
   scroll-behavior: smooth;
@@ -363,6 +365,9 @@ body {
   gap: 20px;
   z-index: 100;
   padding: 40px 20px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 #game-list {
@@ -663,6 +668,10 @@ body {
     line-height: 1.8;
     min-height: 0;
     flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
   }
 
   #options-area {
@@ -785,6 +794,10 @@ body {
   /* 游戏开始选择页适配 */
   #game-select {
     padding: 20px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
   }
 
   .game-card {

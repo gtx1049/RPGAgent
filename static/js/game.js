@@ -1356,9 +1356,7 @@ async function initSelectScreen() {
       <div class="game-name">${g.name}</div>
       <div class="game-summary">${g.summary || g.id}</div>`;
     const handleSelect = () => {
-      const name = prompt("你的名字：", "无名旅人");
-      if (!name) return;
-      launchGame(g.id, name);
+      launchGame(g.id, "无名旅人");
     };
     card.addEventListener("click", handleSelect);
     card.addEventListener("keydown", e => {

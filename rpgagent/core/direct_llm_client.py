@@ -1,13 +1,7 @@
 """
 DirectLLMClient - 直接管理 Memory 和工具调用的 LLM 客户端
-
-替代 AgentScope ReActAgent，自己管理：
-1. 消息历史（memory）- 滑动窗口，保留最近 N 轮
-2. 工具调用循环 - 手动控制，可靠可控
-3. System prompt - 单独管理，不计入滑动窗口
-
-解决 MiniMax M2.7 的 tool id bug（2013错误）问题的根本方案。
 """
+import asyncio
 import json
 import logging
 import re
@@ -89,49 +83,54 @@ class DirectLLMClient:
             - command_data: GM_COMMAND 解析结果（dict 或 None）
             - all_messages: 本次对话的所有消息（用于调试）
         """
-        # 添加用户消息
-        self._add_user_message(user_input)
+        # 加锁：防止 async 并发导致消息历史穿插破坏 tool_id 对应关系
+        await asyncio.to_thread(self._call_lock.acquire)
+        try:
+            # 添加用户消息
+            self._add_user_message(user_input)
 
-        # 发送并处理响应
-        response_text, tool_calls = await self._send_and_handle(
-            tool_executor=tool_executor,
-        )
+            # 发送并处理响应
+            response_text, tool_calls = await self._send_and_handle(
+                tool_executor=tool_executor,
+            )
 
-        # 解析 GM_COMMAND（必须先解析，再移除 GM_COMMAND 块）
-        cmd = None
-        if response_text:
-            import re
-            pattern = r"\[GM_COMMAND\]\s*(.*?)\s*\[/GM_COMMAND\]"
-            match = re.search(pattern, response_text, re.DOTALL)
-            if match:
-                cmd = {}
-                raw_block = match.group(1).replace("\\n", "\n")
-                self.logger.info(f"[GM_COMMAND] raw_block:\n{raw_block[:500]}")
-                # 收集所有 options 行，合并为一个字符串
-                options_parts = []
-                for line in raw_block.strip().split("\n"):
-                    if ":" not in line:
-                        continue
-                    key, _, value = line.partition(":")
-                    key = key.strip()
-                    value = value.strip()
-                    if key == "options":
-                        # 累积所有 options 行
-                        if value:
-                            options_parts.append(value)
-                    else:
-                        cmd[key] = value
-                # 合并所有 options，用 | 分隔
-                if options_parts:
-                    cmd["options"] = "|".join(options_parts)
-                self.logger.info(f"[GM_COMMAND] parsed cmd: {cmd}")
-            else:
-                self.logger.warning("[GM_COMMAND] No GM_COMMAND found in response_text")
+            # 解析 GM_COMMAND（必须先解析，再移除 GM_COMMAND 块）
+            cmd = None
+            if response_text:
+                import re
+                pattern = r"\[GM_COMMAND\]\s*(.*?)\s*\[/GM_COMMAND\]"
+                match = re.search(pattern, response_text, re.DOTALL)
+                if match:
+                    cmd = {}
+                    raw_block = match.group(1).replace("\\n", "\n")
+                    self.logger.info(f"[GM_COMMAND] raw_block:\n{raw_block[:500]}")
+                    # 收集所有 options 行，合并为一个字符串
+                    options_parts = []
+                    for line in raw_block.strip().split("\n"):
+                        if ":" not in line:
+                            continue
+                        key, _, value = line.partition(":")
+                        key = key.strip()
+                        value = value.strip()
+                        if key == "options":
+                            # 累积所有 options 行
+                            if value:
+                                options_parts.append(value)
+                        else:
+                            cmd[key] = value
+                    # 合并所有 options，用 | 分隔
+                    if options_parts:
+                        cmd["options"] = "|".join(options_parts)
+                    self.logger.info(f"[GM_COMMAND] parsed cmd: {cmd}")
+                else:
+                    self.logger.warning("[GM_COMMAND] No GM_COMMAND found in response_text")
 
-        # 提取叙事文本（移除 GM_COMMAND 块）
-        narrative = self._extract_narrative(response_text)
+            # 提取叙事文本（移除 GM_COMMAND 块）
+            narrative = self._extract_narrative(response_text)
 
-        return narrative, cmd, list(self.messages)
+            return narrative, cmd, list(self.messages)
+        finally:
+            self._call_lock.release()
 
     def _add_user_message(self, content: str) -> None:
         """添加用户消息到历史"""
@@ -148,6 +147,9 @@ class DirectLLMClient:
         import uuid
         
         if tool_calls:
+            self.logger.info(f"[MSG] _add_assistant_message: content='{content[:50]}...', tool_calls count={len(tool_calls)}")
+            for tc in tool_calls:
+                self.logger.info(f"[MSG]   tool_call id={tc.get('id')}, name={tc.get('name') or tc.get('function', {}).get('name')}")
             # Anthropic 格式：使用 content blocks
             content_blocks = []
             for tc in tool_calls:
@@ -222,21 +224,38 @@ class DirectLLMClient:
         """
         应用滑动窗口：只保留 system + 最近 N 条对话消息。
 
-        注意：tool result 不计入窗口限制。
-        策略：保留 system + 最近 N 条非 tool 消息。
+        策略：保留 system + 最近 N 条非 tool 消息，但确保 tool_result 不孤立
+        （即只保留其对应 tool_use 仍在窗口内的 tool_result）。
         """
         if len(self.messages) <= self.max_memory + 1:  # +1 是 system prompt
             return
 
-        # 重新构建：system + 最近的对话消息
-        # 找出所有非 tool 消息（user 和 assistant）
+        # 第一次扫描：收集所有 tool_use 的 id（这些消息 role=assistant）
+        valid_tool_ids = set()
+        for msg in self.messages:
+            if msg.get("role") == "assistant" and isinstance(msg.get("content"), list):
+                for block in msg["content"]:
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        valid_tool_ids.add(block.get("id"))
+
+        # 第二次扫描：构建非 tool 消息列表，跳过孤立（无对应 tool_use）的 tool_result
         non_tool_msgs = []
         for msg in self.messages:
-            if msg["role"] == "system":
+            if msg.get("role") == "system":
                 continue  # 保留 system
-            if msg["role"] == "tool":
+            if msg.get("role") == "tool":
                 continue  # 不保留 tool result（让 LLM 自己回忆）
-            non_tool_msgs.append(msg)
+            if msg.get("role") == "user" and isinstance(msg.get("content"), list):
+                # 检查是否是 tool_result若是，则检查其 tool_use_id 是否有效
+                for block in msg["content"]:
+                    if isinstance(block, dict) and block.get("type") == "tool_result":
+                        if block.get("tool_use_id") not in valid_tool_ids:
+                            self.logger.warning(f"[MEM] Dropping orphaned tool_result id={block.get('tool_use_id')}")
+                            break  # 跳过这条消息（tool_result孤立）
+                else:
+                    non_tool_msgs.append(msg)
+            else:
+                non_tool_msgs.append(msg)
 
         # 保留 system + 最近 N 条
         keep = non_tool_msgs[-self.max_memory:]
@@ -293,9 +312,13 @@ class DirectLLMClient:
                 if block.get("type") == "text":
                     text_parts.append(block.get("text", ""))
                 elif block.get("type") == "tool_use":
-                    # 重新生成有效的 tool id，不使用 block 中可能无效的 id
-                    import uuid
-                    tool_id = f"call_{uuid.uuid4().hex[:12]}"
+                    # 优先使用 MiniMax 返回的原始 id，如果为空才生成新的
+                    raw_id = block.get("id")
+                    tool_id = raw_id if raw_id else f"call_{uuid.uuid4().hex[:12]}"
+                    if not raw_id:
+                        self.logger.warning(f"[TOOL] _parse_response: MiniMax returned empty tool_id, generated {tool_id}")
+                    else:
+                        self.logger.info(f"[TOOL] _parse_response: using MiniMax tool_id={tool_id}")
                     
                     # 处理 input 字段：可能是 Pydantic 模型或 dict
                     raw_input = block.get("input", {})
@@ -315,7 +338,6 @@ class DirectLLMClient:
                             "arguments": json.dumps(input_dict, ensure_ascii=False),
                         },
                     })
-                    self.logger.info(f"[TOOL] _parse_response: generated tool_id={tool_id} for {block.get('name')}")
 
             current_text = "".join(text_parts)
             current_tool_calls = tool_calls if tool_calls else None
