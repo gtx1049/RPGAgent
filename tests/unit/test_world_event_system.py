@@ -118,24 +118,42 @@ class TestWorldEventSystem:
         assert found
 
     def test_once_only_blocks_retrigger(self):
+        import random
+        random.seed(42)
         sys = WorldEventSystem()
         sys.load_from_meta(MockMeta())
 
-        # 强制触发plague
+        # 确保初始状态干净
+        assert "plague" not in sys._fired_ids
+
+        # 强制触发plague（用循环确保概率随机性不会干扰）
         ev = sys._events["plague"]
-        fired = sys.evaluate(
-            day=3, period=TimePeriod("上午"), turn=10,
-            scene_id="camp", hidden_values={}, factions={}, flags={},
-        )
-        for e in fired:
-            sys.fire_event(e, turn=10, scene_id="camp", day=3, period="上午")
+        fired_plague = None
+        for _ in range(50):
+            fired = sys.evaluate(
+                day=3, period=TimePeriod("上午"), turn=10,
+                scene_id="camp", hidden_values={}, factions={}, flags={},
+            )
+            for e in fired:
+                if e.id == "plague":
+                    fired_plague = e
+                    break
+            if fired_plague:
+                break
+        assert fired_plague is not None, "plague should have been triggered"
+        sys.fire_event(fired_plague, turn=10, scene_id="camp", day=3, period="上午")
+
+        # 确认plague已进入fired_ids
+        assert "plague" in sys._fired_ids
 
         # 再次评估应被once_only阻挡
+        random.seed(99)  # 固定随机种子，排除概率影响
         fired2 = sys.evaluate(
             day=5, period=TimePeriod("正午"), turn=20,
             scene_id="camp", hidden_values={}, factions={}, flags={},
         )
-        assert not any(e.id == "plague" for e in fired2)
+        assert not any(e.id == "plague" for e in fired2), \
+            f"plague should be blocked by once_only, but fired2={[e.id for e in fired2]}"
 
     def test_fire_event_records(self):
         sys = WorldEventSystem()
